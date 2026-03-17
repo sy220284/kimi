@@ -291,12 +291,16 @@ class UnifiedWaveAnalyzer:
                     validated_signals.append(sig)
                 elif sig.direction == 'down' and resonance_result.overall_direction in [SignalDirection.BEARISH, SignalDirection.NEUTRAL]:
                     validated_signals.append(sig)
-                elif sig.confidence >= 0.7:  # 高置信度信号保留
+                elif sig.confidence >= 0.6:  # 高置信度信号保留 (降低从0.7)
                     validated_signals.append(sig)
-            elif sig.confidence >= 0.7:  # 高置信度信号绕过共振过滤
+            elif sig.confidence >= 0.6:  # 高置信度信号绕过共振过滤 (降低从0.7)
                 validated_signals.append(sig)
         
-        return validated_signals if validated_signals else signals
+        # 如果全部过滤，返回原信号
+        if not validated_signals:
+            return signals
+            
+        return validated_signals
     
     def _calculate_atr(self, df: pd.DataFrame) -> float:
         """计算当前ATR值"""
@@ -348,8 +352,13 @@ class UnifiedWaveAnalyzer:
                 filtered.append(sig)
             elif trend == 'neutral':
                 # 震荡市中，高置信度信号保留
-                if sig.confidence >= 0.6 or sig.resonance_score >= 0.5:
+                if sig.confidence >= 0.5 or getattr(sig, 'resonance_score', 0) >= 0.4:
                     sig.trend_aligned = True
+                    sig.trend_direction = trend
+                    filtered.append(sig)
+                else:
+                    # 低置信度信号也保留，但标记为不对齐
+                    sig.trend_aligned = False
                     sig.trend_direction = trend
                     filtered.append(sig)
             elif sig.confidence >= 0.75:  # 极高置信度信号可逆势
@@ -357,7 +366,14 @@ class UnifiedWaveAnalyzer:
                 sig.trend_direction = trend
                 filtered.append(sig)
         
-        return filtered if filtered else signals  # 如果全部过滤，返回原信号
+        # 如果全部过滤，返回原信号（不过滤）
+        if not filtered:
+            for sig in signals:
+                sig.trend_aligned = False
+                sig.trend_direction = trend
+            return signals
+            
+        return filtered
     
     def _detect_wave_c(self, pivots: List[PivotPoint], prices: np.ndarray, 
                        atr: float) -> Optional[UnifiedWaveSignal]:
