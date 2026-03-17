@@ -1,5 +1,49 @@
 # 智能体量化分析系统配置
 
+# 模型配置
+models:
+  # CodeFlow AI 模型 (Claude系列)
+  codeflow:
+    enabled: true
+    base_url: https://codeflow.asia
+    api_key: sk-0TDDM87yNB4yb6f21VOX2TJhOuKtwB4zHB1WvEidYboc56fZ
+    timeout: 120
+    models:
+      - id: claude-haiku-4-5-20251001
+        alias: haiku
+        description: Claude Haiku 轻量级模型
+        max_tokens: 4096
+      - id: claude-sonnet-4-5-20250929
+        alias: sonnet
+        description: Claude Sonnet 平衡模型
+        max_tokens: 8192
+      - id: claude-sonnet-4-6
+        alias: sonnet-4-6
+        description: Claude Sonnet 4.6版本
+        max_tokens: 8192
+      - id: claude-opus-4-5-20251101
+        alias: opus
+        description: Claude Opus 高性能模型
+        max_tokens: 8192
+      - id: claude-opus-4-6
+        alias: opus-4-6
+        description: Claude Opus 4.6版本
+        max_tokens: 8192
+    default_model: claude-sonnet-4-6
+    
+  # DeepSeek 模型
+  deepseek:
+    enabled: true
+    base_url: https://api.deepseek.com
+    api_key: ""  # 从环境变量或单独配置文件读取
+    models:
+      - name: deepseek-reasoner
+        alias: r1
+        description: DeepSeek R1 推理模型
+      - name: deepseek-chat
+        alias: v3
+        description: DeepSeek V3 对话模型
+
 # 数据库配置
 database:
   postgres:
