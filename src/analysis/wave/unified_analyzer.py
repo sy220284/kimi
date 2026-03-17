@@ -590,8 +590,8 @@ class UnifiedWaveAnalyzer:
         if not (self.min_retrace <= retrace <= self.max_wave2_retrace):
             return None
         
-        # 浪1应该足够强 (波动>3%)
-        if wave1 < p1_start.price * 0.03:
+        # 浪1应该足够强 (波动>2% - 与验证逻辑保持一致)
+        if wave1 < p1_start.price * 0.02:
             return None
         
         current_price = prices[-1]
