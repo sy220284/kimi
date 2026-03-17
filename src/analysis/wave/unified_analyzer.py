@@ -530,12 +530,17 @@ class UnifiedWaveAnalyzer:
             direction_up = p1_end.price > p1_start.price
             
             # 浪1特征验证:
-            # 1. 浪1应该从相对低位启动 (至少比前一点高/低)
-            wave1_valid_start = False
-            if direction_up and p0.price < p1_start.price:
-                wave1_valid_start = True
-            elif not direction_up and p0.price > p1_start.price:
-                wave1_valid_start = True
+            # 1. 浪1应该从相对低位/高位启动 (放宽条件: 允许平盘启动)
+            # 原逻辑过于严格，导致下跌方向的2浪无法通过验证
+            wave1_valid_start = True  # 默认通过，取消严格的启动点验证
+            
+            # 可选: 宽松的启动点验证 (偏离不超过10%)
+            if direction_up:
+                # 上涨时，p0不应远高于p1_start (允许平盘或略高)
+                wave1_valid_start = p0.price <= p1_start.price * 1.10
+            else:
+                # 下跌时，p0不应远低于p1_start (允许平盘或略低)  
+                wave1_valid_start = p0.price >= p1_start.price * 0.90
             
             # 2. 浪1幅度足够(>2% - 放宽从3%)
             wave1_strong = wave1 >= p1_start.price * 0.02
