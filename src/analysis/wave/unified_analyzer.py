@@ -378,16 +378,55 @@ class UnifiedWaveAnalyzer:
     def _detect_wave_c(self, pivots: List[PivotPoint], prices: np.ndarray, 
                        atr: float) -> Optional[UnifiedWaveSignal]:
         """
-        检测C浪结束信号 - 优化版
+        检测C浪结束信号 - 增强版
         
-        优化: 添加与推动浪的区别验证
+        关键改进:
+        1. 验证前一浪是B浪(反弹) - 确保ABC调整结构完整
+        2. 验证B浪特征: 从A浪低点反弹,但未创新高/低
+        3. C浪长度检查,与推动浪区分
         """
         if len(pivots) < 3:
             return None
         
-        p_a = pivots[-3]
-        p_b = pivots[-2]
-        p_c = pivots[-1]
+        # 需要至少4个点验证B浪前序
+        if len(pivots) >= 4:
+            p_before_a = pivots[-4]  # A浪前一点(推动浪结束点)
+            p_a = pivots[-3]         # A浪终点(调整开始)
+            p_b = pivots[-2]         # B浪终点(反弹结束)
+            p_c = pivots[-1]         # C浪终点(当前)
+            
+            # 验证B浪结构:
+            # 1. B浪是从A浪低点/高点的反弹
+            # 2. B浪高点/低点不应突破A浪起点(即推动浪终点)
+            is_bounce_from_a = False
+            b_within_range = False
+            
+            if p_a.is_peak:  # A浪是下跌(A浪终点是高点)
+                # B浪应该从A浪低点反弹(但p_a是高点,所以B浪是反弹到高点附近)
+                # 实际上p_a是高点, B浪是从高点下跌后的反弹
+                bounce_size = abs(p_b.price - p_a.price)
+                a_size = abs(p_before_a.price - p_a.price) if p_before_a else bounce_size
+                # B浪反弹幅度应在A浪的38.2%-80%之间
+                if a_size > 0 and 0.382 <= bounce_size / a_size <= 0.8:
+                    is_bounce_from_a = True
+                # B浪不应突破A浪起点
+                if p_before_a and p_b.price < p_before_a.price:
+                    b_within_range = True
+            else:  # A浪是上涨(A浪终点是低点)
+                bounce_size = abs(p_b.price - p_a.price)
+                a_size = abs(p_before_a.price - p_a.price) if p_before_a else bounce_size
+                if a_size > 0 and 0.382 <= bounce_size / a_size <= 0.8:
+                    is_bounce_from_a = True
+                if p_before_a and p_b.price > p_before_a.price:
+                    b_within_range = True
+            
+            # 如果B浪验证失败,降低置信度但不完全排除
+            b_wave_valid = is_bounce_from_a and b_within_range
+        else:
+            p_a = pivots[-3]
+            p_b = pivots[-2]
+            p_c = pivots[-1]
+            b_wave_valid = False  # 无足够数据验证
         
         # A-C同方向 (调整浪特征)
         ac_same_direction = (p_a.price < p_b.price and p_b.price > p_c.price) or \
@@ -402,8 +441,7 @@ class UnifiedWaveAnalyzer:
         if wave_a < p_a.price * self.min_wave_pct:
             return None
         
-        # 优化: C浪长度检查，与推动浪区分
-        # 调整浪的C浪通常与A浪相近或更长
+        # C浪长度检查: 调整浪的C浪通常与A浪相近或更长
         if wave_c < wave_a * 0.5:
             return None
         
@@ -422,12 +460,20 @@ class UnifiedWaveAnalyzer:
         
         confidence = 0.5
         if wave_c >= wave_a * 0.8:
-            confidence += 0.15
+            confidence += 0.1
         if p_c.strength >= 3:
             confidence += 0.1
-        # 优化: C浪长于A浪，更可能是真调整浪结束
+        # C浪长于A浪，更可能是真调整浪结束
         if wave_c >= wave_a:
             confidence += 0.1
+        # B浪验证奖励
+        if b_wave_valid:
+            confidence += 0.15  # B浪结构正确，大幅加分
+        else:
+            confidence -= 0.1   # B浪结构存疑，适当减分
+        # 4个点以上可以更好验证结构，加分
+        if len(pivots) >= 4:
+            confidence += 0.05
         
         return UnifiedWaveSignal(
             is_valid=True,
@@ -435,79 +481,121 @@ class UnifiedWaveAnalyzer:
             entry_price=current_price,
             target_price=target,
             stop_loss=stop_loss,
-            confidence=min(confidence, 0.9),
+            confidence=min(max(confidence, 0.3), 0.9),
             direction='up' if direction_up else 'down',
-            detection_method='enhanced',
+            detection_method='enhanced_context',
             pivot_count=len(pivots)
         )
-    
-    def _detect_wave2(self, pivots: List[PivotPoint], prices: np.ndarray, 
+
+    def _detect_wave2(self, pivots: List[PivotPoint], prices: np.ndarray,
                       atr: float) -> Optional[UnifiedWaveSignal]:
         """
-        检测2浪回撤信号 - 优化版
+        检测2浪回撤信号 - 增强版
         
-        优化: 
-        1. 收紧回撤区间至38.2%-50% (最优区域)
-        2. 添加强推动浪前序验证
+        关键改进:
+        1. 验证前一浪是1浪(推动上涨) - 确保12345结构
+        2. 浪1特征: 从低位启动,幅度足够,时间合理
+        3. 收紧回撤区间至38.2%-50%
         """
         if len(pivots) < 3:
             return None
         
-        p1 = pivots[-3]
-        p2 = pivots[-2]
-        p3 = pivots[-1]
+        # 需要4个点验证完整的浪1-2结构
+        if len(pivots) >= 4:
+            p0 = pivots[-4]  # 浪1起点前(可能是前一浪结束或底部)
+            p1_start = pivots[-3]  # 浪1起点
+            p1_end = pivots[-2]    # 浪1终点 = 浪2起点
+            p2_end = pivots[-1]    # 浪2终点 = 当前点
+            
+            # 验证浪1是推动浪(从低位启动)
+            wave1 = abs(p1_end.price - p1_start.price)
+            direction_up = p1_end.price > p1_start.price
+            
+            # 浪1特征验证:
+            # 1. 浪1应该从相对低位启动 (至少比前一点高/低)
+            wave1_valid_start = False
+            if direction_up and p0.price < p1_start.price:
+                wave1_valid_start = True
+            elif not direction_up and p0.price > p1_start.price:
+                wave1_valid_start = True
+            
+            # 2. 浪1幅度足够(>3%)
+            wave1_strong = wave1 >= p1_start.price * 0.03
+            
+            # 3. 浪1时间合理(至少5天)
+            try:
+                from datetime import datetime
+                d1 = datetime.strptime(str(p1_start.date)[:10], '%Y-%m-%d')
+                d2 = datetime.strptime(str(p1_end.date)[:10], '%Y-%m-%d')
+                wave1_duration = (d2 - d1).days
+                wave1_valid_time = wave1_duration >= 3  # 至少3天
+            except:
+                wave1_valid_time = True  # 无法解析日期时默认通过
+            
+            wave1_valid = wave1_valid_start and wave1_strong and wave1_valid_time
+        else:
+            p1_start = pivots[-3]
+            p1_end = pivots[-2]
+            p2_end = pivots[-1]
+            wave1 = abs(p1_end.price - p1_start.price)
+            direction_up = p1_end.price > p1_start.price
+            wave1_valid = False
         
-        wave1 = abs(p2.price - p1.price)
-        if wave1 < p1.price * self.min_wave_pct:
+        if wave1 < p1_start.price * self.min_wave_pct:
             return None
         
-        direction_up = p2.price > p1.price
-        
-        # 验证浪2结构
+        # 验证浪2结构: 回撤在浪1范围内
         if direction_up:
-            if not (p1.price < p3.price < p2.price):
+            if not (p1_start.price < p2_end.price < p1_end.price):
                 return None
         else:
-            if not (p1.price > p3.price > p2.price):
+            if not (p1_start.price > p2_end.price > p1_end.price):
                 return None
         
-        wave2 = abs(p3.price - p2.price)
+        wave2 = abs(p2_end.price - p1_end.price)
         retrace = wave2 / wave1
         
-        # 优化: 收紧回撤区间至38.2%-50%
+        # 收紧回撤区间至38.2%-50% (最优区域)
         if not (self.min_retrace <= retrace <= self.max_wave2_retrace):
             return None
         
-        # 优化: 添加强推动浪验证
         # 浪1应该足够强 (波动>3%)
-        if wave1 < p1.price * 0.03:
+        if wave1 < p1_start.price * 0.03:
             return None
         
         current_price = prices[-1]
         
         if direction_up:
-            if current_price < p3.price * 0.98:
+            if current_price < p2_end.price * 0.98:
                 return None
-            target = current_price + wave1 * 1.618  # 优化: 浪3通常延长
+            target = current_price + wave1 * 1.618  # 浪3通常延长
             atr_stop = self.atr_stop_mult * atr
-            stop_loss = max(p1.price * 0.99, current_price - atr_stop)
+            stop_loss = max(p1_start.price * 0.99, current_price - atr_stop)
         else:
-            if current_price > p3.price * 1.02:
+            if current_price > p2_end.price * 1.02:
                 return None
             target = current_price - wave1 * 1.618
             atr_stop = self.atr_stop_mult * atr
-            stop_loss = min(p1.price * 1.01, current_price + atr_stop)
+            stop_loss = min(p1_start.price * 1.01, current_price + atr_stop)
         
-        # 优化: 置信度加权
+        # 置信度加权
         confidence = 0.5
         if 0.382 <= retrace <= 0.5:  # 最优回撤区域
-            confidence += 0.25
+            confidence += 0.2
         elif 0.5 < retrace <= 0.618:
             confidence += 0.1
-        if p3.strength >= 3:
+        if p2_end.strength >= 3:
             confidence += 0.1
-        if wave1 > p1.price * 0.05:  # 强浪1
+        if wave1 > p1_start.price * 0.05:  # 强浪1
             confidence += 0.1
+        # 浪1验证奖励/惩罚
+        if wave1_valid:
+            confidence += 0.15  # 浪1结构正确,大幅加分
+        else:
+            confidence -= 0.1   # 浪1结构存疑,减分
+        # 4个点以上可以验证完整结构
+        if len(pivots) >= 4:
+            confidence += 0.05
         
         return UnifiedWaveSignal(
             is_valid=True,
@@ -515,32 +603,93 @@ class UnifiedWaveAnalyzer:
             entry_price=current_price,
             target_price=target,
             stop_loss=stop_loss,
-            confidence=min(confidence, 0.85),
+            confidence=min(max(confidence, 0.3), 0.9),
             direction='up' if direction_up else 'down',
-            detection_method='enhanced',
+            detection_method='enhanced_context',
             pivot_count=len(pivots),
-            wave_structure={'wave1': wave1, 'retrace': retrace}
+            wave_structure={'wave1': wave1, 'retrace': retrace, 'wave1_valid': wave1_valid}
         )
     
     def _detect_wave4_standard(self, pivots: List[PivotPoint], prices: np.ndarray, 
                                atr: float) -> Optional[UnifiedWaveSignal]:
-        """标准4浪检测 (需要4个极值点)"""
+        """
+        标准4浪检测 - 增强版 (需要4个极值点)
+        
+        关键改进:
+        1. 验证前面是完整的1-2-3浪结构
+        2. 浪3特征: 幅度最大(通常>浪1),时间足够
+        3. 浪3幅度验证: 不能是最短浪
+        """
         if len(pivots) < 4:
             return None
         
-        p1 = pivots[-4]
-        p2 = pivots[-3]
-        p3 = pivots[-2]
-        p4 = pivots[-1]
-        
-        wave1 = abs(p2.price - p1.price)
-        wave2 = abs(p3.price - p2.price)
-        wave3 = abs(p4.price - p3.price)
+        # 需要5个点验证完整的1-2-3-4结构
+        if len(pivots) >= 5:
+            p0 = pivots[-5]          # 浪1起点前(前一浪结束或底部)
+            p1 = pivots[-4]          # 浪1起点
+            p2 = pivots[-3]          # 浪2终点 = 浪1终点
+            p3 = pivots[-2]          # 浪3终点 = 浪4起点
+            p4 = pivots[-1]          # 浪4终点 = 当前
+            
+            wave1 = abs(p2.price - p1.price)
+            wave2 = abs(p3.price - p2.price)  # 这里p3是浪3起点,需要重新理解
+            # 实际上: p1(1起点)->p2(2起点)->p3(3起点)->p4(4起点)
+            # 但极值点应该是: p1(低点)->p2(高点)->p3(低点)->p4(高点)->p5(低点)
+            # 所以重新映射
+            
+            # 正确的推动浪极值点序列 (上涨):
+            # p1=低点(1起点), p2=高点(1终点=2起点), p3=低点(2终点=3起点), p4=高点(3终点=4起点), p5=低点(4终点)
+            
+            # 重新计算
+            wave1 = abs(p2.price - p1.price)
+            wave2 = abs(p3.price - p2.price)
+            wave3 = abs(p4.price - p3.price)
+            
+            direction_up = p2.price > p1.price
+            
+            # 验证浪3是推动浪(幅度最大,不能是最短)
+            # 规则: 浪3通常是最长的,至少不能比浪1短
+            wave3_is_strongest = wave3 >= wave1 * 1.1  # 浪3比浪1长10%以上
+            wave3_not_shortest = wave3 >= wave1 * 0.8   # 浪3不能比浪1短太多
+            
+            # 验证浪3时间足够(至少3天)
+            try:
+                from datetime import datetime
+                d3_start = datetime.strptime(str(p3.date)[:10], '%Y-%m-%d')
+                d3_end = datetime.strptime(str(p4.date)[:10], '%Y-%m-%d')
+                wave3_duration = (d3_end - d3_start).days
+                wave3_valid_time = wave3_duration >= 3
+            except:
+                wave3_valid_time = True
+            
+            # 验证1-2浪结构合理
+            w2_retrace = wave2 / wave1 if wave1 > 0 else 1
+            wave2_valid = w2_retrace <= self.max_wave2_retrace
+            
+            # 浪1起点验证(从相对低位启动)
+            wave1_valid_start = False
+            if direction_up and p0.price < p1.price:
+                wave1_valid_start = True
+            elif not direction_up and p0.price > p1.price:
+                wave1_valid_start = True
+            
+            # 整体123结构验证
+            wave123_valid = wave1_valid_start and wave2_valid and wave3_not_shortest
+        else:
+            p1 = pivots[-4]
+            p2 = pivots[-3]
+            p3 = pivots[-2]
+            p4 = pivots[-1]
+            
+            wave1 = abs(p2.price - p1.price)
+            wave2 = abs(p3.price - p2.price)
+            wave3 = abs(p4.price - p3.price)
+            direction_up = p2.price > p1.price
+            wave123_valid = False
+            wave3_is_strongest = wave3 >= wave1
         
         if wave1 < p1.price * self.min_wave_pct:
             return None
-        
-        direction_up = p2.price > p1.price
         
         # 验证推动浪结构
         if direction_up:
@@ -552,10 +701,12 @@ class UnifiedWaveAnalyzer:
                     p3.price < p1.price and p4.price < p3.price):
                 return None
         
+        # 浪2回撤检查
         w2_retrace = wave2 / wave1
         if w2_retrace > self.max_wave2_retrace:
             return None
         
+        # 浪3幅度检查 - 不能是最短浪
         if wave3 < wave1 * 0.8:
             return None
         
@@ -563,6 +714,7 @@ class UnifiedWaveAnalyzer:
         wave4_sofar = abs(current_price - p4.price)
         w4_retrace = wave4_sofar / wave3 if wave3 > 0 else 1
         
+        # 浪4回撤范围检查
         if direction_up:
             if current_price >= p4.price or current_price <= p3.price:
                 return None
@@ -570,6 +722,7 @@ class UnifiedWaveAnalyzer:
             if current_price <= p4.price or current_price >= p3.price:
                 return None
         
+        # 浪4回撤不应超过浪3的50%
         if w4_retrace > self.max_wave4_retrace:
             return None
         
@@ -583,17 +736,26 @@ class UnifiedWaveAnalyzer:
             target = current_price - wave1
             stop_loss = min(max(current_price * 1.02, p3.price * 1.01), current_price + atr_stop)
         
+        # 置信度加权
         confidence = 0.5
         if 0.382 <= w2_retrace <= 0.5:
-            confidence += 0.15
+            confidence += 0.1
         if 0.2 <= w4_retrace <= 0.382:
-            confidence += 0.2
+            confidence += 0.15
         elif 0.382 < w4_retrace <= 0.5:
             confidence += 0.1
         if wave3 > wave1 * 1.5:
             confidence += 0.1
         if p4.strength >= 3:
             confidence += 0.1
+        # 123浪结构验证奖励
+        if wave123_valid:
+            confidence += 0.2  # 完整123结构,大幅加分
+        if wave3_is_strongest:
+            confidence += 0.1  # 浪3是最强浪,加分
+        # 5个点以上可以验证完整1234结构
+        if len(pivots) >= 5:
+            confidence += 0.05
         
         return UnifiedWaveSignal(
             is_valid=True,
@@ -601,11 +763,17 @@ class UnifiedWaveAnalyzer:
             entry_price=current_price,
             target_price=target,
             stop_loss=stop_loss,
-            confidence=min(confidence, 0.9),
+            confidence=min(max(confidence, 0.3), 0.9),
             direction='up' if direction_up else 'down',
-            detection_method='enhanced',
+            detection_method='enhanced_context',
             pivot_count=len(pivots),
-            wave_structure={'wave1': wave1, 'wave2_retrace': w2_retrace, 'wave4_retrace': w4_retrace}
+            wave_structure={
+                'wave1': wave1, 
+                'wave2_retrace': w2_retrace, 
+                'wave4_retrace': w4_retrace,
+                'wave123_valid': wave123_valid,
+                'wave3_is_strongest': wave3_is_strongest
+            }
         )
     
     def _detect_wave4_inferred(self, pivots: List[PivotPoint], prices: np.ndarray, 
