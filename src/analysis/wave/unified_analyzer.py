@@ -407,8 +407,9 @@ class UnifiedWaveAnalyzer:
             
             if a_size > 0:
                 bounce_ratio = bounce_size / a_size
-                # 放宽到20%-100% (原来38.2%-80%)
-                if 0.2 <= bounce_ratio <= 1.0:
+                # 放宽到20%-200% (原来38.2%-80%，后改为20%-100%)
+                # B浪可以超过A浪幅度的100%（扩散平台型调整），极端情况下可达200%
+                if 0.2 <= bounce_ratio <= 2.0:
                     is_bounce_from_a = True
             
             # B浪不应突破A浪起点
