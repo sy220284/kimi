@@ -537,8 +537,8 @@ class UnifiedWaveAnalyzer:
             elif not direction_up and p0.price > p1_start.price:
                 wave1_valid_start = True
             
-            # 2. 浪1幅度足够(>3%)
-            wave1_strong = wave1 >= p1_start.price * 0.03
+            # 2. 浪1幅度足够(>2% - 放宽从3%)
+            wave1_strong = wave1 >= p1_start.price * 0.02
             
             # 3. 浪1时间(软性判断,不作为硬性门槛)
             try:
@@ -555,12 +555,16 @@ class UnifiedWaveAnalyzer:
             # 浪1验证: 启动点和幅度验证通过即可,时间仅影响置信度
             wave1_valid = wave1_valid_start and wave1_strong
         else:
+            # 只有3个极值点: 尝试推断1浪结构
             p1_start = pivots[-3]
             p1_end = pivots[-2]
             p2_end = pivots[-1]
             wave1 = abs(p1_end.price - p1_start.price)
             direction_up = p1_end.price > p1_start.price
-            wave1_valid = False
+            
+            # 推断模式: 只验证幅度(>2%)，不验证启动点
+            wave1_strong = wave1 >= p1_start.price * 0.02
+            wave1_valid = wave1_strong  # 推断模式下只要求幅度足够
             wave1_duration = 0
         
         if wave1 < p1_start.price * self.min_wave_pct:
