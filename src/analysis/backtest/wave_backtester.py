@@ -1,5 +1,5 @@
 """
-回测框架 - Phase 5 验证层
+回测框架 - Phase 5 验证层 (集成 UnifiedWaveAnalyzer)
 验证波浪分析策略的历史表现
 """
 import pandas as pd
@@ -8,6 +8,15 @@ from typing import List, Dict, Optional, Tuple, Any
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
+
+# 导入 UnifiedWaveAnalyzer
+try:
+    from ..wave.unified_analyzer import UnifiedWaveAnalyzer, UnifiedWaveSignal, WaveEntryType
+except ImportError:
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from wave.unified_analyzer import UnifiedWaveAnalyzer, UnifiedWaveSignal, WaveEntryType
 
 
 class TradeAction(Enum):
@@ -105,7 +114,7 @@ class WaveStrategy:
         use_resonance: bool = True,
         min_holding_days: int = 3,  # 最小持仓天数
         use_trend_filter: bool = True,  # 使用趋势过滤
-        trend_ma_period: int = 60,  # 趋势均线周期
+        trend_ma_period: int = 200,  # 趋势均线周期 (优化: 200日均线)
         use_dynamic_target: bool = True,  # 使用动态目标价(基于浪型)
         target_proximity_pct: float = 0.03,  # 接近目标价3%即考虑卖出
         wave_structure_break_pct: float = 0.03  # 浪型破坏阈值3%
@@ -131,70 +140,6 @@ class WaveStrategy:
         # 记录持仓时的最新分析结果，用于动态更新目标价
         self.position_analysis: Dict[str, Any] = {}
     
-    def generate_signal(
-        self,
-        analysis_result: Any,
-        current_price: float
-    ) -> Optional[TradeAction]:
-        """
-        根据分析结果生成交易信号
-        
-        Returns:
-            TradeAction or None
-        """
-        if not analysis_result or not analysis_result.primary_pattern:
-            return None
-        
-        pattern = analysis_result.primary_pattern
-        
-        # 检查置信度
-        if pattern.confidence < self.min_confidence:
-            return None
-        
-        # 检查共振
-        if self.use_resonance and analysis_result.resonance:
-            res = analysis_result.resonance
-            # 波浪和指标方向一致才交易
-            if not res.wave_aligned:
-                return TradeAction.HOLD
-            
-            # 共振强度足够
-            if res.overall_strength < 0.4:
-                return TradeAction.HOLD
-        
-        # 获取最新浪号
-        latest_wave = pattern.points[-1].wave_num if pattern.points else None
-        
-        # 买入条件: 调整浪结束或任何可能反弹的位置
-        # 标准调整浪: 2/4/C (回调买入点)
-        # ZigZag调整浪: A/B/C 
-        # 起点或不确定: 0/None
-        buy_waves = ['0', '2', '4', 'C', 'A', 'B', None]
-        
-        # 对于推动浪的1/3/5，如果前面有足够大的调整，也可以考虑买入
-        # 这里简化处理: 只要不是明确的推动浪末端(5)，都尝试买入
-        if latest_wave in ['1', '3'] and pattern.direction.value == 'up':
-            # 检查是否是推动浪刚开始
-            if len(pattern.points) <= 2:  # 刚检测到推动浪起点
-                buy_waves.append('1')
-        
-        if latest_wave in buy_waves:
-            if pattern.direction.value == 'up':
-                return TradeAction.BUY
-            else:
-                return TradeAction.SELL  # 做空
-        
-        # 对于zigzag类型，如果已经到末端也尝试买入
-        if pattern.wave_type.value in ['zigzag', 'corrective'] and len(pattern.points) >= 3:
-            if pattern.direction.value == 'up':
-                return TradeAction.BUY
-        
-        # 卖出条件: 推动浪完成
-        if latest_wave in ['5']:
-            return TradeAction.CLOSE
-        
-        return TradeAction.HOLD
-    
     def execute_trade(
         self,
         symbol: str,
@@ -203,56 +148,42 @@ class WaveStrategy:
         action: TradeAction,
         target_price: Optional[float] = None,
         stop_loss: Optional[float] = None,
-        data_idx: int = 0,  # 当前数据索引
-        historical_df: Optional[pd.DataFrame] = None,  # 历史数据用于计算波动率
-        current_analysis: Any = None  # 当前分析结果用于记录浪号
+        data_idx: int = 0,
+        historical_df: Optional[pd.DataFrame] = None,
+        wave_signal: Optional[UnifiedWaveSignal] = None  # 新的 UnifiedWaveSignal
     ):
-        """执行交易"""
+        """执行交易 - 适配 UnifiedWaveSignal"""
         
         if action == TradeAction.BUY:
-            # 开仓
             if symbol in self.positions:
-                return  # 已有仓位
+                return
             
             position_value = self.capital * self.position_size
-            quantity = int(position_value / price / 100) * 100  # 整手
+            quantity = int(position_value / price / 100) * 100
             
-            # 修复: 如果按仓位计算不足1手，但至少够买1手，就买1手
             if quantity < 100:
                 if position_value >= price * 100:
-                    quantity = 100  # 至少买1手
+                    quantity = 100
                 else:
-                    return  # 资金确实不足
+                    return
             
-            # 基于浪型和个股波动率计算目标价
-            # 如果是动态目标价模式，根据买入浪号计算预期目标
-            if self.use_dynamic_target:
-                # 获取当前分析结果（从position_analysis中获取最新的）
-                current_analysis = self.position_analysis.get(symbol)
-                target_price = self._calculate_wave_based_target(
-                    symbol, price, current_analysis, historical_df
-                )
+            # 动态目标价计算
+            if self.use_dynamic_target and wave_signal:
+                target_price = wave_signal.target_price
+                # 确保目标价合理
+                if target_price <= price * 1.001:
+                    target_price = price * (1 + self.take_profit_pct)
+                stop_loss = wave_signal.stop_loss
             
-            # 如果仍然无法计算目标价，使用默认止盈
             if target_price is None or target_price <= price * 1.001:
                 target_price = price * (1 + self.take_profit_pct)
             
-            # 确保止损价 < 买入价
-            calculated_stop = price * (1 - self.stop_loss_pct)
             if stop_loss is None or stop_loss >= price:
-                stop_loss = calculated_stop
+                stop_loss = price * (1 - self.stop_loss_pct)
             
-            # 获取买入浪号和预期下一浪
-            entry_wave = None
-            expected_wave = None
-            if current_analysis and current_analysis.primary_pattern:
-                entry_wave = current_analysis.primary_pattern.points[-1].wave_num if current_analysis.primary_pattern.points else None
-                # 预期下一浪映射
-                wave_progression = {
-                    'C': '1', '2': '3', '4': '5',
-                    'A': 'B', 'B': 'C', '1': '2', '3': '4', '5': None
-                }
-                expected_wave = wave_progression.get(entry_wave, None)
+            # 从 UnifiedWaveSignal 获取浪号
+            entry_wave = wave_signal.entry_type.value if wave_signal else None
+            expected_wave = {'C': '1', '2': '3', '4': '5'}.get(entry_wave, None)
             
             trade = Trade(
                 symbol=symbol,
@@ -262,7 +193,7 @@ class WaveStrategy:
                 quantity=quantity,
                 target_price=target_price,
                 stop_loss=stop_loss,
-                entry_idx=data_idx,  # 记录买入索引
+                entry_idx=data_idx,
                 entry_wave=entry_wave,
                 expected_wave=expected_wave
             )
@@ -270,18 +201,18 @@ class WaveStrategy:
             self.positions[symbol] = trade
             self.trades.append(trade)
             
+            # 记录信号用于后续检查
+            if wave_signal:
+                self.position_analysis[symbol] = wave_signal
+            
         elif action == TradeAction.CLOSE:
-            # 平仓
             if symbol not in self.positions:
                 return
             
             trade = self.positions[symbol]
             trade.close(date, price)
-            
-            # 更新资金
             self.capital += trade.pnl
             
-            # 清理持仓分析记录
             if symbol in self.position_analysis:
                 del self.position_analysis[symbol]
             
@@ -293,15 +224,10 @@ class WaveStrategy:
         date: str, 
         price: float, 
         data_idx: int = 0,
-        current_analysis: Any = None
+        wave_signal: Optional[UnifiedWaveSignal] = None
     ):
         """
-        检查止损止盈 - 动态浪型目标价版本
-        
-        卖出条件:
-        1. 固定止损: 价格跌破止损价
-        2. 动态止盈: 价格接近目标价(基于浪型计算)
-        3. 浪型走坏: 持仓期间浪型结构被破坏
+        检查止损止盈 - 适配 UnifiedWaveSignal
         """
         if symbol not in self.positions:
             return None
@@ -311,154 +237,64 @@ class WaveStrategy:
         # 检查最小持仓天数
         holding_days = trade.holding_days(data_idx)
         if holding_days < self.min_holding_days:
-            return None  # 持仓时间不足，不检查止损止盈
+            return None
         
         # 1. 固定止损检查
         if trade.stop_loss and price <= trade.stop_loss:
             self.execute_trade(symbol, date, price, TradeAction.CLOSE, data_idx=data_idx)
             return "stop_loss"
         
-        # 动态目标价模式
-        if self.use_dynamic_target and current_analysis and current_analysis.primary_pattern:
-            pattern = current_analysis.primary_pattern
+        # 2. 动态止盈: 接近目标价
+        if trade.target_price:
+            distance_to_target = abs(trade.target_price - price) / price
             
-            # 更新持仓分析记录
-            self.position_analysis[symbol] = current_analysis
-            
-            # 2. 动态止盈: 接近目标价
-            if pattern.target_price:
-                # 计算当前价格距离目标价的百分比
-                distance_to_target = abs(pattern.target_price - price) / price
-                
-                # 如果接近目标价(在3%范围内)，卖出
-                if distance_to_target <= self.target_proximity_pct:
-                    self.execute_trade(symbol, date, price, TradeAction.CLOSE, data_idx=data_idx)
-                    return f"target_proximity({pattern.target_price:.2f})"
-                
-                # 如果价格已经超过目标价，立即卖出
-                if price >= pattern.target_price:
-                    self.execute_trade(symbol, date, price, TradeAction.CLOSE, data_idx=data_idx)
-                    return f"target_reached({pattern.target_price:.2f})"
-            
-            # 3. 浪型走坏检测
-            if self._is_wave_structure_broken(symbol, pattern, price):
+            if distance_to_target <= self.target_proximity_pct:
                 self.execute_trade(symbol, date, price, TradeAction.CLOSE, data_idx=data_idx)
-                return "wave_structure_broken"
+                return f"target_proximity({trade.target_price:.2f})"
+            
+            if price >= trade.target_price:
+                self.execute_trade(symbol, date, price, TradeAction.CLOSE, data_idx=data_idx)
+                return f"target_reached({trade.target_price:.2f})"
         
-        # 备用: 固定止盈(如果动态目标价不可用)
-        elif not self.use_dynamic_target:
-            if trade.target_price and price >= trade.target_price:
-                self.execute_trade(symbol, date, price, TradeAction.CLOSE, data_idx=data_idx)
-                return "take_profit_fixed"
+        # 3. 浪型走坏检测 - 使用 UnifiedWaveSignal
+        if wave_signal and self._is_wave_structure_broken_unified(symbol, wave_signal, price):
+            self.execute_trade(symbol, date, price, TradeAction.CLOSE, data_idx=data_idx)
+            return "wave_structure_broken"
         
         return None
     
-    def _is_wave_structure_broken(self, symbol: str, current_pattern: Any, current_price: float) -> bool:
-        """
-        检测浪型结构是否走坏
-        
-        判断标准:
-        1. 当前浪号从买入时发生变化(比如从浪C变成浪A，意味着新调整开始)
-        2. 方向发生反转
-        3. 价格跌破关键支撑位
-        """
+    def _is_wave_structure_broken_unified(self, symbol: str, current_signal: UnifiedWaveSignal, current_price: float) -> bool:
+        """检测浪型结构是否走坏 - 适配 UnifiedWaveSignal"""
         if symbol not in self.position_analysis:
             return False
         
-        entry_analysis = self.position_analysis[symbol]
-        if not entry_analysis or not entry_analysis.primary_pattern:
+        entry_signal = self.position_analysis[symbol]
+        if not entry_signal:
             return False
         
-        entry_pattern = entry_analysis.primary_pattern
+        entry_wave = entry_signal.entry_type.value
+        current_wave = current_signal.entry_type.value
         
-        # 获取当前和买入时的浪号
-        entry_wave = entry_pattern.points[-1].wave_num if entry_pattern.points else None
-        current_wave = current_pattern.points[-1].wave_num if current_pattern.points else None
-        
-        # 标准1: 浪号变化且不是正常推进
-        # 例如: 买入时是浪C(调整结束)，现在变成浪A(新调整开始)
+        # 浪号变化检查
         if entry_wave and current_wave:
-            # 如果买入时是C浪(期待上涨)，现在变成A浪(新的下跌调整)
             if entry_wave == 'C' and current_wave == 'A':
                 return True
-            # 如果买入时是2/4浪(期待上涨)，现在变成1/3/5浪(可能已经是推动浪末端)
             if entry_wave in ['2', '4'] and current_wave in ['1', '3', '5']:
-                # 如果已经有足够涨幅，认为是正常推进; 如果涨幅很小，可能是误判
                 entry_price = self.positions[symbol].entry_price
-                if (current_price - entry_price) / entry_price < 0.02:  # 涨幅<2%
+                if (current_price - entry_price) / entry_price < 0.02:
                     return True
         
-        # 标准2: 方向反转
-        if entry_pattern.direction.value != current_pattern.direction.value:
-            # 只有当方向从up变成down才认为是走坏
-            if entry_pattern.direction.value == 'up' and current_pattern.direction.value == 'down':
+        # 方向反转检查
+        if entry_signal.direction != current_signal.direction:
+            if entry_signal.direction == 'up' and current_signal.direction == 'down':
                 return True
         
-        # 标准3: 置信度大幅下降
-        if current_pattern.confidence < entry_pattern.confidence * 0.5:
+        # 置信度下降检查
+        if current_signal.confidence < entry_signal.confidence * 0.5:
             return True
         
         return False
-    
-    def _calculate_wave_based_target(
-        self, 
-        symbol: str, 
-        entry_price: float, 
-        analysis_result: Any,
-        historical_df: pd.DataFrame
-    ) -> Optional[float]:
-        """
-        基于浪型和个股历史波动率计算目标价
-        
-        策略:
-        - C浪末买入 → 计算后续1浪涨幅 (推动浪开始,预期涨幅较小)
-        - 2浪末买入 → 计算后续3浪涨幅 (主升浪,预期涨幅最大)  
-        - 4浪末买入 → 计算后续5浪涨幅 (末浪,预期涨幅中等)
-        - A/B浪买入 → 默认使用历史平均波动率
-        
-        波动率计算:
-        - 基于个股60日涨跌幅标准差
-        - 结合ATR(平均真实波幅)
-        """
-        if not analysis_result or not analysis_result.primary_pattern:
-            return None
-        
-        pattern = analysis_result.primary_pattern
-        
-        # 获取买入时的浪号
-        entry_wave = pattern.points[-1].wave_num if pattern.points else None
-        
-        # 计算个股历史波动率
-        volatility = self._calculate_stock_volatility(historical_df)
-        
-        # 根据浪号确定预期涨幅倍数
-        # 基于Elliott Wave理论:
-        # 浪1: 通常是推动浪的开始,涨幅相对保守
-        # 浪3: 通常是主升浪,涨幅最大(可能是1浪的1.618倍)
-        # 浪5: 通常是末浪,涨幅与1浪相近或较小
-        wave_multipliers = {
-            'C': 1.0,   # C浪后1浪: 基础涨幅
-            '2': 1.618, # 2浪后3浪: 主升浪,预期最高
-            '4': 1.0,   # 4浪后5浪: 末浪,保守预期
-            'A': 0.8,   # A浪后B浪: 反弹,较保守
-            'B': 1.2,   # B浪后C浪: 可能延续
-            None: 1.0   # 未知浪号: 默认
-        }
-        
-        multiplier = wave_multipliers.get(entry_wave, 1.0)
-        
-        # 计算目标涨幅 = 波动率 × 浪型倍数 × 安全系数(0.8)
-        # 安全系数避免过度乐观
-        safety_factor = 0.8
-        target_return = volatility * multiplier * safety_factor
-        
-        # 确保最小目标涨幅(至少5%)和最大限制(不超过30%)
-        target_return = max(0.05, min(target_return, 0.30))
-        
-        target_price = entry_price * (1 + target_return)
-        
-        return target_price
-    
+
     def _calculate_stock_volatility(self, df: pd.DataFrame, lookback: int = 60) -> float:
         """
         计算个股历史波动率
@@ -485,11 +321,7 @@ class WaveStrategy:
         atr = recent_df['tr'].mean()
         atr_pct = atr / recent_df['close'].mean() if recent_df['close'].mean() > 0 else 0
         
-        # 综合波动率(取两者平均)
-        # 将ATR百分比转换为与年化波动率类似的量级
-        combined_volatility = (annual_volatility + atr_pct * np.sqrt(252)) / 2
-        
-        # 默认最小波动率10%
+        # 便捷函数
         return max(combined_volatility, 0.10)
     
     def record_equity(self, date: str, price: float):
@@ -510,11 +342,19 @@ class WaveStrategy:
 
 
 class WaveBacktester:
-    """波浪回测器"""
+    """
+    波浪回测器 - 集成 UnifiedWaveAnalyzer
     
-    def __init__(self, analyzer: Any):
-        self.analyzer = analyzer
+    适配 UnifiedWaveAnalyzer 的信号结构:
+    - UnifiedWaveSignal 替代原 analysis_result
+    - 直接使用 detect() 方法获取信号
+    """
+    
+    def __init__(self, analyzer: Optional[UnifiedWaveAnalyzer] = None):
+        # 默认创建 UnifiedWaveAnalyzer 实例
+        self.analyzer = analyzer or UnifiedWaveAnalyzer()
         self.strategy = WaveStrategy()
+        self._current_signals: List[UnifiedWaveSignal] = []
     
     def run(
         self,
@@ -523,7 +363,7 @@ class WaveBacktester:
         reanalyze_every: int = 5  # 每5天重新分析
     ) -> BacktestResult:
         """
-        运行回测
+        运行回测 - 使用 UnifiedWaveAnalyzer
         
         Args:
             symbol: 股票代码
@@ -540,59 +380,86 @@ class WaveBacktester:
         df['date'] = pd.to_datetime(df['date'])
         df = df.sort_values('date')
         
-        # 计算趋势均线
+        # 计算200日均线趋势
         if self.strategy.use_trend_filter:
             df['ma_trend'] = df['close'].rolling(window=self.strategy.trend_ma_period).mean()
         
-        current_analysis = None
+        self._current_signals = []
         
         for i, row in df.iterrows():
             date = row['date'].strftime('%Y-%m-%d')
             price = row['close']
             
-            # 趋势过滤：只在均线之上才考虑买入
+            # 200日均线趋势过滤
             if self.strategy.use_trend_filter and 'ma_trend' in row:
                 ma_trend = row['ma_trend']
-                if pd.notna(ma_trend) and price < ma_trend:
-                    # 价格在均线下方，跳过买入信号
-                    current_analysis = None
+                if pd.notna(ma_trend) and price < ma_trend * 0.98:  # 价格低于均线2%
+                    # 价格在长期均线下方，清空信号
+                    self._current_signals = []
             
             # 定期重新分析
-            if i % reanalyze_every == 0 or current_analysis is None:
+            if i % reanalyze_every == 0 or len(self._current_signals) == 0:
                 # 使用最近60天数据进行分析
                 lookback_start = max(0, i - 60)
                 analysis_df = df.iloc[lookback_start:i+1].copy()
                 
-                if len(analysis_df) >= 20:
+                if len(analysis_df) >= 30:
                     try:
-                        current_analysis = self.analyzer.analyze(symbol, analysis_df)
-                    except Exception:
-                        current_analysis = None
+                        self._current_signals = self.analyzer.detect(analysis_df, mode='all')
+                    except Exception as e:
+                        print(f"分析失败 at {date}: {e}")
+                        self._current_signals = []
             
-            # 生成信号
-            if current_analysis:
-                signal = self.strategy.generate_signal(current_analysis, price)
-                
-                if signal == TradeAction.BUY:
-                    target = current_analysis.primary_pattern.target_price if current_analysis.primary_pattern else None
-                    stop = current_analysis.primary_pattern.stop_loss if current_analysis.primary_pattern else None
-                    # 记录分析结果用于目标价计算
-                    self.strategy.position_analysis[symbol] = current_analysis
-                    # 传入历史数据用于计算波动率
-                    historical_df = df.iloc[:i+1].copy()
-                    self.strategy.execute_trade(symbol, date, price, signal, target, stop, data_idx=i, historical_df=historical_df, current_analysis=current_analysis)
-                
-                elif signal == TradeAction.CLOSE:
-                    self.strategy.execute_trade(symbol, date, price, signal, data_idx=i)
+            # 生成交易信号
+            best_signal = self._get_best_trade_signal(price)
             
-            # 检查止损止盈 - 传入当前分析结果以支持动态目标价
-            self.strategy.check_stop_loss_take_profit(symbol, date, price, data_idx=i, current_analysis=current_analysis)
+            if best_signal and best_signal.direction == 'up':
+                # 买入信号
+                target = best_signal.target_price
+                stop = best_signal.stop_loss
+                # 传入历史数据用于计算波动率
+                historical_df = df.iloc[:i+1].copy()
+                self.strategy.execute_trade(
+                    symbol, date, price, TradeAction.BUY, 
+                    target, stop, data_idx=i, 
+                    historical_df=historical_df,
+                    wave_signal=best_signal
+                )
+            
+            # 检查止损止盈 - 使用最佳信号进行动态目标价检查
+            best_for_exit = self._get_best_trade_signal(price)
+            self.strategy.check_stop_loss_take_profit(
+                symbol, date, price, data_idx=i, 
+                wave_signal=best_for_exit
+            )
             
             # 记录权益
             self.strategy.record_equity(date, price)
         
         # 计算结果
         return self._calculate_result(symbol, df)
+    
+    def _get_best_trade_signal(self, current_price: float) -> Optional[UnifiedWaveSignal]:
+        """获取最佳交易信号"""
+        if not self._current_signals:
+            return None
+        
+        # 过滤有效信号
+        valid_signals = [
+            s for s in self._current_signals 
+            if s.is_valid and s.confidence >= 0.5
+        ]
+        
+        if not valid_signals:
+            return None
+        
+        # 按综合评分排序 (置信度 + 共振分数)
+        valid_signals.sort(
+            key=lambda x: (x.confidence + getattr(x, 'resonance_score', 0)) / 2, 
+            reverse=True
+        )
+        
+        return valid_signals[0]
     
     def _calculate_result(self, symbol: str, df: pd.DataFrame) -> BacktestResult:
         """计算回测结果"""

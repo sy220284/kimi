@@ -23,9 +23,13 @@ from enum import Enum
 try:
     from .enhanced_detector import enhanced_pivot_detection, PivotPoint, label_wave_numbers
     from .elliott_wave import WavePattern, WavePoint, WaveType, WaveDirection
+    from .resonance import ResonanceAnalyzer, SignalDirection
+    from .adaptive_params import AdaptiveParameterOptimizer, MarketCondition
 except ImportError:
     from enhanced_detector import enhanced_pivot_detection, PivotPoint, label_wave_numbers
     from elliott_wave import WavePattern, WavePoint, WaveType, WaveDirection
+    from resonance import ResonanceAnalyzer, SignalDirection
+    from adaptive_params import AdaptiveParameterOptimizer, MarketCondition
 
 
 class WaveEntryType(Enum):
@@ -58,70 +62,119 @@ class UnifiedWaveSignal:
     trend_aligned: bool = False
     trend_direction: str = "unknown"
     
+    # 共振分析结果 (新增)
+    resonance_score: float = 0.0
+    resonance_direction: str = "neutral"
+    tech_aligned: bool = False
+    
+    # 市场状态 (新增)
+    market_condition: str = "unknown"
+    
     def __repr__(self):
-        return f"WaveSignal({self.entry_type.value}, ¥{self.entry_price:.2f}, conf={self.confidence:.2f})"
+        return f"WaveSignal({self.entry_type.value}, ¥{self.entry_price:.2f}, conf={self.confidence:.2f}, res={self.resonance_score:.2f})"
 
 
 class UnifiedWaveAnalyzer:
     """
-    统一波浪分析器 - 优化版
+    统一波浪分析器 - 集成优化版
     
-    优化:
+    集成功能:
     1. 浪4检测支持3极值点推断模式
     2. 浪C/2区分使用推动浪前序验证
     3. 趋势过滤后置，避免过度过滤
     4. ATR动态止损替代固定止损
+    5. 多指标共振验证 (MACD/RSI/量价)
+    6. 自适应参数优化 (根据市场状态)
     """
     
     def __init__(self,
                  # 极值点检测参数
-                 atr_period: int = 10,           # 优化: 从14缩短至10，获取更多极值点
+                 atr_period: int = 10,
                  atr_mult: float = 0.5,
-                 min_pivots: int = 3,            # 优化: 从4降至3，支持浪4检测
+                 min_pivots: int = 3,
                  
                  # 波浪检测参数
                  min_wave_pct: float = 0.015,
-                 max_wave2_retrace: float = 0.50,  # 优化: 收紧至50%
+                 max_wave2_retrace: float = 0.50,
                  max_wave4_retrace: float = 0.50,
-                 min_retrace: float = 0.382,       # 优化: 从30%提高至38.2%
+                 min_retrace: float = 0.382,
                  
                  # 信号过滤
                  min_confidence: float = 0.5,
-                 use_trend_filter: bool = True,    # 优化: 改为后置趋势过滤
+                 use_trend_filter: bool = True,
+                 trend_ma_period: int = 200,  # 优化: 改为200日均线
                  
                  # ATR止损参数
-                 atr_stop_mult: float = 2.0):      # 新增: ATR止损倍数
+                 atr_stop_mult: float = 2.0,
+                 
+                 # 共振分析 (新增)
+                 use_resonance: bool = True,
+                 min_resonance_score: float = 0.3,
+                 
+                 # 自适应参数 (新增)
+                 use_adaptive_params: bool = False,
+                 
+                 # 便捷模式: 传入自适应参数覆盖手动设置
+                 adaptive_params: Optional[Dict] = None):
         
-        self.atr_period = atr_period
-        self.atr_mult = atr_mult
-        self.min_pivots = min_pivots
+        # 如果使用自适应参数，优先采用
+        if adaptive_params:
+            self.atr_period = adaptive_params.get('atr_period', atr_period)
+            self.atr_mult = adaptive_params.get('atr_mult', atr_mult)
+            self.min_pivots = adaptive_params.get('min_pivots', min_pivots)
+            self.min_wave_pct = adaptive_params.get('min_wave_pct', min_wave_pct)
+            self.min_confidence = adaptive_params.get('confidence_threshold', min_confidence)
+            self.use_adaptive_params = False  # 已应用，不再动态调整
+        else:
+            self.atr_period = atr_period
+            self.atr_mult = atr_mult
+            self.min_pivots = min_pivots
+            self.min_wave_pct = min_wave_pct
+            self.min_confidence = min_confidence
+            self.use_adaptive_params = use_adaptive_params
         
-        self.min_wave_pct = min_wave_pct
         self.max_wave2_retrace = max_wave2_retrace
         self.max_wave4_retrace = max_wave4_retrace
         self.min_retrace = min_retrace
         
-        self.min_confidence = min_confidence
         self.use_trend_filter = use_trend_filter
+        self.trend_ma_period = trend_ma_period  # 200日均线
+        
         self.atr_stop_mult = atr_stop_mult
+        
+        # 共振分析设置
+        self.use_resonance = use_resonance
+        self.min_resonance_score = min_resonance_score
+        self._resonance_analyzer = ResonanceAnalyzer() if use_resonance else None
+        
+        # 记录当前市场状态
+        self._current_market_condition = MarketCondition.TRENDING
     
     def detect(self, df: pd.DataFrame, mode: str = 'all') -> List[UnifiedWaveSignal]:
         """
-        检测波浪买入信号 - 优化版
+        检测波浪买入信号 - 集成优化版
         
         流程:
-        1. 极值点检测 (不使用趋势确认，避免过度过滤)
-        2. 波浪检测 (C/2/4)
-        3. 趋势过滤后置 (买入前检查)
-        4. ATR动态止损计算
+        1. 自适应参数优化 (如启用)
+        2. 极值点检测
+        3. 波浪检测 (C/2/4)
+        4. 共振分析验证
+        5. 趋势过滤后置
+        6. ATR动态止损计算
         """
         if len(df) < 60:
             return []
         
+        # 步骤1: 自适应参数优化
+        if self.use_adaptive_params:
+            self._apply_adaptive_params(df)
+        
+        # 检测市场状态
+        self._current_market_condition = self._detect_market_condition(df)
+        
         signals = []
         
-        # 优化1: 极值点检测不使用趋势确认，获取更多点
-        # 修复: 预留10天数据给浪3/4发展，避免最后一个点是极值点
+        # 步骤2: 极值点检测
         detect_df = df.iloc[:-10] if len(df) > 70 else df
         
         pivots = enhanced_pivot_detection(
@@ -138,11 +191,9 @@ class UnifiedWaveAnalyzer:
         # 使用完整数据计算当前价格和ATR
         prices = df['close'].values
         current_price = prices[-1]
-        
-        # 计算ATR用于动态止损
         atr = self._calculate_atr(df)
         
-        # 检测各浪型
+        # 步骤3: 检测各浪型
         if mode in ['all', 'C'] and len(pivots) >= 3:
             sig = self._detect_wave_c(pivots, prices, atr)
             if sig:
@@ -153,23 +204,99 @@ class UnifiedWaveAnalyzer:
             if sig:
                 signals.append(sig)
         
-        # 优化2: 浪4检测支持3极值点推断模式
         if mode in ['all', '4']:
             sig = None
             if len(pivots) >= 4:
                 sig = self._detect_wave4_standard(pivots, prices, atr)
-            # 标准检测失败或未满足条件，尝试推断检测
             if sig is None:
                 sig = self._detect_wave4_inferred(pivots, prices, atr, df)
             if sig:
                 signals.append(sig)
         
-        # 优化3: 趋势过滤后置
+        # 步骤4: 共振分析验证
+        if self.use_resonance and signals:
+            signals = self._apply_resonance_analysis(signals, df)
+        
+        # 步骤5: 趋势过滤后置
         if self.use_trend_filter and signals:
             signals = self._apply_trend_filter(signals, df)
         
-        signals.sort(key=lambda x: x.confidence, reverse=True)
+        # 添加市场状态信息
+        for sig in signals:
+            sig.market_condition = self._current_market_condition.value
+        
+        signals.sort(key=lambda x: (x.confidence + x.resonance_score) / 2, reverse=True)
         return signals
+    
+    def _apply_adaptive_params(self, df: pd.DataFrame):
+        """应用自适应参数"""
+        try:
+            adaptive = AdaptiveParameterOptimizer.optimize(df)
+            self.atr_period = adaptive.atr_period
+            self.atr_mult = adaptive.atr_mult
+            self.min_confidence = adaptive.confidence_threshold
+        except:
+            pass  # 自适应失败则使用默认参数
+    
+    def _detect_market_condition(self, df: pd.DataFrame) -> MarketCondition:
+        """检测当前市场状态"""
+        try:
+            from .adaptive_params import VolatilityAnalyzer
+            vol_analysis = VolatilityAnalyzer.calculate_volatility_regime(df)
+            return vol_analysis['market_condition']
+        except:
+            return MarketCondition.TRENDING
+    
+    def _apply_resonance_analysis(self, signals: List[UnifiedWaveSignal], 
+                                   df: pd.DataFrame) -> List[UnifiedWaveSignal]:
+        """
+        应用共振分析验证信号
+        
+        整合波浪信号与技术指标(MACD/RSI/量价)的一致性
+        """
+        if not self._resonance_analyzer:
+            return signals
+        
+        validated_signals = []
+        
+        for sig in signals:
+            # 构建临时波浪信号对象供共振分析器使用
+            class TempWaveSignal:
+                pass
+            
+            temp_signal = TempWaveSignal()
+            temp_signal.signal_type = 'buy' if sig.direction == 'up' else 'sell'
+            temp_signal.confidence = sig.confidence
+            
+            # 创建临时pattern
+            class TempPattern:
+                pass
+            temp_pattern = TempPattern()
+            temp_pattern.wave_type = WaveType.CORRECTIVE if sig.entry_type.value == 'C' else WaveType.IMPULSE
+            temp_pattern.direction = WaveDirection.UP if sig.direction == 'up' else WaveDirection.DOWN
+            temp_signal.wave_pattern = temp_pattern
+            
+            # 执行共振分析
+            resonance_result = self._resonance_analyzer.analyze(df, temp_signal)
+            
+            # 更新信号
+            sig.resonance_score = abs(resonance_result.weighted_score)
+            sig.resonance_direction = resonance_result.overall_direction.value
+            sig.tech_aligned = resonance_result.wave_aligned
+            
+            # 过滤：共振分数低于阈值且方向不一致的信号
+            if sig.resonance_score >= self.min_resonance_score:
+                # 方向检查：买入信号需要共振看涨或中性
+                if sig.direction == 'up' and resonance_result.overall_direction in [SignalDirection.BULLISH, SignalDirection.NEUTRAL]:
+                    validated_signals.append(sig)
+                elif sig.direction == 'down' and resonance_result.overall_direction in [SignalDirection.BEARISH, SignalDirection.NEUTRAL]:
+                    validated_signals.append(sig)
+                elif sig.confidence >= 0.7:  # 高置信度信号保留
+                    validated_signals.append(sig)
+            elif sig.confidence >= 0.7:  # 高置信度信号绕过共振过滤
+                validated_signals.append(sig)
+        
+        return validated_signals if validated_signals else signals
     
     def _calculate_atr(self, df: pd.DataFrame) -> float:
         """计算当前ATR值"""
@@ -190,32 +317,42 @@ class UnifiedWaveAnalyzer:
     def _apply_trend_filter(self, signals: List[UnifiedWaveSignal], 
                            df: pd.DataFrame) -> List[UnifiedWaveSignal]:
         """
-        后置趋势过滤 - 只保留与趋势一致的信号
+        后置趋势过滤 - 使用200日均线
         
-        趋势判断: 价格 vs 20日均线
+        趋势判断: 价格 vs 200日均线 (长期趋势)
         """
-        if len(df) < 20:
+        if len(df) < self.trend_ma_period:
             return signals
         
-        ma20 = df['close'].rolling(20).mean().iloc[-1]
+        ma200 = df['close'].rolling(self.trend_ma_period).mean().iloc[-1]
         current_price = df['close'].iloc[-1]
         
-        # 简单趋势判断
-        if current_price > ma20 * 1.02:
+        # 200日均线趋势判断
+        if current_price > ma200 * 1.05:
             trend = 'up'
-        elif current_price < ma20 * 0.98:
+        elif current_price < ma200 * 0.95:
             trend = 'down'
         else:
             trend = 'neutral'
         
         filtered = []
         for sig in signals:
-            # 信号方向与趋势一致，或在震荡市中
-            if trend == 'neutral' or sig.direction == trend:
+            # 买入信号应与趋势一致
+            if sig.direction == 'up' and trend == 'up':
                 sig.trend_aligned = True
                 sig.trend_direction = trend
                 filtered.append(sig)
-            elif sig.confidence >= 0.7:  # 高置信度信号保留
+            elif sig.direction == 'down' and trend == 'down':
+                sig.trend_aligned = True
+                sig.trend_direction = trend
+                filtered.append(sig)
+            elif trend == 'neutral':
+                # 震荡市中，高置信度信号保留
+                if sig.confidence >= 0.6 or sig.resonance_score >= 0.5:
+                    sig.trend_aligned = True
+                    sig.trend_direction = trend
+                    filtered.append(sig)
+            elif sig.confidence >= 0.75:  # 极高置信度信号可逆势
                 sig.trend_aligned = False
                 sig.trend_direction = trend
                 filtered.append(sig)
