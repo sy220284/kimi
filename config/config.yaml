@@ -1,0 +1,133 @@
+# 智能体量化分析系统配置
+
+# 数据库配置
+database:
+  postgres:
+    host: localhost
+    port: 5432
+    database: quant_analysis
+    username: quant_user
+    password: quant_password
+    pool_size: 10
+  
+  redis:
+    host: localhost
+    port: 6379
+    db: 0
+    password: ""
+  
+  mongodb:
+    host: localhost
+    port: 27017
+    database: quant_data
+
+# 数据源配置
+data_sources:
+  tushare:
+    token: ""
+    enabled: false  # 已替换为同花顺接口
+  
+  akshare:
+    enabled: false  # 已替换为同花顺接口
+  
+  baostock:
+    enabled: false  # 已替换为同花顺接口
+  
+  ths:  # 同花顺网页版API
+    enabled: true
+    timeout: 30
+    headers:
+      # 可在此自定义请求头
+    # K线类型映射: 01-日线, 11-周线, 12-月线
+    default_ktype: "01"
+  
+  sw_industry:
+    enabled: true
+    update_frequency: daily
+
+# 分析配置
+analysis:
+  wave_analyst:
+    enabled: true
+    min_wave_length: 5
+    max_wave_length: 100
+    confidence_threshold: 0.7
+  
+  technical_analyst:
+    enabled: true
+    indicators:
+      - name: MACD
+        fast_period: 12
+        slow_period: 26
+        signal_period: 9
+      
+      - name: RSI
+        period: 14
+        overbought: 70
+        oversold: 30
+      
+      - name: Bollinger_Bands
+        period: 20
+        std_dev: 2
+      
+      - name: KDJ
+        k_period: 9
+        d_period: 3
+        j_period: 3
+  
+  rotation_analyst:
+    enabled: true
+    lookback_period: 60  # 60个交易日
+    momentum_period: 20
+    rebalance_frequency: monthly
+
+# 智能体配置
+agents:
+  wave_analyst:
+    model: deepseek/deepseek-reasoner
+    thinking: high
+    timeout_seconds: 300
+  
+  technical_analyst:
+    model: deepseek/deepseek-chat
+    thinking: medium
+    timeout_seconds: 180
+  
+  rotation_analyst:
+    model: deepseek/deepseek-reasoner
+    thinking: high
+    timeout_seconds: 300
+
+# 调度配置
+scheduler:
+  data_collection:
+    frequency: "0 16 * * *"  # 每天16:00
+    enabled: true
+  
+  wave_analysis:
+    frequency: "0 17 * * *"  # 每天17:00
+    enabled: true
+  
+  technical_analysis:
+    frequency: "0 17 * * *"  # 每天17:00
+    enabled: true
+  
+  rotation_analysis:
+    frequency: "0 18 * * 5"  # 每周五18:00
+    enabled: true
+
+# 日志配置
+logging:
+  level: INFO
+  file: /var/log/quant_agent_system.log
+  max_size: 100MB
+  backup_count: 10
+
+# API配置
+api:
+  host: 0.0.0.0
+  port: 8000
+  debug: false
+  cors_origins:
+    - "http://localhost:3000"
+    - "http://127.0.0.1:3000"
