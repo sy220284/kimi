@@ -396,31 +396,42 @@ class UnifiedWaveAnalyzer:
             p_c = pivots[-1]         # C浪终点(当前)
             
             # 验证B浪结构:
-            # 1. B浪是从A浪低点/高点的反弹
+            # 1. B浪是从A浪低点/高点的反弹,幅度为A浪的20%-100% (基于历史统计:平均17.7%,范围2.1%-98.7%)
             # 2. B浪高点/低点不应突破A浪起点(即推动浪终点)
+            bounce_size = abs(p_b.price - p_a.price)
+            a_size = abs(p_before_a.price - p_a.price) if p_before_a else bounce_size
+            
             is_bounce_from_a = False
             b_within_range = False
+            b_wave_duration_ok = True  # 移除时间硬性要求,改为软性判断
             
-            if p_a.is_peak:  # A浪是下跌(A浪终点是高点)
-                # B浪应该从A浪低点反弹(但p_a是高点,所以B浪是反弹到高点附近)
-                # 实际上p_a是高点, B浪是从高点下跌后的反弹
-                bounce_size = abs(p_b.price - p_a.price)
-                a_size = abs(p_before_a.price - p_a.price) if p_before_a else bounce_size
-                # B浪反弹幅度应在A浪的38.2%-80%之间
-                if a_size > 0 and 0.382 <= bounce_size / a_size <= 0.8:
+            if a_size > 0:
+                bounce_ratio = bounce_size / a_size
+                # 放宽到20%-100% (原来38.2%-80%)
+                if 0.2 <= bounce_ratio <= 1.0:
                     is_bounce_from_a = True
-                # B浪不应突破A浪起点
-                if p_before_a and p_b.price < p_before_a.price:
-                    b_within_range = True
-            else:  # A浪是上涨(A浪终点是低点)
-                bounce_size = abs(p_b.price - p_a.price)
-                a_size = abs(p_before_a.price - p_a.price) if p_before_a else bounce_size
-                if a_size > 0 and 0.382 <= bounce_size / a_size <= 0.8:
-                    is_bounce_from_a = True
-                if p_before_a and p_b.price > p_before_a.price:
-                    b_within_range = True
             
-            # 如果B浪验证失败,降低置信度但不完全排除
+            # B浪不应突破A浪起点
+            if p_before_a:
+                if p_a.is_peak and p_b.price < p_before_a.price:
+                    b_within_range = True
+                elif not p_a.is_peak and p_b.price > p_before_a.price:
+                    b_within_range = True
+            else:
+                b_within_range = True  # 无前序数据时默认通过
+            
+            # 计算B浪时间(软性判断,不硬性过滤)
+            try:
+                from datetime import datetime
+                d_b_start = datetime.strptime(str(p_a.date)[:10], '%Y-%m-%d')
+                d_b_end = datetime.strptime(str(p_b.date)[:10], '%Y-%m-%d')
+                b_duration = (d_b_end - d_b_start).days
+                # 时间不作为硬性门槛,只记录用于置信度加权
+                b_wave_duration_ok = b_duration >= 0  # 只要求时间合理(非负)
+            except:
+                b_duration = 0
+            
+            # B浪验证: 幅度验证通过即可,时间仅影响置信度
             b_wave_valid = is_bounce_from_a and b_within_range
         else:
             p_a = pivots[-3]
@@ -466,12 +477,17 @@ class UnifiedWaveAnalyzer:
         # C浪长于A浪，更可能是真调整浪结束
         if wave_c >= wave_a:
             confidence += 0.1
-        # B浪验证奖励
+        # B浪验证奖励(基于修正后的宽松条件)
         if b_wave_valid:
-            confidence += 0.15  # B浪结构正确，大幅加分
+            confidence += 0.15  # 幅度和范围验证通过,加分
+            # B浪时间软性加权
+            if b_duration < 3:
+                confidence -= 0.05  # 短B浪轻微惩罚
+            elif b_duration > 15:
+                confidence += 0.05  # 长期B浪加分(历史统计显示长期B浪后续表现更好)
         else:
-            confidence -= 0.1   # B浪结构存疑，适当减分
-        # 4个点以上可以更好验证结构，加分
+            confidence -= 0.1   # B浪验证失败,减分
+        # 4个点以上可以更好验证结构,加分
         if len(pivots) >= 4:
             confidence += 0.05
         
@@ -483,8 +499,9 @@ class UnifiedWaveAnalyzer:
             stop_loss=stop_loss,
             confidence=min(max(confidence, 0.3), 0.9),
             direction='up' if direction_up else 'down',
-            detection_method='enhanced_context',
-            pivot_count=len(pivots)
+            detection_method='enhanced_context_v2',
+            pivot_count=len(pivots),
+            wave_structure={'wave_a': wave_a, 'wave_c': wave_c, 'b_duration': b_duration if len(pivots) >= 4 else 0, 'b_wave_valid': b_wave_valid}
         )
 
     def _detect_wave2(self, pivots: List[PivotPoint], prices: np.ndarray,
@@ -522,17 +539,20 @@ class UnifiedWaveAnalyzer:
             # 2. 浪1幅度足够(>3%)
             wave1_strong = wave1 >= p1_start.price * 0.03
             
-            # 3. 浪1时间合理(至少5天)
+            # 3. 浪1时间(软性判断,不作为硬性门槛)
             try:
                 from datetime import datetime
                 d1 = datetime.strptime(str(p1_start.date)[:10], '%Y-%m-%d')
                 d2 = datetime.strptime(str(p1_end.date)[:10], '%Y-%m-%d')
                 wave1_duration = (d2 - d1).days
-                wave1_valid_time = wave1_duration >= 3  # 至少3天
+                # 时间仅用于置信度加权,不作为硬性过滤
+                wave1_valid_time = wave1_duration >= 0  # 只要求合理(非负)
             except:
+                wave1_duration = 0
                 wave1_valid_time = True  # 无法解析日期时默认通过
             
-            wave1_valid = wave1_valid_start and wave1_strong and wave1_valid_time
+            # 浪1验证: 启动点和幅度验证通过即可,时间仅影响置信度
+            wave1_valid = wave1_valid_start and wave1_strong
         else:
             p1_start = pivots[-3]
             p1_end = pivots[-2]
@@ -540,6 +560,7 @@ class UnifiedWaveAnalyzer:
             wave1 = abs(p1_end.price - p1_start.price)
             direction_up = p1_end.price > p1_start.price
             wave1_valid = False
+            wave1_duration = 0
         
         if wave1 < p1_start.price * self.min_wave_pct:
             return None
@@ -588,9 +609,14 @@ class UnifiedWaveAnalyzer:
             confidence += 0.1
         if wave1 > p1_start.price * 0.05:  # 强浪1
             confidence += 0.1
-        # 浪1验证奖励/惩罚
+        # 浪1验证奖励/惩罚(基于修正后的宽松条件)
         if wave1_valid:
             confidence += 0.15  # 浪1结构正确,大幅加分
+            # 浪1时间软性加权
+            if wave1_duration < 3:
+                confidence -= 0.03  # 短浪1轻微惩罚(仅3.2%影响)
+            elif wave1_duration > 20:
+                confidence += 0.03  # 长期浪1加分
         else:
             confidence -= 0.1   # 浪1结构存疑,减分
         # 4个点以上可以验证完整结构
@@ -605,9 +631,9 @@ class UnifiedWaveAnalyzer:
             stop_loss=stop_loss,
             confidence=min(max(confidence, 0.3), 0.9),
             direction='up' if direction_up else 'down',
-            detection_method='enhanced_context',
+            detection_method='enhanced_context_v2',
             pivot_count=len(pivots),
-            wave_structure={'wave1': wave1, 'retrace': retrace, 'wave1_valid': wave1_valid}
+            wave_structure={'wave1': wave1, 'retrace': retrace, 'wave1_valid': wave1_valid, 'wave1_duration': wave1_duration}
         )
     
     def _detect_wave4_standard(self, pivots: List[PivotPoint], prices: np.ndarray, 

@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-03-17T22:03:53.179684",
+  "total_stocks": 20,
+  "total_signals": 3493,
+  "by_type": {
+    "C": 2920,
+    "2": 572,
+    "4": 1
+  },
+  "by_method": {
+    "enhanced_context": 3493
+  },
+  "avg_confidence": 0.6467220154594904,
+  "win_rate_5d": 46.49298597194389,
+  "win_rate_20d": 46.34984254222731
+}
