@@ -40,7 +40,7 @@ def get_tech_stocks():
            MIN(date) as start_date,
            MAX(date) as end_date,
            COUNT(*) as records
-    FROM marketdata
+    FROM market_data
     WHERE symbol IN %s
     GROUP BY symbol
     ORDER BY records DESC
@@ -92,7 +92,7 @@ def run_backtest_for_stock(symbol, analyzer, start_date='2017-01-01', end_date='
             'trades': result.total_trades,
             'win_rate': result.win_rate,
             'return': result.total_return_pct,
-            'avg_return': result.avg_return_pertrade,
+            'avg_return': result.avg_return_per_trade,
             'max_dd': result.max_drawdown_pct,
             'sharpe': result.sharpe_ratio,
             'data_days': len(df)
