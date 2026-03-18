@@ -10,14 +10,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 import unittest
 import os
 
-from utils.config_loader import loadconfig, getconfig_loader
+from utils.config_loader import load_config, get_config_loader
 
 # 辅助函数：获取测试用的配置加载器
 def get_testconfig():
     """获取测试配置"""
     project_root = Path(__file__).parent.parent
     config_path = project_root / "config" / "config.yaml"
-    config_loader = getconfig_loader(config_path)
+    config_loader = get_config_loader(config_path)
     return config_loader.load()
 
 
@@ -120,7 +120,7 @@ class TestConfigEdgeCases(unittest.TestCase):
         """测试缺少配置文件"""
         # 尝试加载不存在的配置
         try:
-            config = loadconfig('non_existentconfig.yaml')
+            config = load_config('non_existentconfig.yaml')
             # 应该返回默认配置
             self.assertIsNotNone(config)
             print("✅ 缺少配置文件处理正常")

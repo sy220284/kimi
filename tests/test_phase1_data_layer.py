@@ -36,7 +36,7 @@ else:
         print("\n🔍 质量报告:")
         print(f"  质量评分: {report.score}/100")
         print(f"  是否有效: {'✅' if report.is_valid else '❌'}")
-        print(f"  缺失值: {report.missingvalues}")
+        print(f"  缺失值: {report.missing_values}")
         print(f"  价格异常: {len(report.price_anomalies)} 处")
         print(f"  日期缺失: {len(report.gap_dates)} 处")
 
@@ -45,7 +45,7 @@ print("\n【测试2】批量数据获取")
 print("-"*60)
 
 symbols = ['600138', '002184', '600556']
-batch_result = api.get_batchdata(symbols, '2025-01-01', '2025-12-31')
+batch_result = api.get_batch_data(symbols, '2025-01-01', '2025-12-31')
 
 for symbol, res in batch_result.items():
     if 'error' in res:
@@ -73,7 +73,7 @@ t2 = time.time()
 print(f"  缓存命中: {(t2-t1)*1000:.1f}ms ⚡")
 
 # 缓存统计
-cachestats = api.get_cachestats()
+cachestats = api.get_cache_stats()
 print("\n  缓存统计:")
 print(f"    内存条目: {cachestats['memory_entries']}")
 print(f"    文件条目: {cachestats['file_entries']}")

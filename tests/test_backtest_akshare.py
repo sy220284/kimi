@@ -11,7 +11,7 @@ from datetime import datetime
 from analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy
 from analysis.wave.unified_analyzer import UnifiedWaveAnalyzer
 
-def get_stockdata_akshare(symbol, start_date, end_date):
+def get_stock_data_akshare(symbol, start_date, end_date):
     """使用akshare获取股票数据"""
     try:
         print(f"  获取 {symbol} 数据...")
@@ -65,7 +65,7 @@ def main():
         print('='*60)
         
         # 获取数据
-        df = get_stockdata_akshare(symbol, start_date, end_date)
+        df = get_stock_data_akshare(symbol, start_date, end_date)
         
         if df is None or len(df) < 200:
             print("  ⚠️ 数据不足,跳过")
@@ -97,7 +97,7 @@ def main():
             result = backtester.run(symbol, df, reanalyze_every=5)
             
             print("\n【结果】")
-            print(f"  交易次数: {result.totaltrades}")
+            print(f"  交易次数: {result.total_trades}")
             print(f"  胜率: {result.win_rate:.1%}")
             print(f"  总收益: {result.total_return_pct:.2f}%")
             print(f"  平均每笔: {result.avg_return_pertrade:.2f}%")
@@ -107,7 +107,7 @@ def main():
             results.append({
                 'symbol': symbol,
                 'name': name,
-                'trades': result.totaltrades,
+                'trades': result.total_trades,
                 'win_rate': result.win_rate,
                 'return': result.total_return_pct,
                 'avg': result.avg_return_pertrade,

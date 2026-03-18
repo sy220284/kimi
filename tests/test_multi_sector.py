@@ -7,7 +7,7 @@ import sys
 sys.path.insert(0, 'src')
 
 from data import get_stock_data
-from analysis.wave import EnhancedWaveAnalyzer
+from analysis.wave import UnifiedWaveAnalyzer
 from analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy
 from collections import Counter
 
@@ -60,7 +60,7 @@ for sector, stocks in test_stocks.items():
         try:
             df = get_stock_data(symbol, '2023-01-01', '2026-03-16')
             
-            analyzer = EnhancedWaveAnalyzer(use_adaptive=False)
+            analyzer = UnifiedWaveAnalyzer(use_adaptive_params=False)
             strategy = WaveStrategy(
                 initial_capital=1000000,
                 position_size=0.2,
@@ -83,7 +83,7 @@ for sector, stocks in test_stocks.items():
             main_wave = max(wave_dist, key=wave_dist.get) if wave_dist else 'None'
             
             print(f"  {symbol} {name:8s} ({size:6s}): "
-                  f"{result.totaltrades:2d}次 | 胜率{result.win_rate:5.1%} | "
+                  f"{result.total_trades:2d}次 | 胜率{result.win_rate:5.1%} | "
                   f"收益{result.total_return_pct:+6.1f}% | 回撤{result.max_drawdown_pct:5.1f}% | "
                   f"主要浪{main_wave}")
             
@@ -91,7 +91,7 @@ for sector, stocks in test_stocks.items():
                 'symbol': symbol,
                 'name': name,
                 'size': size,
-                'trades': result.totaltrades,
+                'trades': result.total_trades,
                 'win_rate': result.win_rate,
                 'return': result.total_return_pct,
                 'drawdown': result.max_drawdown_pct,
@@ -116,8 +116,8 @@ for size_key, size_name in size_groups.items():
     if size_results:
         avg_return = sum(r['return'] for r in size_results) / len(size_results)
         avg_winrate = sum(r['win_rate'] for r in size_results) / len(size_results)
-        totaltrades = sum(r['trades'] for r in size_results)
-        print(f"{size_name}: 平均收益 {avg_return:+.1f}% | 平均胜率 {avg_winrate:.1%} | 总交易 {totaltrades}次")
+        total_trades = sum(r['trades'] for r in size_results)
+        print(f"{size_name}: 平均收益 {avg_return:+.1f}% | 平均胜率 {avg_winrate:.1%} | 总交易 {total_trades}次")
 
 # 按收益排序
 print(f"\n{'='*80}")

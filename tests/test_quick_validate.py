@@ -35,7 +35,7 @@ print("-" * 70)
 
 analyzer1 = UnifiedWaveAnalyzer(
     use_resonance=False,
-    use_adaptiveparams=False,
+    use_adaptive_params=False,
     trend_ma_period=200
 )
 
@@ -53,7 +53,7 @@ print("-" * 70)
 analyzer2 = UnifiedWaveAnalyzer(
     use_resonance=True,
     min_resonance_score=0.3,
-    use_adaptiveparams=False,
+    use_adaptive_params=False,
     trend_ma_period=200
 )
 
@@ -76,7 +76,7 @@ print(f"✓ 策略200日均线: {backtester.strategy.trend_ma_period}日")
 result = backtester.run(SYMBOL, df, reanalyze_every=10)
 
 print("\n📊 回测结果:")
-print(f"  交易次数: {result.totaltrades}")
+print(f"  交易次数: {result.total_trades}")
 print(f"  胜率: {result.win_rate:.1%}")
 print(f"  总收益: {result.total_return_pct:+.2f}%")
 print(f"  最大回撤: {result.max_drawdown_pct:.2f}%")

@@ -9,12 +9,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from data import ThsAdapter
-from analysis.wave.wave_detector import WaveDetector
+from analysis.wave import UnifiedWaveAnalyzer
 import pandas as pd
 from datetime import datetime, timedelta
 
 
-def analyze_single_period(symbol: str, name: str, df: pd.DataFrame, detector: WaveDetector, period_name: str):
+def analyze_single_period(symbol: str, name: str, df: pd.DataFrame, detector: UnifiedWaveAnalyzer, period_name: str):
     """分析单个周期"""
     if df.empty or len(df) < 10:
         return None
@@ -89,7 +89,7 @@ def analyze_stock_multi_timeframe(symbol: str, name: str, adapter: ThsAdapter):
         
         # 创建该周期的检测器
         p = config['params']
-        detector = WaveDetector(
+        detector = UnifiedWaveAnalyzer(
             confidence_threshold=p['confidence_threshold'],
             atr_period=p['atr_period'],
             atr_mult=p['atr_mult']

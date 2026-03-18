@@ -8,7 +8,7 @@ import numpy as np
 from typing import List, Dict, Optional, Any
 
 from ..backtest.wave_backtester import WaveBacktester
-from ..wave import EnhancedWaveAnalyzer
+from ..wave import UnifiedWaveAnalyzer
 from .param_optimizer import ParameterSet
 
 
@@ -127,10 +127,9 @@ class AdaptiveBacktester:
     ) -> Dict[str, Any]:
         """在单个窗口运行回测"""
         try:
-            analyzer = EnhancedWaveAnalyzer(
+            analyzer = UnifiedWaveAnalyzer(
                 atr_mult=params.atr_mult,
-                min_change_pct=params.min_change_pct,
-                peak_window=params.peak_window
+                min_wave_pct=params.min_change_pct
             )
             
             backtester = WaveBacktester(analyzer)

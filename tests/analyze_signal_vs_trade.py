@@ -7,7 +7,7 @@ sys.path.insert(0, 'src')
 
 import pandas as pd
 from data import get_stock_data
-from analysis.wave import EnhancedWaveAnalyzer
+from analysis.wave import UnifiedWaveAnalyzer
 from analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy
 
 print("🔍 信号vs交易对比分析\n")
@@ -22,7 +22,7 @@ strategy = WaveStrategy(
     take_profit_pct=0.10  # 10%止盈
 )
 
-analyzer = EnhancedWaveAnalyzer(use_adaptive=True)
+analyzer = UnifiedWaveAnalyzer(use_adaptive_params=True)
 backtester = WaveBacktester(analyzer)
 backtester.strategy = strategy
 
@@ -43,7 +43,7 @@ print(f"  止损比例: {strategy.stop_loss_pct:.0%}")
 print(f"  止盈比例: {strategy.take_profit_pct:.0%}")
 
 print("\n【交易统计】")
-print(f"  总交易次数: {result.totaltrades}")
+print(f"  总交易次数: {result.total_trades}")
 print(f"  盈利: {result.winningtrades}次")
 print(f"  亏损: {result.losingtrades}次")
 print(f"  胜率: {result.win_rate:.1%}")

@@ -155,7 +155,7 @@ def main():
         use_resonance=True,
         min_resonance_score=0.3,
         trend_ma_period=200,
-        use_adaptiveparams=False,
+        use_adaptive_params=False,
     )
     
     # 进度跟踪

@@ -37,7 +37,7 @@ CONFIGS = [
         'name': '基础配置',
         'analyzerparams': {
             'use_resonance': False,
-            'use_adaptiveparams': False,
+            'use_adaptive_params': False,
             'trend_ma_period': 200,
             'min_confidence': 0.5,
         },
@@ -51,7 +51,7 @@ CONFIGS = [
         'analyzerparams': {
             'use_resonance': True,
             'min_resonance_score': 0.2,
-            'use_adaptiveparams': False,
+            'use_adaptive_params': False,
             'trend_ma_period': 200,
         },
         'strategyparams': {
@@ -64,7 +64,7 @@ CONFIGS = [
         'analyzerparams': {
             'use_resonance': True,
             'min_resonance_score': 0.3,
-            'use_adaptiveparams': False,
+            'use_adaptive_params': False,
             'trend_ma_period': 200,
         },
         'strategyparams': {
@@ -77,7 +77,7 @@ CONFIGS = [
         'analyzerparams': {
             'use_resonance': True,
             'min_resonance_score': 0.5,
-            'use_adaptiveparams': False,
+            'use_adaptive_params': False,
             'trend_ma_period': 200,
         },
         'strategyparams': {
@@ -90,7 +90,7 @@ CONFIGS = [
         'analyzerparams': {
             'use_resonance': True,
             'min_resonance_score': 0.3,
-            'use_adaptiveparams': True,
+            'use_adaptive_params': True,
             'trend_ma_period': 200,
         },
         'strategyparams': {
@@ -103,7 +103,7 @@ CONFIGS = [
         'analyzerparams': {
             'use_resonance': True,
             'min_resonance_score': 0.3,
-            'use_adaptiveparams': False,
+            'use_adaptive_params': False,
             'trend_ma_period': 60,
         },
         'strategyparams': {
@@ -116,7 +116,7 @@ CONFIGS = [
         'analyzerparams': {
             'use_resonance': True,
             'min_resonance_score': 0.3,
-            'use_adaptiveparams': False,
+            'use_adaptive_params': False,
             'trend_ma_period': 120,
         },
         'strategyparams': {
@@ -157,13 +157,13 @@ def run_single_test(symbol, name, config):
                 if wave in signals_by_type:
                     signals_by_type[wave] += 1
         
-        print(f"✓ 交易{result.totaltrades}次 胜率{result.win_rate:.1%} 收益{result.total_return_pct:+.2f}%")
+        print(f"✓ 交易{result.total_trades}次 胜率{result.win_rate:.1%} 收益{result.total_return_pct:+.2f}%")
         
         return {
             'symbol': symbol,
             'name': name,
             'config_name': config['name'],
-            'trades': result.totaltrades,
+            'trades': result.total_trades,
             'win_rate': result.win_rate,
             'return_pct': result.total_return_pct,
             'max_drawdown': result.max_drawdown_pct,

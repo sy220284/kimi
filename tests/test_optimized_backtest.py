@@ -9,7 +9,7 @@ import pandas as pd
 import numpy as np
 from typing import List, Dict, Tuple
 from data import get_stock_data
-from analysis.wave import EnhancedWaveAnalyzer
+from analysis.wave import UnifiedWaveAnalyzer
 from analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy, TradeAction, Trade
 
 
@@ -339,7 +339,7 @@ if __name__ == "__main__":
     for symbol, name in test_stocks:
         df = get_stock_data(symbol, '2023-01-01', '2026-03-16')
         
-        analyzer = EnhancedWaveAnalyzer(use_adaptive=False)
+        analyzer = UnifiedWaveAnalyzer(use_adaptive_params=False)
         optimizer = ImpulseWaveOptimizer()
         strategy = WaveStrategy(
             initial_capital=1000000,

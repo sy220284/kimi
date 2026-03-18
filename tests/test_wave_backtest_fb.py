@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 import pandas as pd
 from data import get_stock_data, get_db_manager
-from analysis.wave import EnhancedWaveAnalyzer
+from analysis.wave import UnifiedWaveAnalyzer
 from analysis.backtest.wave_backtester import WaveBacktester
 
 print("="*80)
@@ -48,7 +48,7 @@ for idx, symbol in enumerate(test_symbols, 1):
         print(f"   数据: {len(df)}条")
         
         # 使用自适应分析器
-        analyzer = EnhancedWaveAnalyzer(use_adaptive=True, use_resonance=True)
+        analyzer = UnifiedWaveAnalyzer(use_adaptive_params=True, use_resonance=True)
         backtester = WaveBacktester(analyzer)
         
         # 运行回测
@@ -56,7 +56,7 @@ for idx, symbol in enumerate(test_symbols, 1):
         
         # 计算得分
         score = 0
-        if result.totaltrades >= 3:
+        if result.total_trades >= 3:
             score = (
                 result.win_rate * 0.3 +
                 result.total_return_pct / 100 * 0.3 +
@@ -70,11 +70,11 @@ for idx, symbol in enumerate(test_symbols, 1):
             'return_pct': result.total_return_pct,
             'max_dd': result.max_drawdown_pct,
             'sharpe': result.sharpe_ratio,
-            'trades': result.totaltrades,
+            'trades': result.total_trades,
             'score': score
         })
         
-        print(f"   ✅ 胜率{result.win_rate:.1%} | 收益{result.total_return_pct:.1f}% | 回撤{result.max_drawdown_pct:.1f}% | 交易{result.totaltrades}次\n")
+        print(f"   ✅ 胜率{result.win_rate:.1%} | 收益{result.total_return_pct:.1f}% | 回撤{result.max_drawdown_pct:.1f}% | 交易{result.total_trades}次\n")
         
     except Exception as e:
         print(f"   ❌ 失败: {str(e)[:50]}\n")

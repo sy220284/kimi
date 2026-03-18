@@ -72,7 +72,7 @@ for idx in valid_days.index[:20]:
     
     # 检查是否会买入
     backtester.currentsignals = signals
-    best = backtester._get_besttradesignal(price)
+    best = backtester._get_best_trade_signal(price)
     will_buy = '✓' if (best and best.direction == 'up' and SYMBOL not in strategy.positions) else ''
     if will_buy:
         buy_count += 1

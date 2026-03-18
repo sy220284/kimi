@@ -10,7 +10,7 @@ import pandas as pd
 from typing import List, Dict
 from datetime import datetime
 from data import get_stock_data
-from analysis.wave import EnhancedWaveAnalyzer
+from analysis.wave import UnifiedWaveAnalyzer
 from analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy, TradeAction
 
 
@@ -134,7 +134,7 @@ class ImpulseSignalDetector:
 
 def run_original_backtest(symbol: str, df: pd.DataFrame) -> Dict:
     """运行原策略回测"""
-    analyzer = EnhancedWaveAnalyzer(use_adaptive=False)
+    analyzer = UnifiedWaveAnalyzer(use_adaptive_params=False)
     strategy = WaveStrategy(
         initial_capital=1000000,
         position_size=0.2,
@@ -154,7 +154,7 @@ def run_original_backtest(symbol: str, df: pd.DataFrame) -> Dict:
     return {
         'symbol': symbol,
         'strategy': 'original',
-        'trades': result.totaltrades,
+        'trades': result.total_trades,
         'win_rate': result.win_rate,
         'return': result.total_return_pct,
         'drawdown': result.max_drawdown_pct,
@@ -164,7 +164,7 @@ def run_original_backtest(symbol: str, df: pd.DataFrame) -> Dict:
 
 def run_optimized_backtest(symbol: str, df: pd.DataFrame) -> Dict:
     """运行优化策略回测（2/4浪增强）"""
-    analyzer = EnhancedWaveAnalyzer(use_adaptive=False)
+    analyzer = UnifiedWaveAnalyzer(use_adaptive_params=False)
     impulse_detector = ImpulseSignalDetector(validity_days=3)
     strategy = WaveStrategy(
         initial_capital=1000000,

@@ -8,7 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from data import ThsAdapter
-from analysis.wave.wave_detector import WaveDetector
+from analysis.wave import UnifiedWaveAnalyzer
 import pandas as pd
 from datetime import timedelta
 
@@ -98,7 +98,7 @@ def analyze_all_timeframes(symbol, name, df_full):
         df_period['date'] = df_period['date'].dt.strftime('%Y-%m-%d')
         
         # 创建检测器
-        detector = WaveDetector(
+        detector = UnifiedWaveAnalyzer(
             confidence_threshold=params['threshold'],
             atr_period=params['atr_period'],
             atr_mult=params['atr_mult']

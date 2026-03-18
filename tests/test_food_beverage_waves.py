@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from collections import defaultdict
 
 from data import get_stock_data
-from analysis.wave import EnhancedWaveAnalyzer, Wave4Detector, Wave2Detector
+from analysis.wave import UnifiedWaveAnalyzer, Wave4Detector, Wave2Detector
 
 
 # 食品饮料板块10只不同市值股票
@@ -106,7 +106,7 @@ class WavePatternBacktester:
     """
     
     def __init__(self):
-        self.analyzer = EnhancedWaveAnalyzer(use_adaptive=False)
+        self.analyzer = UnifiedWaveAnalyzer(use_adaptive_params=False)
         self.wave4_detector = Wave4Detector()
         self.wave2_detector = Wave2Detector()
         self.accuracymetrics = WaveAccuracyMetrics()
@@ -322,7 +322,7 @@ class WavePatternBacktester:
             'name': name,
             'market_cap': market_cap,
             'trades': closedtrades,
-            'totaltrades': len(closedtrades),
+            'total_trades': len(closedtrades),
             'win_rate': win_rate,
             'total_return': total_return,
             'wavestats': wavestats,
@@ -343,7 +343,7 @@ def run_sector_backtest():
     
     for symbol, name, market_cap in FOOD_BEVERAGE_STOCKS:
         result = backtester.run(symbol, name, market_cap)
-        if result['totaltrades'] > 0:
+        if result['total_trades'] > 0:
             results.append(result)
     
     # 汇总统计
@@ -363,10 +363,10 @@ def run_sector_backtest():
     print("\n按市值分组:")
     for group_name, groupdata in [('大市值', large_cap), ('中市值', medium_cap), ('小市值', small_cap)]:
         if groupdata:
-            totaltrades = sum(r['totaltrades'] for r in groupdata)
+            total_trades = sum(r['total_trades'] for r in groupdata)
             avg_win_rate = sum(r['win_rate'] for r in groupdata) / len(groupdata)
             avg_return = sum(r['total_return'] for r in groupdata) / len(groupdata)
-            print(f"  {group_name}: {len(groupdata)}只 总交易{totaltrades}笔 胜率{avg_win_rate:.1%} 收益{avg_return:+.2f}%")
+            print(f"  {group_name}: {len(groupdata)}只 总交易{total_trades}笔 胜率{avg_win_rate:.1%} 收益{avg_return:+.2f}%")
     
     # 按浪型汇总
     print("\n按浪型汇总:")
@@ -415,7 +415,7 @@ def run_sector_backtest():
         wave_str = f"{counts['C']}/{counts['2']}/{counts['4']}"
         win_rate_str = f"{r['win_rate']:.1%}"
         ret_str = f"{r['total_return']:+.1f}%"
-        print(f"{r['symbol']:<10} {r['name']:<10} {r['market_cap']:<8} {r['totaltrades']:<6} {win_rate_str:<8} {ret_str:<8} {wave_str:<10}")
+        print(f"{r['symbol']:<10} {r['name']:<10} {r['market_cap']:<8} {r['total_trades']:<6} {win_rate_str:<8} {ret_str:<8} {wave_str:<10}")
     
     print("\n✅ 回测完成")
     return results

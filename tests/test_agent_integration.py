@@ -14,7 +14,7 @@ from datetime import datetime
 from agents.wave_analyst import WaveAnalystAgent
 from agents.tech_analyst import TechAnalystAgent
 from agents.rotation_analyst import RotationAnalystAgent
-from data.optimizeddata_manager import get_optimizeddata_manager
+from data.optimized_data_manager import get_optimized_data_manager
 
 
 class TestWaveAgentIntegration(unittest.TestCase):
@@ -23,8 +23,8 @@ class TestWaveAgentIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """准备数据"""
-        cls.data_mgr = get_optimizeddata_manager()
-        cls.data_mgr.load_alldata()
+        cls.data_mgr = get_optimized_data_manager()
+        cls.data_mgr.load_all_data()
         cls.agent = WaveAnalystAgent()
     
     def test_01_agent_initialization(self):
@@ -99,8 +99,8 @@ class TestTechAgentIntegration(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        cls.data_mgr = get_optimizeddata_manager()
-        cls.data_mgr.load_alldata()
+        cls.data_mgr = get_optimized_data_manager()
+        cls.data_mgr.load_all_data()
         cls.agent = TechAnalystAgent()
     
     def test_01_agent_initialization(self):
@@ -159,8 +159,8 @@ class TestAgentCollaboration(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        cls.data_mgr = get_optimizeddata_manager()
-        cls.data_mgr.load_alldata()
+        cls.data_mgr = get_optimized_data_manager()
+        cls.data_mgr.load_all_data()
         cls.wave_agent = WaveAnalystAgent()
         cls.tech_agent = TechAnalystAgent()
     
@@ -219,8 +219,8 @@ class TestEndToEndWorkflow(unittest.TestCase):
         print("\n🔄 执行端到端分析工作流...")
         
         # 1. 加载数据
-        data_mgr = get_optimizeddata_manager()
-        df_all = data_mgr.load_alldata()
+        data_mgr = get_optimized_data_manager()
+        df_all = data_mgr.load_all_data()
         self.assertGreater(len(df_all), 0)
         
         # 2. 选择股票
@@ -259,8 +259,8 @@ class TestEndToEndWorkflow(unittest.TestCase):
         start = time.time()
         
         # 快速分析10只股票
-        data_mgr = get_optimizeddata_manager()
-        df_all = data_mgr.load_alldata()
+        data_mgr = get_optimized_data_manager()
+        df_all = data_mgr.load_all_data()
         symbols = df_all['symbol'].unique()[:10]
         
         agent = WaveAnalystAgent()

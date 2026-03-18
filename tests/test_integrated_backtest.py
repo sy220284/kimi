@@ -11,7 +11,7 @@ from typing import Dict, Optional
 from dataclasses import dataclass
 
 from data import get_stock_data
-from analysis.wave import EnhancedWaveAnalyzer, Wave4Detector, Wave2Detector
+from analysis.wave import UnifiedWaveAnalyzer, Wave4Detector, Wave2Detector
 from analysis.backtest.wave_backtester import WaveStrategy, TradeAction
 
 
@@ -44,7 +44,7 @@ class IntegratedWaveBacktester:
         self.wave4_confidence = wave4_confidence
         self.wave2_confidence = wave2_confidence
         
-        self.analyzer = EnhancedWaveAnalyzer(use_adaptive=False)
+        self.analyzer = UnifiedWaveAnalyzer(use_adaptive_params=False)
         self.wave4_detector = Wave4Detector()
         self.wave2_detector = Wave2Detector()
         self.strategy = None
@@ -215,7 +215,7 @@ class IntegratedWaveBacktester:
         
         return {
             'trades': closedtrades,
-            'totaltrades': len(closedtrades),
+            'total_trades': len(closedtrades),
             'win_rate': win_rate,
             'total_return': total_return,
             'wave_distribution': wavestats,
@@ -267,8 +267,8 @@ def run_comparison(symbol: str, name: str, df: pd.DataFrame):
     sep = "-" * 60
     print(sep)
     
-    trades_diff = result2['totaltrades'] - result1['totaltrades']
-    print(f"{'总交易':<20} {result1['totaltrades']:<15} {result2['totaltrades']:<15} {trades_diff:<+10}")
+    trades_diff = result2['total_trades'] - result1['total_trades']
+    print(f"{'总交易':<20} {result1['total_trades']:<15} {result2['total_trades']:<15} {trades_diff:<+10}")
     
     win_rate_diff = result2['win_rate'] - result1['win_rate']
     print(f"{'胜率':<20} {result1['win_rate']:.1%}{'':<8} {result2['win_rate']:.1%}{'':<8} {win_rate_diff:+.1%}")

@@ -120,12 +120,12 @@ def run_quick_smoke_tests():
     
     # 简化版冒烟测试
     try:
-        from data.optimizeddata_manager import get_optimizeddata_manager
+        from data.optimized_data_manager import get_optimized_data_manager
         
         print("  📦 测试数据加载...")
         start = time.time()
-        mgr = get_optimizeddata_manager()
-        df = mgr.load_alldata()
+        mgr = get_optimized_data_manager()
+        df = mgr.load_all_data()
         elapsed = time.time() - start
         print(f"     ✅ 数据加载正常 ({len(df):,}条, {elapsed:.1f}s)")
         

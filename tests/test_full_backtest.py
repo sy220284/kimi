@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 import pandas as pd
 from data import DatabaseDataManager, get_stock_data
-from analysis.wave import EnhancedWaveAnalyzer
+from analysis.wave import UnifiedWaveAnalyzer
 from analysis.backtest.wave_backtester import WaveBacktester
 from analysis.optimization import ParameterSet
 
@@ -19,7 +19,7 @@ print("="*80)
 
 # 初始化
 manager = DatabaseDataManager()
-analyzer = EnhancedWaveAnalyzer()
+analyzer = UnifiedWaveAnalyzer()
 
 # 获取所有股票
 all_symbols = manager.get_stored_symbols()
@@ -57,7 +57,7 @@ for idx, symbol in enumerate(all_symbols[:20], 1):  # 先测试前20只
         for param_name, params in paramconfigs:
             try:
                 # 创建带参数的分析器
-                test_analyzer = EnhancedWaveAnalyzer(
+                test_analyzer = UnifiedWaveAnalyzer(
                     atr_mult=params.atr_mult,
                     min_change_pct=params.min_change_pct,
                     peak_window=params.peak_window
@@ -75,7 +75,7 @@ for idx, symbol in enumerate(all_symbols[:20], 1):  # 先测试前20只
                     result.total_return_pct / 100 * 0.3 +
                     (1 - result.max_drawdown_pct / 100) * 0.2 +
                     min(result.sharpe_ratio, 3) / 3 * 0.2
-                ) if result.totaltrades > 3 else -1
+                ) if result.total_trades > 3 else -1
                 
                 if score > best_score:
                     best_score = score
@@ -86,7 +86,7 @@ for idx, symbol in enumerate(all_symbols[:20], 1):  # 先测试前20只
                         'return_pct': result.total_return_pct,
                         'max_dd': result.max_drawdown_pct,
                         'sharpe': result.sharpe_ratio,
-                        'trades': result.totaltrades,
+                        'trades': result.total_trades,
                         'score': score
                     }
                 

@@ -11,7 +11,7 @@ import unittest
 import pandas as pd
 
 from data.db_manager import DatabaseDataManager
-from data.optimizeddata_manager import get_optimizeddata_manager
+from data.optimized_data_manager import get_optimized_data_manager
 
 # 辅助函数：获取数据库管理器实例
 def get_db_manager():
@@ -60,7 +60,7 @@ class TestMarketDataOperations(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.db = get_db_manager()
-        cls.data_mgr = get_optimizeddata_manager()
+        cls.data_mgr = get_optimized_data_manager()
     
     def test_01_query_stockdata(self):
         """测试查询股票数据"""
@@ -77,7 +77,7 @@ class TestMarketDataOperations(unittest.TestCase):
     def test_02_query_date_range(self):
         """测试日期范围查询"""
         query = """
-            SELECT * FROM marketdata 
+            SELECT * FROM market_data 
             WHERE symbol = '600519' 
             AND date BETWEEN '2024-01-01' AND '2024-01-31'
             ORDER BY date
@@ -92,7 +92,7 @@ class TestMarketDataOperations(unittest.TestCase):
     
     def test_03_distinct_symbols(self):
         """测试获取股票列表"""
-        query = "SELECT DISTINCT symbol FROM marketdata LIMIT 10"
+        query = "SELECT DISTINCT symbol FROM market_data LIMIT 10"
         result = self.db.execute_query(query)
         
         self.assertGreater(len(result), 0)
@@ -100,7 +100,7 @@ class TestMarketDataOperations(unittest.TestCase):
     
     def test_04_count_records(self):
         """测试记录数统计"""
-        query = "SELECT COUNT(*) as count FROM marketdata"
+        query = "SELECT COUNT(*) as count FROM market_data"
         result = self.db.execute_query(query)
         
         count = result[0]['count']
@@ -112,7 +112,7 @@ class TestMarketDataOperations(unittest.TestCase):
         query = """
             SELECT symbol, COUNT(*) as count, 
                    MIN(date) as min_date, MAX(date) as max_date
-            FROM marketdata
+            FROM market_data
             GROUP BY symbol
             LIMIT 5
         """
@@ -141,7 +141,7 @@ class TestIndexPerformance(unittest.TestCase):
         # 带索引的查询
         start = time.time()
         query = """
-            SELECT * FROM marketdata 
+            SELECT * FROM market_data 
             WHERE symbol = '600519' AND date = '2024-01-02'
         """
         result = self.db.execute_query(query)
@@ -158,7 +158,7 @@ class TestIndexPerformance(unittest.TestCase):
         
         start = time.time()
         for symbol in symbols * 10:  # 50次查询
-            query = f"SELECT * FROM marketdata WHERE symbol = '{symbol}' LIMIT 1"
+            query = f"SELECT * FROM market_data WHERE symbol = '{symbol}' LIMIT 1"
             self.db.execute_query(query)
         elapsed = time.time() - start
         
@@ -194,11 +194,11 @@ class TestDataConsistency(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        cls.data_mgr = get_optimizeddata_manager()
+        cls.data_mgr = get_optimized_data_manager()
     
     def test_01_price_consistency(self):
         """测试价格数据一致性"""
-        df = self.data_mgr.load_alldata()
+        df = self.data_mgr.load_all_data()
         
         # 检查基本约束
         invalid = df[
@@ -214,7 +214,7 @@ class TestDataConsistency(unittest.TestCase):
     
     def test_02_volume_positive(self):
         """测试成交量为正"""
-        df = self.data_mgr.load_alldata()
+        df = self.data_mgr.load_all_data()
         
         negative_volume = df[df['volume'] < 0]
         
@@ -246,12 +246,12 @@ class TestTableStructure(unittest.TestCase):
     def setUpClass(cls):
         cls.db = get_db_manager()
     
-    def test_01_marketdata_columns(self):
-        """测试marketdata表结构"""
+    def test_01_market_data_columns(self):
+        """测试market_data表结构"""
         query = """
             SELECT column_name, data_type
             FROM information_schema.columns
-            WHERE table_name = 'marketdata'
+            WHERE table_name = 'market_data'
             ORDER BY ordinal_position
         """
         result = self.db.execute_query(query)
@@ -269,7 +269,7 @@ class TestTableStructure(unittest.TestCase):
         query = """
             SELECT indexname
             FROM pg_indexes
-            WHERE tablename = 'marketdata'
+            WHERE tablename = 'market_data'
         """
         result = self.db.execute_query(query)
         

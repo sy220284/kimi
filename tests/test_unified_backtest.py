@@ -161,7 +161,7 @@ def run_unified_backtest(symbol: str, name: str, market_cap: str,
         'symbol': symbol,
         'name': name,
         'market_cap': market_cap,
-        'totaltrades': len(closedtrades),
+        'total_trades': len(closedtrades),
         'win_rate': win_rate,
         'total_return': total_return,
         'signal_counts': signal_counts,
@@ -181,7 +181,7 @@ def main():
     results = []
     for symbol, name, cap in FOOD_BEVERAGE_STOCKS:
         result = run_unified_backtest(symbol, name, cap)
-        if result['totaltrades'] > 0:
+        if result['total_trades'] > 0:
             results.append(result)
     
     # 汇总
@@ -194,10 +194,10 @@ def main():
     for cap_name, cap_code in [('大市值', 'large'), ('中市值', 'medium'), ('小市值', 'small')]:
         cap_results = [r for r in results if r['market_cap'] == cap_code]
         if cap_results:
-            totaltrades = sum(r['totaltrades'] for r in cap_results)
+            total_trades = sum(r['total_trades'] for r in cap_results)
             avg_win = sum(r['win_rate'] for r in cap_results) / len(cap_results)
             avg_ret = sum(r['total_return'] for r in cap_results) / len(cap_results)
-            print(f"  {cap_name}: {len(cap_results)}只 {totaltrades}笔 胜率{avg_win:.1%} 收益{avg_ret:+.2f}%")
+            print(f"  {cap_name}: {len(cap_results)}只 {total_trades}笔 胜率{avg_win:.1%} 收益{avg_ret:+.2f}%")
     
     # 按浪型
     print("\n按浪型汇总:")
@@ -221,7 +221,7 @@ def main():
         win_rate_str = f"{r['win_rate']:.1%}"
         ret_str = f"{r['total_return']:+.1f}%"
         wave_str = f"{c['C']}/{c['2']}/{c['4']}"
-        print(f"{r['symbol']:<10} {r['name']:<10} {r['totaltrades']:<6} {win_rate_str:<8} {ret_str:<8} {wave_str:<10}")
+        print(f"{r['symbol']:<10} {r['name']:<10} {r['total_trades']:<6} {win_rate_str:<8} {ret_str:<8} {wave_str:<10}")
     
     print("\n✅ 回测完成")
 

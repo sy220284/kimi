@@ -109,11 +109,11 @@ def main():
     print("  ✅ 趋势过滤: 买入时过滤,不清空信号")
     
     print("\n实际交易成本:")
-    if result.totaltrades > 0:
+    if result.total_trades > 0:
         # 估算交易成本
         avg_cost_pertrade = 0.0003 + 0.001 + 0.001 + 0.0003 + 0.001 + 0.001  # 买入+卖出
-        total_cost_pct = avg_cost_pertrade * result.totaltrades * 100
-        print(f"  往返成本: 0.36% × {result.totaltrades}笔 = {total_cost_pct:.2f}%")
+        total_cost_pct = avg_cost_pertrade * result.total_trades * 100
+        print(f"  往返成本: 0.36% × {result.total_trades}笔 = {total_cost_pct:.2f}%")
         print(f"  对收益影响: -{total_cost_pct:.2f}%")
     
     print("\n" + "="*60)

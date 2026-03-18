@@ -73,13 +73,13 @@ for i, sig in enumerate(signals):
     can_buy = sig.is_valid and sig.confidence >= 0.5 and sig.direction == 'up'
     print(f"  可买入: {can_buy}")
 
-# 模拟回测器的 _get_besttradesignal
+# 模拟回测器的 _get_best_trade_signal
 print("\n" + "-" * 70)
 print("回测器内部逻辑模拟:")
 print("-" * 70)
 
 backtester.currentsignals = signals
-best = backtester._get_besttradesignal(price)
+best = backtester._get_best_trade_signal(price)
 
 if best:
     print(f"最佳信号: {best.entry_type.value}浪")

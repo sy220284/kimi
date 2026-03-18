@@ -8,8 +8,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from data import get_stock_data
-from analysis.wave.enhanced_analyzer import EnhancedWaveAnalyzer, analyze_stock_full
-from analysis.wave.adaptiveparams import get_adaptiveparams
+from analysis.wave import UnifiedWaveAnalyzer
+from analysis.wave.adaptive_params import get_adaptive_params
 
 print("="*80)
 print("🔬 Phase 2 测试 - 增强版波浪分析")
@@ -23,7 +23,7 @@ symbols = [
     ("002358", "森源电气"),
 ]
 
-analyzer = EnhancedWaveAnalyzer()
+analyzer = UnifiedWaveAnalyzer()
 
 for symbol, name in symbols:
     print(f"\n{'='*80}")
@@ -37,7 +37,7 @@ for symbol, name in symbols:
         
         # 1. 自适应参数测试
         print("\n【1. 自适应参数优化】")
-        params = get_adaptiveparams(df, 'day')
+        params = get_adaptive_params(df, 'day')
         print(f"  ATR周期: {params['atr_period']}")
         print(f"  ATR倍数: {params['atr_mult']:.2f}")
         print(f"  置信度阈值: {params['confidence_threshold']:.2f}")
@@ -94,16 +94,17 @@ try:
     df = get_stock_data('002184', '2023-01-01', '2026-03-16')
     print(f"海得控制 - 完整历史数据: {len(df)} 条")
     
-    # 多周期分析
-    results = analyze_stock_full('002184', df)
+    # 使用统一分析器
+    analyzer = UnifiedWaveAnalyzer()
+    result = analyzer.analyze(df)
     
-    for timeframe, result in results.items():
-        if result.primary_pattern.confidence > 0:
-            print(f"\n{timeframe.upper()}:")
-            print(f"  {result.primary_pattern.wave_type.value} | "
-                  f"{'📈' if result.primary_pattern.direction.value == 'up' else '📉'} | "
-                  f"置信度 {result.primary_pattern.confidence:.0%} | "
-                  f"共振 {result.resonance.overall_strength:.0%}")
+    if result.primary_pattern.confidence > 0:
+        print(f"\n分析结果:")
+        print(f"  {result.primary_pattern.wave_type.value} | "
+              f"{'📈' if result.primary_pattern.direction.value == 'up' else '📉'} | "
+              f"置信度 {result.primary_pattern.confidence:.0%}")
+    else:
+        print("\n未检测到明确波浪模式")
 
 except Exception as e:
     print(f"❌ 错误: {e}")

@@ -144,7 +144,7 @@ def run_tiered_backtest(mode='tiered'):
             results.append({
                 'symbol': symbol,
                 'tier': tier,
-                'trades': result.totaltrades,
+                'trades': result.total_trades,
                 'win_rate': result.win_rate,
                 'return': result.total_return_pct,
                 'avg_return': result.avg_return_pertrade,
@@ -153,7 +153,7 @@ def run_tiered_backtest(mode='tiered'):
             })
             alltrade_details.extend(trade_details)
             
-            print(f"[{i}/{len(tech_symbols)}] {symbol}({tier_label}): 收益{result.total_return_pct:+.2f}% 交易{result.totaltrades}次")
+            print(f"[{i}/{len(tech_symbols)}] {symbol}({tier_label}): 收益{result.total_return_pct:+.2f}% 交易{result.total_trades}次")
             
         except Exception as e:
             print(f"[{i}/{len(tech_symbols)}] {symbol}: 错误 - {e}")

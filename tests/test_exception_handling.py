@@ -11,7 +11,7 @@ import unittest
 import pandas as pd
 import numpy as np
 
-from data.optimizeddata_manager import get_optimized_data_manager
+from data.optimized_data_manager import get_optimized_data_manager
 from agents.wave_analyst import WaveAnalystAgent
 from agents.tech_analyst import TechAnalystAgent
 
@@ -53,7 +53,7 @@ class TestDataExceptionHandling(unittest.TestCase):
         # 应该抛出异常或被处理
         try:
             result = self.data_mgr.calculate_ma(bad_df, 20)
-            # 如果没有symbol列，get_stockdata会失败
+            # 如果没有symbol列，get_stock_data会失败
             print("✅ 损坏数据框处理正常 (返回结果)")
         except Exception as e:
             # 如果抛出异常也接受，只要系统不崩溃
@@ -124,7 +124,7 @@ class TestDataExceptionHandling(unittest.TestCase):
         })
         
         try:
-            result = self.data_mgr.calculatereturns(extreme_df)
+            result = self.data_mgr.calculate_returns(extreme_df)
             self.assertIsNotNone(result)
             print("✅ 极端值处理正常")
         except Exception as e:
@@ -237,7 +237,7 @@ class TestBoundaryConditions(unittest.TestCase):
         })
         
         try:
-            result = data_mgr.calculatereturns(zero_vol_df)
+            result = data_mgr.calculate_returns(zero_vol_df)
             self.assertIsNotNone(result)
             print("✅ 零成交量处理正常")
         except Exception as e:

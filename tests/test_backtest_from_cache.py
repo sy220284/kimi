@@ -84,7 +84,7 @@ def main():
             result = backtester.run(symbol, df, reanalyze_every=5)
             
             print("\n【结果】")
-            print(f"  交易次数: {result.totaltrades}")
+            print(f"  交易次数: {result.total_trades}")
             print(f"  胜率: {result.win_rate:.1%}")
             print(f"  总收益: {result.total_return_pct:.2f}%")
             print(f"  平均每笔: {result.avg_return_pertrade:.2f}%")
@@ -93,7 +93,7 @@ def main():
             
             results.append({
                 'symbol': symbol,
-                'trades': result.totaltrades,
+                'trades': result.total_trades,
                 'win_rate': result.win_rate,
                 'return': result.total_return_pct,
                 'avg': result.avg_return_pertrade,

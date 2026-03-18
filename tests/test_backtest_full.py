@@ -11,7 +11,7 @@ import unittest
 import pandas as pd
 
 from analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy
-from data.optimizeddata_manager import get_optimizeddata_manager
+from data.optimized_data_manager import get_optimized_data_manager
 
 
 class TestWaveStrategy(unittest.TestCase):
@@ -19,8 +19,8 @@ class TestWaveStrategy(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        cls.data_mgr = get_optimizeddata_manager()
-        cls.data_mgr.load_alldata()
+        cls.data_mgr = get_optimized_data_manager()
+        cls.data_mgr.load_all_data()
     
     def test_01_strategy_initialization(self):
         """测试策略初始化"""
@@ -32,7 +32,7 @@ class TestWaveStrategy(unittest.TestCase):
     def test_02_strategy_parameters(self):
         """测试不同参数"""
         for stop_loss in [0.05, 0.08, 0.10]:
-        strategy = WaveStrategy(stop_loss_pct=stop_loss)
+            strategy = WaveStrategy(stop_loss_pct=stop_loss)
             self.assertEqual(strategy.stop_loss_pct, stop_loss)
         print("✅ 策略参数设置正常")
     
@@ -78,8 +78,8 @@ class TestBacktestExecution(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        cls.data_mgr = get_optimizeddata_manager()
-        cls.data_mgr.load_alldata()
+        cls.data_mgr = get_optimized_data_manager()
+        cls.data_mgr.load_all_data()
     
     def test_01_single_stock_backtest(self):
         """测试单股回测"""
@@ -133,8 +133,8 @@ class TestBacktestResults(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        cls.data_mgr = get_optimizeddata_manager()
-        cls.data_mgr.load_alldata()
+        cls.data_mgr = get_optimized_data_manager()
+        cls.data_mgr.load_all_data()
     
     def test_01_result_structure(self):
         """测试结果结构"""
@@ -152,7 +152,7 @@ class TestBacktestResults(unittest.TestCase):
         # 检查必要字段
         self.assertIsNotNone(result)
         self.assertIsNotNone(result.total_return)
-        self.assertIsNotNone(result.totaltrades)
+        self.assertIsNotNone(result.total_trades)
         
         print("✅ 结果结构正确")
     
@@ -182,13 +182,13 @@ class TestStopLossStrategies(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        cls.data_mgr = get_optimizeddata_manager()
-        cls.data_mgr.load_alldata()
+        cls.data_mgr = get_optimized_data_manager()
+        cls.data_mgr.load_all_data()
     
     def test_01_fixed_stop_loss(self):
         """测试固定止损"""
         for stop_loss in [0.05, 0.08, 0.10]:
-        strategy = WaveStrategy(stop_loss_pct=stop_loss)
+            strategy = WaveStrategy(stop_loss_pct=stop_loss)
             self.assertEqual(strategy.stop_loss_pct, stop_loss)
         
         print("✅ 固定止损设置正常")
@@ -223,8 +223,8 @@ class TestBatchBacktest(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        cls.data_mgr = get_optimizeddata_manager()
-        cls.data_mgr.load_alldata()
+        cls.data_mgr = get_optimized_data_manager()
+        cls.data_mgr.load_all_data()
     
     def test_01_multiple_stocks(self):
         """测试多股批量回测"""
@@ -238,7 +238,7 @@ class TestBatchBacktest(unittest.TestCase):
                 backtester.strategy.stop_loss_pct = 0.08
                 
                 df_test = df.iloc[-100:].copy()
-        result = backtester.run(symbol=symbol, df=df_test)
+                result = backtester.run(symbol=symbol, df=df_test)
                 results.append(result)
         
         self.assertGreaterEqual(len(results), 1)
@@ -256,7 +256,7 @@ class TestBatchBacktest(unittest.TestCase):
                 backtester.strategy.stop_loss_pct = 0.08
                 
                 df_test = df.iloc[-100:].copy()
-        result = backtester.run(symbol=symbol, df=df_test)
+                result = backtester.run(symbol=symbol, df=df_test)
                 returns.append(result.total_return)
         
         if returns:
@@ -284,7 +284,7 @@ class TestBacktestEdgeCases(unittest.TestCase):
         
         # 应该不崩溃
         try:
-        result = backtester.run(symbol='TEST', df=df)
+            result = backtester.run(symbol='TEST', df=df)
             print("✅ 零价格处理正常")
         except Exception as e:
             print(f"⚠️ 零价格回测异常: {e}")

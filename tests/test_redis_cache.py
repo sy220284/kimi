@@ -11,7 +11,7 @@ import unittest
 import time
 
 from data.cache import DataCache
-from data.optimizeddata_manager import get_optimizeddata_manager
+from data.optimized_data_manager import get_optimized_data_manager
 
 
 class TestDataCache(unittest.TestCase):
@@ -37,16 +37,16 @@ class TestDataCache(unittest.TestCase):
     
     def test_02data_manager_cache(self):
         """测试数据管理器缓存功能"""
-        data_mgr = get_optimizeddata_manager()
+        data_mgr = get_optimized_data_manager()
         
         # 测试数据加载
         start = time.time()
-        df1 = data_mgr.load_alldata()
+        df1 = data_mgr.load_all_data()
         elapsed1 = time.time() - start
         
         # 再次加载（应该从内存缓存）
         start = time.time()
-        df2 = data_mgr.load_alldata()
+        df2 = data_mgr.load_all_data()
         elapsed2 = time.time() - start
         
         self.assertEqual(len(df1), len(df2))
@@ -54,7 +54,7 @@ class TestDataCache(unittest.TestCase):
     
     def test_03_stockdata_consistency(self):
         """测试股票数据一致性"""
-        data_mgr = get_optimizeddata_manager()
+        data_mgr = get_optimized_data_manager()
         
         # 多次查询同一只股票
         results = []

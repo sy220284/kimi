@@ -257,7 +257,7 @@ class ATRWaveBacktester(WaveBacktester):
                 symbol=symbol,
                 start_date=df.iloc[0]['date'].strftime('%Y-%m-%d'),
                 end_date=df.iloc[-1]['date'].strftime('%Y-%m-%d'),
-                totaltrades=0,
+                total_trades=0,
                 winningtrades=0,
                 losingtrades=0,
                 win_rate=0.0,
@@ -306,7 +306,7 @@ _        total_pnl = sum(t.pnl for t in closedtrades)
             symbol=symbol,
             start_date=df.iloc[0]['date'].strftime('%Y-%m-%d'),
             end_date=df.iloc[-1]['date'].strftime('%Y-%m-%d'),
-            totaltrades=len(closedtrades),
+            total_trades=len(closedtrades),
             winningtrades=winningtrades,
             losingtrades=losingtrades,
             win_rate=win_rate,
@@ -381,7 +381,7 @@ def run_atr_backtest():
             results.append({
                 'symbol': symbol,
                 'tier': '科创' if symbol.startswith('688') else '主板',
-                'trades': result.totaltrades,
+                'trades': result.total_trades,
                 'win_rate': result.win_rate,
                 'return': result.total_return_pct,
                 'avg_return': result.avg_return_pertrade,
@@ -390,7 +390,7 @@ def run_atr_backtest():
             })
             alltrade_details.extend(trade_details)
             
-            print(f"[{i}/{len(tech_symbols)}] {symbol}: 收益{result.total_return_pct:+.2f}% 交易{result.totaltrades}次")
+            print(f"[{i}/{len(tech_symbols)}] {symbol}: 收益{result.total_return_pct:+.2f}% 交易{result.total_trades}次")
             
         except Exception as e:
             print(f"[{i}/{len(tech_symbols)}] {symbol}: 错误 - {e}")

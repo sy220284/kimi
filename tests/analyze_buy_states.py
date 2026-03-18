@@ -6,7 +6,7 @@ import sys
 sys.path.insert(0, 'src')
 
 from data import get_stock_data
-from analysis.wave import EnhancedWaveAnalyzer
+from analysis.wave import UnifiedWaveAnalyzer
 
 symbol = '600519'
 df = get_stock_data(symbol, '2023-01-01', '2026-03-16')
@@ -14,7 +14,7 @@ df = get_stock_data(symbol, '2023-01-01', '2026-03-16')
 print(f"🔍 分析 {symbol} 买入时的波浪状态\n")
 print("="*80)
 
-analyzer = EnhancedWaveAnalyzer(use_adaptive=False)
+analyzer = UnifiedWaveAnalyzer(use_adaptive_params=False)
 
 # 检查几个关键买入点
 test_indices = [

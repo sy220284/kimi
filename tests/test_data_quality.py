@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 import unittest
 import pandas as pd
 
-from data.optimizeddata_manager import get_optimizeddata_manager
+from data.optimized_data_manager import get_optimized_data_manager
 
 
 class TestDataQualityBasic(unittest.TestCase):
@@ -18,8 +18,8 @@ class TestDataQualityBasic(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        cls.data_mgr = get_optimizeddata_manager()
-        cls.df_all = cls.data_mgr.load_alldata()
+        cls.data_mgr = get_optimized_data_manager()
+        cls.df_all = cls.data_mgr.load_all_data()
     
     def test_01_no_null_symbols(self):
         """测试无空股票代码"""
@@ -78,8 +78,8 @@ class TestDataCompleteness(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        cls.data_mgr = get_optimizeddata_manager()
-        cls.df_all = cls.data_mgr.load_alldata()
+        cls.data_mgr = get_optimized_data_manager()
+        cls.df_all = cls.data_mgr.load_all_data()
     
     def test_01_symbol_coverage(self):
         """测试股票覆盖"""
@@ -132,8 +132,8 @@ class TestDataConsistency(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        cls.data_mgr = get_optimizeddata_manager()
-        cls.df_all = cls.data_mgr.load_alldata()
+        cls.data_mgr = get_optimized_data_manager()
+        cls.df_all = cls.data_mgr.load_all_data()
     
     def test_01_consistentdata_types(self):
         """测试数据类型一致"""
@@ -184,8 +184,8 @@ class TestDataAnomalies(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        cls.data_mgr = get_optimizeddata_manager()
-        cls.df_all = cls.data_mgr.load_alldata()
+        cls.data_mgr = get_optimized_data_manager()
+        cls.df_all = cls.data_mgr.load_all_data()
     
     def test_01_price_spikes(self):
         """测试价格异常波动"""
@@ -242,8 +242,8 @@ class TestDataQualityReport(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        cls.data_mgr = get_optimizeddata_manager()
-        cls.df_all = cls.data_mgr.load_alldata()
+        cls.data_mgr = get_optimized_data_manager()
+        cls.df_all = cls.data_mgr.load_all_data()
     
     def test_01_generate_quality_report(self):
         """生成数据质量报告"""

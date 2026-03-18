@@ -8,11 +8,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from data import ThsAdapter
-from analysis.wave.wave_detector import WaveDetector
+from analysis.wave import UnifiedWaveAnalyzer
 import pandas as pd
 
 
-def analyze_stock(symbol: str, name: str, adapter: ThsAdapter, detector: WaveDetector):
+def analyze_stock(symbol: str, name: str, adapter: ThsAdapter, detector: UnifiedWaveAnalyzer):
     """分析单只股票的波浪形态"""
     print(f"\n{'='*70}")
     print(f"📊 {name} ({symbol})")
@@ -105,7 +105,7 @@ def main():
     
     # 初始化适配器和检测器
     adapter = ThsAdapter({'enabled': True, 'timeout': 30})
-    detector = WaveDetector(
+    detector = UnifiedWaveAnalyzer(
         min_wave_length=3,
         max_wave_length=100,
         confidence_threshold=0.4,

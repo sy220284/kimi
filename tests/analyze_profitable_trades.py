@@ -10,7 +10,7 @@ import pandas as pd
 from datetime import timedelta
 from data import get_db_manager
 
-def get_stockdata_afterexit(symbol, exit_date, days=60):
+def get_stock_data_afterexit(symbol, exit_date, days=60):
     """获取卖出后的股价数据"""
     try:
         db_manager = get_db_manager()
@@ -78,7 +78,7 @@ def analyze_profitabletrades():
         entry_wave = row['entry_wave']
         
         # 获取后续数据 - 确保symbol是字符串
-        df_after = get_stockdata_afterexit(str(symbol), exit_date, days=60)
+        df_after = get_stock_data_afterexit(str(symbol), exit_date, days=60)
         
         if df_after is not None and len(df_after) > 0:
             # 计算不同时间点的涨跌幅

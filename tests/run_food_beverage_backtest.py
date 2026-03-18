@@ -75,7 +75,7 @@ def run_backtest_for_stock(symbol, analyzer, start_date='2017-01-01', end_date='
 
         return {
             'symbol': symbol,
-            'trades': result.totaltrades,
+            'trades': result.total_trades,
             'win_rate': result.win_rate,
             'return': result.total_return_pct,
             'avg_return': result.avg_return_pertrade,
