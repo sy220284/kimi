@@ -2,15 +2,15 @@
 智能体框架 - 波浪分析师智能体 (简化版)
 """
 import sys
+import time
+from datetime import datetime
 from pathlib import Path
-
-import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from analysis.wave.elliott_wave import ElliottWaveAnalyzer
 
-from .base_agent import AnalysisType, BaseAgent
+from .base_agent import AgentInput, AgentOutput, AgentState, AnalysisType, BaseAgent
 
 
 class WaveAnalystAgent(BaseAgent):
@@ -32,28 +32,74 @@ class WaveAnalystAgent(BaseAgent):
         # 使用艾略特波浪分析器
         self.analyzer = ElliottWaveAnalyzer()
 
-    def analyze(self, df: pd.DataFrame) -> list:
+    def analyze(self, input_data: AgentInput) -> AgentOutput:
         """
         执行波浪分析
 
         Args:
-            df: 股票数据DataFrame
+            input_data: 输入数据
 
         Returns:
-            分析结果列表
+            分析结果
         """
-        if df is None or df.empty:
-            return []
+        from data.optimized_data_manager import get_optimized_data_manager
+
+        start_time = time.time()
+        symbol = input_data.symbol
 
         try:
-            # 使用艾略特波浪分析器 - 使用 detect_wave_pattern 方法
+            # 获取数据
+            data_mgr = get_optimized_data_manager()
+            df = data_mgr.get_stock_data(symbol)
+
+            # 应用日期过滤
+            if input_data.start_date and df is not None and not df.empty:
+                df = df[df['date'] >= input_data.start_date].copy()
+            if input_data.end_date and df is not None and not df.empty:
+                df = df[df['date'] <= input_data.end_date].copy()
+
+            if df is None or df.empty:
+                return AgentOutput(
+                    agent_type=self.analysis_type.value,
+                    symbol=symbol,
+                    analysis_date=datetime.now().strftime('%Y-%m-%d'),
+                    result={'patterns': [], 'error': '无数据'},
+                    confidence=0.0,
+                    state=AgentState.ERROR,
+                    execution_time=time.time() - start_time,
+                    error_message='无数据'
+                )
+
+            # 执行波浪分析
             pattern = self.analyzer.detect_wave_pattern(df)
-            if pattern:
-                return [pattern]
-            return []
+            patterns = [pattern] if pattern else []
+
+            # 计算置信度
+            confidence = pattern.confidence if pattern and hasattr(pattern, 'confidence') else 0.5
+
+            return AgentOutput(
+                agent_type=self.analysis_type.value,
+                symbol=symbol,
+                analysis_date=datetime.now().strftime('%Y-%m-%d'),
+                result={'patterns': patterns, 'data_points': len(df)},
+                confidence=confidence,
+                state=AgentState.COMPLETED,
+                execution_time=time.time() - start_time,
+                error_message=None
+            )
+
         except Exception as e:
-            self.logger.error(f"波浪分析失败: {e}")
-            return []
+            self.logger.error(f"波浪分析失败 {symbol}: {e}")
+            return AgentOutput(
+                agent_type=self.analysis_type.value,
+                symbol=symbol,
+                analysis_date=datetime.now().strftime('%Y-%m-%d'),
+                result={'patterns': [], 'error': str(e)},
+                confidence=0.0,
+                state=AgentState.ERROR,
+                execution_time=time.time() - start_time,
+                error_message=str(e)
+            )
 
 
 def main():

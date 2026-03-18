@@ -3,15 +3,16 @@
 分析行业轮动和板块轮动机会
 """
 import sys
+import time
+from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from .base_agent import AnalysisType, BaseAgent
+from .base_agent import AgentInput, AgentOutput, AgentState, AnalysisType, BaseAgent
 
 
 class RotationAnalystAgent(BaseAgent):
@@ -33,16 +34,18 @@ class RotationAnalystAgent(BaseAgent):
         self.lookback_period = 60
         self.momentum_period = 20
 
-    def analyze(self, data: dict[str, Any] = None) -> dict[str, Any]:
+    def analyze(self, input_data: AgentInput | None = None) -> AgentOutput:
         """
         执行轮动分析
 
         Args:
-            data: 可选的分析数据
+            input_data: 可选的输入数据（轮动分析不需要特定symbol）
 
         Returns:
-            分析结果字典
+            分析结果
         """
+        start_time = time.time()
+
         try:
             from data.optimized_data_manager import get_optimized_data_manager
 
@@ -50,7 +53,16 @@ class RotationAnalystAgent(BaseAgent):
             df_all = data_mgr.load_all_data()
 
             if df_all.empty:
-                return {'status': 'no_data', 'sectors': {}}
+                return AgentOutput(
+                    agent_type=self.analysis_type.value,
+                    symbol='MARKET',
+                    analysis_date=datetime.now().strftime('%Y-%m-%d'),
+                    result={'status': 'no_data', 'sectors': {}},
+                    confidence=0.0,
+                    state=AgentState.ERROR,
+                    execution_time=time.time() - start_time,
+                    error_message='无数据'
+                )
 
             # 按板块分类统计
             sectors = {
@@ -81,19 +93,43 @@ class RotationAnalystAgent(BaseAgent):
                     if returns:
                         sector_performance[sector_name] = np.mean(returns)
 
-            return {
-                'status': 'success',
-                'sectors': sectors,
-                'sector_performance': sector_performance,
-                'strong_sectors': sorted(sector_performance.items(), key=lambda x: x[1], reverse=True)[:2],
-                'weak_sectors': sorted(sector_performance.items(), key=lambda x: x[1])[:2],
-            }
+            # 计算置信度（基于数据完整性）
+            confidence = min(len(sector_performance) / 4, 1.0)
+
+            strong_sectors = sorted(sector_performance.items(), key=lambda x: x[1], reverse=True)[:2]
+            weak_sectors = sorted(sector_performance.items(), key=lambda x: x[1])[:2]
+
+            return AgentOutput(
+                agent_type=self.analysis_type.value,
+                symbol='MARKET',
+                analysis_date=datetime.now().strftime('%Y-%m-%d'),
+                result={
+                    'status': 'success',
+                    'sectors': sectors,
+                    'sector_performance': sector_performance,
+                    'strong_sectors': strong_sectors,
+                    'weak_sectors': weak_sectors,
+                },
+                confidence=confidence,
+                state=AgentState.COMPLETED,
+                execution_time=time.time() - start_time,
+                error_message=None
+            )
 
         except Exception as e:
             self.logger.error(f"轮动分析失败: {e}")
-            return {'status': 'error', 'message': str(e)}
+            return AgentOutput(
+                agent_type=self.analysis_type.value,
+                symbol='MARKET',
+                analysis_date=datetime.now().strftime('%Y-%m-%d'),
+                result={'status': 'error', 'message': str(e)},
+                confidence=0.0,
+                state=AgentState.ERROR,
+                execution_time=time.time() - start_time,
+                error_message=str(e)
+            )
 
-    def analyze_market_rotation(self) -> dict[str, Any]:
+    def analyze_market_rotation(self) -> AgentOutput:
         """市场轮动分析"""
         return self.analyze()
 
