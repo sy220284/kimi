@@ -520,14 +520,26 @@ class WaveBacktester:
 
         print(f"数据范围: {df['date'].min()} ~ {df['date'].max()}, {len(df)} 条")
 
+        # 重置策略状态 - 防止批量回测时状态污染
+        self.strategy.reset()
+
         df = df.copy()
         df['date'] = pd.to_datetime(df['date'])
         df = df.sort_values('date').reset_index(drop=True)
 
-        # 计算涨跌停标记
+        # 计算涨跌停标记 - 根据板块设置不同阈值
+        # 科创板(688)/创业板(300)涨停20%，主板(600/601/603/000/002)涨停10%
+        symbol_prefix = symbol[:3] if len(symbol) >= 3 else symbol
+        if symbol_prefix in ['688', '300', '301']:
+            limit_up_threshold = 0.195    # 19.5%视为涨停(考虑误差)
+            limit_down_threshold = -0.195  # -19.5%视为跌停
+        else:
+            limit_up_threshold = 0.095     # 9.5%视为涨停
+            limit_down_threshold = -0.095  # -9.5%视为跌停
+
         df['pct_change'] = df['close'].pct_change()
-        df['is_limit_up'] = df['pct_change'] >= 0.095  # 9.5%视为涨停(考虑误差)
-        df['is_limit_down'] = df['pct_change'] <= -0.095  # -9.5%视为跌停
+        df['is_limit_up'] = df['pct_change'] >= limit_up_threshold
+        df['is_limit_down'] = df['pct_change'] <= limit_down_threshold
 
         # 计算200日均线趋势
         if self.strategy.use_trend_filter:
@@ -665,14 +677,32 @@ class WaveBacktester:
         losing_trades = [t for t in closed_trades if t.pnl <= 0]
 
         total_pnl = sum(t.pnl for t in closed_trades)
-        total_pnl_pct = sum(t.pnl_pct for t in closed_trades)
 
         gross_profit = sum(t.pnl for t in winning_trades)
         gross_loss = abs(sum(t.pnl for t in losing_trades))
 
-        # 最大回撤
+        # 权益曲线和资金加权收益率
         equity_values = [e['total_equity'] for e in self.strategy.equity_curve]
+        if equity_values and len(equity_values) >= 2:
+            initial_equity = equity_values[0]
+            final_equity = equity_values[-1]
+            # 资金加权收益率 = (期末权益 - 期初资金) / 期初资金 * 100
+            total_return_pct = (final_equity - self.strategy.initial_capital) / self.strategy.initial_capital * 100
+
+            # 计算每日收益率用于Sharpe
+            daily_returns = pd.Series(equity_values).pct_change().dropna()
+            if len(daily_returns) > 1 and daily_returns.std() > 0:
+                # Sharpe = (平均日收益率 - 无风险利率) / 日收益率标准差 * sqrt(年交易日)
+                sharpe = (daily_returns.mean() / daily_returns.std()) * np.sqrt(252)
+            else:
+                sharpe = 0
+        else:
+            total_return_pct = 0.0
+            sharpe = 0.0
+
+        # 最大回撤
         max_dd = 0
+        max_dd_pct = 0.0
         peak = equity_values[0] if equity_values else 0
 
         for equity in equity_values:
@@ -681,15 +711,10 @@ class WaveBacktester:
             dd = peak - equity
             if dd > max_dd:
                 max_dd = dd
-
-        max_dd_pct = (max_dd / peak * 100) if peak > 0 else 0
-
-        # Sharpe (简化版，假设无风险利率0)
-        returns = [t.pnl_pct for t in closed_trades]
-        if len(returns) > 1 and np.std(returns) > 0:
-            sharpe = np.mean(returns) / np.std(returns) * np.sqrt(252)  # 年化
-        else:
-            sharpe = 0
+            if peak > 0:
+                dd_pct = (peak - equity) / peak * 100
+                if dd_pct > max_dd_pct:
+                    max_dd_pct = dd_pct
 
         return BacktestResult(
             symbol=symbol,
@@ -700,8 +725,8 @@ class WaveBacktester:
             losing_trades=len(losing_trades),
             win_rate=len(winning_trades) / len(closed_trades) if closed_trades else 0,
             total_return=total_pnl,
-            total_return_pct=total_pnl_pct,
-            avg_return_per_trade=total_pnl_pct / len(closed_trades) if closed_trades else 0,
+            total_return_pct=total_return_pct,
+            avg_return_per_trade=total_return_pct / len(closed_trades) if closed_trades else 0,
             max_drawdown=max_dd,
             max_drawdown_pct=max_dd_pct,
             sharpe_ratio=sharpe,
