@@ -2,8 +2,7 @@
 智能体框架 - 轮动分析师智能体 (简化版，无外部依赖)
 分析行业轮动和板块轮动机会
 """
-from typing import Any, Dict, Optional, List
-from datetime import datetime, timedelta
+from typing import Any, Dict, Optional
 from pathlib import Path
 import sys
 import pandas as pd
@@ -11,7 +10,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from .base_agent import BaseAgent, AgentInput, AgentOutput, AnalysisType, AgentState
+from .base_agent import BaseAgent, AnalysisType
 
 
 class RotationAnalystAgent(BaseAgent):
@@ -74,7 +73,7 @@ class RotationAnalystAgent(BaseAgent):
                         df = data_mgr.get_stock_data(symbol)
                         if df is not None and len(df) > 20:
                             df = data_mgr.calculate_returns(df)
-                            recent_return = df['returns'].tail(20).mean() * 100
+                            recent_return = df['daily_return'].tail(20).mean() * 100
                             if not pd.isna(recent_return):
                                 returns.append(recent_return)
                     

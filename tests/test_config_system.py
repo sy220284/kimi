@@ -9,34 +9,32 @@ sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 import unittest
 import os
-import json
-import yaml
 
-from utils.config_loader import load_config, get_config_loader
+from utils.config_loader import loadconfig, getconfig_loader
 
 # 辅助函数：获取测试用的配置加载器
-def get_test_config():
+def get_testconfig():
     """获取测试配置"""
     project_root = Path(__file__).parent.parent
     config_path = project_root / "config" / "config.yaml"
-    config_loader = get_config_loader(config_path)
+    config_loader = getconfig_loader(config_path)
     return config_loader.load()
 
 
 class TestConfigLoading(unittest.TestCase):
     """配置加载测试"""
     
-    def test_01_load_default_config(self):
+    def test_01_load_defaultconfig(self):
         """测试加载默认配置"""
-        config = get_test_config()
+        config = get_testconfig()
         
         self.assertIsNotNone(config)
         self.assertIsInstance(config, dict)
         print("✅ 默认配置加载正常")
     
-    def test_02_config_structure(self):
+    def test_02config_structure(self):
         """测试配置结构"""
-        config = get_test_config()
+        config = get_testconfig()
         
         # 检查主要配置段
         main_sections = ['database', 'redis', 'analysis', 'backtest', 'data']
@@ -46,29 +44,29 @@ class TestConfigLoading(unittest.TestCase):
         
         print("✅ 配置结构正确")
     
-    def test_03_database_config(self):
+    def test_03databaseconfig(self):
         """测试数据库配置"""
-        config = get_test_config()
+        config = get_testconfig()
         
         if 'database' in config:
-            db_config = config['database']
+            dbconfig = config['database']
             required_keys = ['host', 'port', 'dbname', 'user']
             for key in required_keys:
-                if key in db_config:
-                    self.assertIsNotNone(db_config[key])
+                if key in dbconfig:
+                    self.assertIsNotNone(dbconfig[key])
         
         print("✅ 数据库配置正常")
     
-    def test_04_redis_config(self):
+    def test_04_redisconfig(self):
         """测试Redis配置"""
-        config = get_test_config()
+        config = get_testconfig()
         
         if 'redis' in config:
-            redis_config = config['redis']
-            if 'host' in redis_config:
-                self.assertIsNotNone(redis_config['host'])
-            if 'port' in redis_config:
-                self.assertIsInstance(redis_config['port'], int)
+            redisconfig = config['redis']
+            if 'host' in redisconfig:
+                self.assertIsNotNone(redisconfig['host'])
+            if 'port' in redisconfig:
+                self.assertIsInstance(redisconfig['port'], int)
         
         print("✅ Redis配置正常")
 
@@ -76,9 +74,9 @@ class TestConfigLoading(unittest.TestCase):
 class TestConfigValidation(unittest.TestCase):
     """配置验证测试"""
     
-    def test_01_config_types(self):
+    def test_01config_types(self):
         """测试配置类型"""
-        config = get_test_config()
+        config = get_testconfig()
         
         if 'database' in config and 'port' in config['database']:
             self.assertIsInstance(config['database']['port'], int)
@@ -88,9 +86,9 @@ class TestConfigValidation(unittest.TestCase):
         
         print("✅ 配置类型正确")
     
-    def test_02_config_values(self):
+    def test_02configvalues(self):
         """测试配置值"""
-        config = get_test_config()
+        config = get_testconfig()
         
         # 端口应该在合理范围
         if 'database' in config and 'port' in config['database']:
@@ -100,17 +98,17 @@ class TestConfigValidation(unittest.TestCase):
         
         print("✅ 配置值合理")
     
-    def test_03_default_values(self):
+    def test_03_defaultvalues(self):
         """测试默认值"""
-        config = get_test_config()
+        config = get_testconfig()
         
         # 检查是否有合理的默认值
         if 'analysis' in config:
             if 'wave_analyst' in config['analysis']:
-                wave_config = config['analysis']['wave_analyst']
-                if 'confidence_threshold' in wave_config:
-                    self.assertGreaterEqual(wave_config['confidence_threshold'], 0)
-                    self.assertLessEqual(wave_config['confidence_threshold'], 1)
+                waveconfig = config['analysis']['wave_analyst']
+                if 'confidence_threshold' in waveconfig:
+                    self.assertGreaterEqual(waveconfig['confidence_threshold'], 0)
+                    self.assertLessEqual(waveconfig['confidence_threshold'], 1)
         
         print("✅ 默认值合理")
 
@@ -118,22 +116,22 @@ class TestConfigValidation(unittest.TestCase):
 class TestConfigEdgeCases(unittest.TestCase):
     """配置边界情况测试"""
     
-    def test_01_missing_config_file(self):
+    def test_01_missingconfig_file(self):
         """测试缺少配置文件"""
         # 尝试加载不存在的配置
         try:
-            config = load_config('non_existent_config.yaml')
+            config = loadconfig('non_existentconfig.yaml')
             # 应该返回默认配置
             self.assertIsNotNone(config)
             print("✅ 缺少配置文件处理正常")
         except Exception as e:
             print(f"⚠️ 缺少配置文件异常: {e}")
     
-    def test_02_empty_config(self):
+    def test_02_emptyconfig(self):
         """测试空配置"""
         # 测试空配置处理
         try:
-            config = get_test_config()
+            config = get_testconfig()
             self.assertIsInstance(config, dict)
             print("✅ 空配置处理正常")
         except Exception as e:
@@ -154,7 +152,7 @@ class TestEnvironmentVariables(unittest.TestCase):
         
         print("✅ 环境变量检查完成")
     
-    def test_02_config_from_env(self):
+    def test_02config_from_env(self):
         """测试从环境变量读取配置"""
         # 设置测试环境变量
         os.environ['TEST_CONFIG_VAR'] = 'test_value'

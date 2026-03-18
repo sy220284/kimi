@@ -10,10 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from data import ThsAdapter
 from analysis.wave.wave_detector import WaveDetector
-from analysis.wave.elliott_wave import ElliottWaveAnalyzer, WaveType, WaveDirection
 import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
 
 
 def resample_to_weekly(df_daily):
@@ -67,7 +64,7 @@ def analyze_post_breakout(df_daily, symbol, name):
     df_weekly = resample_to_weekly(df_daily)
     df_monthly = resample_to_monthly(df_daily)
     
-    print(f"\n📊 数据转换:")
+    print("\n📊 数据转换:")
     print(f"  日线: {len(df_daily)} 条")
     print(f"  周线: {len(df_weekly)} 条 ({len(df_weekly)//52}年)")
     print(f"  月线: {len(df_monthly)} 条 ({len(df_monthly)//12}年)")
@@ -155,36 +152,36 @@ def interpret_breakout(patterns, symbol, name):
     all_broken = all(abs(p['deviation']) > 15 for p in patterns if p['target'])
     
     if all_broken:
-        print(f"\n🔴 结构突破确认")
-        print(f"  所有时间框架的目标价均已被突破")
-        print(f"  这可能意味着:")
+        print("\n🔴 结构突破确认")
+        print("  所有时间框架的目标价均已被突破")
+        print("  这可能意味着:")
         
         # 分析可能的浪型
         directions = [p['direction'] for p in patterns]
         
         if len(set(directions)) == 1 and directions[0] == 'up':
-            print(f"\n  【情景1: 延长浪 (Wave Extension)】")
-            print(f"  原波浪的第3浪或第5浪发生延长")
-            print(f"  特征: 价格远超预期目标，但趋势继续")
-            print(f"  应对: 等待子浪完成，不宜逆势做空")
+            print("\n  【情景1: 延长浪 (Wave Extension)】")
+            print("  原波浪的第3浪或第5浪发生延长")
+            print("  特征: 价格远超预期目标，但趋势继续")
+            print("  应对: 等待子浪完成，不宜逆势做空")
             
-            print(f"\n  【情景2: 更高级别推动浪】")
-            print(f"  当前处于更大周期的第3浪或第5浪")
-            print(f"  特征: 月线/周线共振向上")
-            print(f"  应对: 顺势持有，目标重新计算")
+            print("\n  【情景2: 更高级别推动浪】")
+            print("  当前处于更大周期的第3浪或第5浪")
+            print("  特征: 月线/周线共振向上")
+            print("  应对: 顺势持有，目标重新计算")
             
         elif len(set(directions)) == 1 and directions[0] == 'down':
-            print(f"\n  【情景: 延长下跌浪】")
-            print(f"  下跌第3浪或第5浪延长")
-            print(f"  应对: 切勿抄底，等待止跌信号")
+            print("\n  【情景: 延长下跌浪】")
+            print("  下跌第3浪或第5浪延长")
+            print("  应对: 切勿抄底，等待止跌信号")
             
         else:
-            print(f"\n  【情景3: 时间框架冲突】")
-            print(f"  大周期向上，小周期向下，或反之")
-            print(f"  应对: 以更大周期方向为主")
+            print("\n  【情景3: 时间框架冲突】")
+            print("  大周期向上，小周期向下，或反之")
+            print("  应对: 以更大周期方向为主")
     
     # 2. 检查浪型位置
-    print(f"\n📍 当前浪型位置分析:")
+    print("\n📍 当前浪型位置分析:")
     
     for p in patterns:
         wave = p['latest_wave']
@@ -202,7 +199,7 @@ def interpret_breakout(patterns, symbol, name):
             print(f"  {tf}: 浪{wave} - 推动浪早期或调整")
     
     # 3. 给出操作建议
-    print(f"\n💡 操作建议:")
+    print("\n💡 操作建议:")
     
     # 找最大周期的方向
     monthly = next((p for p in patterns if '月线' in p['timeframe']), None)
@@ -216,16 +213,16 @@ def interpret_breakout(patterns, symbol, name):
             
             if monthly['direction'] == 'up':
                 if monthly['latest_wave'] == '3':
-                    print(f"  🚀 处于大周期第3浪，主升浪进行中，可追涨")
+                    print("  🚀 处于大周期第3浪，主升浪进行中，可追涨")
                 elif monthly['latest_wave'] == '5':
-                    print(f"  ⚠️ 处于大周期第5浪，注意止盈")
+                    print("  ⚠️ 处于大周期第5浪，注意止盈")
                 else:
-                    print(f"  📈 中长期向上，逢低买入")
+                    print("  📈 中长期向上，逢低买入")
             else:
-                print(f"  📉 中长期向下，反弹减仓")
+                print("  📉 中长期向下，反弹减仓")
         else:
-            print(f"  ⚠️ 月线与周线方向冲突，震荡格局")
-            print(f"  建议观望，等待方向明确")
+            print("  ⚠️ 月线与周线方向冲突，震荡格局")
+            print("  建议观望，等待方向明确")
 
 
 def main():

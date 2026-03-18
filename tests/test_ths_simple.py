@@ -3,17 +3,15 @@
 同花顺(THS)适配器测试脚本 - 简化版
 直接测试，不依赖utils模块
 """
-import sys
 import requests
 import json
 import re
 import pandas as pd
-from pathlib import Path
 
 # 同花顺API配置
 BASE_URL = "http://d.10jqka.com.cn/v4/line"
 
-def parse_js_data(js_text: str, symbol: str) -> pd.DataFrame:
+def parse_jsdata(js_text: str, symbol: str) -> pd.DataFrame:
     """解析同花顺返回的JavaScript格式数据"""
     pattern = r'quotebridge_v4_line_[^(]+\((.*)\)'
     match = re.search(pattern, js_text)
@@ -72,7 +70,7 @@ def test_ths_api():
         if response.status_code == 200:
             print("   ✓ 连接成功")
         else:
-            print(f"   ✗ 连接失败")
+            print("   ✗ 连接失败")
             return
     except Exception as e:
         print(f"   ✗ 连接错误: {e}")
@@ -81,11 +79,11 @@ def test_ths_api():
     # 测试2: 数据解析
     print("\n2. 数据解析测试")
     try:
-        df = parse_js_data(response.text, "600519")
-        print(f"   ✓ 解析成功")
+        df = parse_jsdata(response.text, "600519")
+        print("   ✓ 解析成功")
         print(f"   数据条数: {len(df)}")
         print(f"   日期范围: {df['date'].min()} ~ {df['date'].max()}")
-        print(f"\n   最新数据:")
+        print("\n   最新数据:")
         latest = df.iloc[-1]
         print(f"     日期: {latest['date']}")
         print(f"     开盘: {latest['open']}")
@@ -112,7 +110,7 @@ def test_ths_api():
             resp = session.get(url, headers={'Referer': f'http://stockpage.10jqka.com.cn/{stock_code}/'}, timeout=30)
             
             if resp.status_code == 200:
-                df = parse_js_data(resp.text, code)
+                df = parse_jsdata(resp.text, code)
                 print(f"   ✓ {name}({code}) - {len(df)}条数据")
             else:
                 print(f"   ✗ {name}({code}) - HTTP {resp.status_code}")
@@ -125,7 +123,7 @@ def test_ths_api():
         df_filtered = df[(df['date'] >= '2024-01-01') & (df['date'] <= '2024-01-31')]
         print(f"   ✓ 过滤后: {len(df_filtered)} 条数据 (2024-01-01 ~ 2024-01-31)")
         if len(df_filtered) > 0:
-            print(f"   数据预览:")
+            print("   数据预览:")
             print(df_filtered[['date', 'open', 'high', 'low', 'close', 'volume']].head(5).to_string(index=False))
     except Exception as e:
         print(f"   ✗ 过滤失败: {e}")
@@ -145,7 +143,7 @@ def test_ths_api():
             resp = session.get(url, headers={'Referer': f'http://stockpage.10jqka.com.cn/{idx_code}/'}, timeout=30)
             
             if resp.status_code == 200:
-                df_idx = parse_js_data(resp.text, code)
+                df_idx = parse_jsdata(resp.text, code)
                 latest = df_idx.iloc[-1]
                 print(f"   ✓ {name} - 最新: {latest['close']}")
             else:

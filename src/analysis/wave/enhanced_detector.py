@@ -1,7 +1,7 @@
 """
 波浪检测优化模块 - 增强版高低点识别和浪型验证
 """
-from typing import List, Dict, Optional, Tuple, Any
+from typing import List, Optional, Tuple
 import pandas as pd
 import numpy as np
 from dataclasses import dataclass
@@ -42,7 +42,7 @@ def enhanced_pivot_detection(
     lows = df['low'].values
     closes = df['close'].values
     volumes = df['volume'].values if 'volume' in df.columns else np.ones(len(df))
-    dates = df['date'].values if 'date' in df.columns else [str(i) for i in range(len(df))]
+    _dates = df['date'].values if 'date' in df.columns else [str(i) for i in range(len(df))]
     
     # 计算ATR
     atr = _calculate_atr(highs, lows, closes, atr_period)

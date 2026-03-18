@@ -16,18 +16,18 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import pandas as pd
 import numpy as np
-from typing import List, Dict, Optional, Tuple, Any
-from dataclasses import dataclass, field
+from typing import List, Dict, Optional
+from dataclasses import dataclass
 from enum import Enum
 
 try:
-    from .enhanced_detector import enhanced_pivot_detection, PivotPoint, label_wave_numbers
-    from .elliott_wave import WavePattern, WavePoint, WaveType, WaveDirection
+    from .enhanced_detector import enhanced_pivot_detection, PivotPoint
+    from .elliott_wave import WaveType, WaveDirection
     from .resonance import ResonanceAnalyzer, SignalDirection
     from .adaptive_params import AdaptiveParameterOptimizer, MarketCondition
 except ImportError:
-    from enhanced_detector import enhanced_pivot_detection, PivotPoint, label_wave_numbers
-    from elliott_wave import WavePattern, WavePoint, WaveType, WaveDirection
+    from enhanced_detector import enhanced_pivot_detection, PivotPoint
+    from elliott_wave import WaveType, WaveDirection
     from resonance import ResonanceAnalyzer, SignalDirection
     from adaptive_params import AdaptiveParameterOptimizer, MarketCondition
 
@@ -190,7 +190,7 @@ class UnifiedWaveAnalyzer:
         
         # 使用完整数据计算当前价格和ATR
         prices = df['close'].values
-        current_price = prices[-1]
+        current_price = prices[-1]  # noqa: F841
         atr = self._calculate_atr(df)
         
         # 步骤3: 检测各浪型
@@ -235,7 +235,7 @@ class UnifiedWaveAnalyzer:
             self.atr_period = adaptive.atr_period
             self.atr_mult = adaptive.atr_mult
             self.min_confidence = adaptive.confidence_threshold
-        except:
+        except Exception:
             pass  # 自适应失败则使用默认参数
     
     def _detect_market_condition(self, df: pd.DataFrame) -> MarketCondition:
@@ -244,7 +244,7 @@ class UnifiedWaveAnalyzer:
             from .adaptive_params import VolatilityAnalyzer
             vol_analysis = VolatilityAnalyzer.calculate_volatility_regime(df)
             return vol_analysis['market_condition']
-        except:
+        except Exception:
             return MarketCondition.TRENDING
     
     def _apply_resonance_analysis(self, signals: List[UnifiedWaveSignal], 
@@ -403,7 +403,7 @@ class UnifiedWaveAnalyzer:
             
             is_bounce_from_a = False
             b_within_range = False
-            b_wave_duration_ok = True  # 移除时间硬性要求,改为软性判断
+            _b_wave_duration_ok = True  # 移除时间硬性要求,改为软性判断
             
             if a_size > 0:
                 bounce_ratio = bounce_size / a_size
@@ -428,8 +428,8 @@ class UnifiedWaveAnalyzer:
                 d_b_end = datetime.strptime(str(p_b.date)[:10], '%Y-%m-%d')
                 b_duration = (d_b_end - d_b_start).days
                 # 时间不作为硬性门槛,只记录用于置信度加权
-                b_wave_duration_ok = b_duration >= 0  # 只要求时间合理(非负)
-            except:
+                _b_wave_duration_ok = b_duration >= 0  # 只要求时间合理(非负)
+            except Exception:
                 b_duration = 0
             
             # B浪验证: 幅度验证通过即可,时间仅影响置信度
@@ -552,10 +552,10 @@ class UnifiedWaveAnalyzer:
                 d2 = datetime.strptime(str(p1_end.date)[:10], '%Y-%m-%d')
                 wave1_duration = (d2 - d1).days
                 # 时间仅用于置信度加权,不作为硬性过滤
-                wave1_valid_time = wave1_duration >= 0  # 只要求合理(非负)
-            except:
+                _wave1_valid_time = wave1_duration >= 0  # 只要求合理(非负)
+            except Exception:
                 wave1_duration = 0
-                wave1_valid_time = True  # 无法解析日期时默认通过
+                _wave1_valid_time = True  # 无法解析日期时默认通过
             
             # 浪1验证: 启动点和幅度验证通过即可,时间仅影响置信度
             wave1_valid = wave1_valid_start and wave1_strong
@@ -694,9 +694,9 @@ class UnifiedWaveAnalyzer:
                 d3_start = datetime.strptime(str(p3.date)[:10], '%Y-%m-%d')
                 d3_end = datetime.strptime(str(p4.date)[:10], '%Y-%m-%d')
                 wave3_duration = (d3_end - d3_start).days
-                wave3_valid_time = wave3_duration >= 3
-            except:
-                wave3_valid_time = True
+                _wave3_valid_time = wave3_duration >= 3
+            except Exception:
+                _wave3_valid_time = True
             
             # 验证1-2浪结构合理
             w2_retrace = wave2 / wave1 if wave1 > 0 else 1

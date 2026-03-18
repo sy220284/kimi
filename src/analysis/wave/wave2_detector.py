@@ -7,9 +7,8 @@ sys.path.insert(0, 'src')
 
 import pandas as pd
 import numpy as np
-from typing import List, Dict, Optional, Tuple
+from typing import List, Optional, Tuple
 from dataclasses import dataclass
-from datetime import datetime
 
 
 @dataclass

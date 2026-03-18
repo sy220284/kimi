@@ -9,7 +9,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 import unittest
 import logging
-import os
 from io import StringIO
 
 from utils.logger import get_logger
@@ -154,7 +153,7 @@ class TestLogFormat(unittest.TestCase):
 class TestLogRotation(unittest.TestCase):
     """日志轮转测试"""
     
-    def test_01_rotation_config(self):
+    def test_01_rotationconfig(self):
         """测试轮转配置"""
         logger = get_logger("rotation_test")
         

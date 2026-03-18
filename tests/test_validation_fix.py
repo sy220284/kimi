@@ -7,7 +7,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
-import numpy as np
 import psycopg2
 from datetime import datetime
 
@@ -25,7 +24,7 @@ def get_all_stocks():
         host='localhost', port=5432, database='quant_analysis',
         user='quant_user', password='quant_password'
     )
-    sql = 'SELECT symbol FROM market_data GROUP BY symbol ORDER BY COUNT(*) DESC LIMIT 10'
+    sql = 'SELECT symbol FROM marketdata GROUP BY symbol ORDER BY COUNT(*) DESC LIMIT 10'
     df = pd.read_sql(sql, conn)
     conn.close()
     return df['symbol'].tolist()
@@ -72,20 +71,20 @@ def main():
         use_resonance=True,
         min_resonance_score=0.3,
         trend_ma_period=200,
-        use_adaptive_params=False,
+        use_adaptiveparams=False,
     )
     
-    all_signals = []
+    allsignals = []
     
     for idx, symbol in enumerate(stocks):
         signals = analyze_stock(symbol, analyzer)
         if signals:
-            all_signals.extend(signals)
+            allsignals.extend(signals)
         print(f"  [{idx+1}/{len(stocks)}] {symbol}: {len(signals)} 个信号")
     
     # 统计结果
-    if all_signals:
-        df = pd.DataFrame(all_signals)
+    if allsignals:
+        df = pd.DataFrame(allsignals)
         
         print("\n" + "=" * 80)
         print("📊 验证统计")
@@ -95,7 +94,7 @@ def main():
         c_df = df[df['entry_type'] == 'C']
         if len(c_df) > 0:
             valid_count = c_df['b_wave_valid'].sum()
-            print(f"\nC浪信号:")
+            print("\nC浪信号:")
             print(f"  总数: {len(c_df)}")
             print(f"  通过B浪验证: {valid_count}")
             print(f"  通过率: {valid_count/len(c_df)*100:.1f}%")
@@ -104,7 +103,7 @@ def main():
         w2_df = df[df['entry_type'] == '2']
         if len(w2_df) > 0:
             valid_count = w2_df['wave1_valid'].sum()
-            print(f"\n2浪信号:")
+            print("\n2浪信号:")
             print(f"  总数: {len(w2_df)}")
             print(f"  通过1浪验证: {valid_count}")
             print(f"  通过率: {valid_count/len(w2_df)*100:.1f}%")

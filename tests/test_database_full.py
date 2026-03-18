@@ -9,11 +9,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 import unittest
 import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
 
 from data.db_manager import DatabaseDataManager
-from data.optimized_data_manager import get_optimized_data_manager
+from data.optimizeddata_manager import get_optimizeddata_manager
 
 # 辅助函数：获取数据库管理器实例
 def get_db_manager():
@@ -27,9 +25,11 @@ class TestDatabaseConnection(unittest.TestCase):
     def test_01_postgres_connection(self):
         """测试PostgreSQL连接"""
         db = get_db_manager()
-        conn = db.get_connection()
-        self.assertIsNotNone(conn)
-        conn.close()
+        # 使用上下文管理器
+        conn_mgr = db.get_connection()
+        self.assertIsNotNone(conn_mgr)
+        with conn_mgr as conn:
+            self.assertIsNotNone(conn)
         print("✅ PostgreSQL连接正常")
     
     def test_02_connection_pool(self):
@@ -37,15 +37,9 @@ class TestDatabaseConnection(unittest.TestCase):
         db = get_db_manager()
         
         # 获取多个连接
-        connections = []
         for _ in range(5):
-            conn = db.get_connection()
-            connections.append(conn)
-        
-        # 验证都是有效连接
-        for conn in connections:
-            self.assertIsNotNone(conn)
-            conn.close()
+            with db.get_connection() as conn:
+                self.assertIsNotNone(conn)
         
         print("✅ 连接池工作正常")
     
@@ -66,9 +60,9 @@ class TestMarketDataOperations(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.db = get_db_manager()
-        cls.data_mgr = get_optimized_data_manager()
+        cls.data_mgr = get_optimizeddata_manager()
     
-    def test_01_query_stock_data(self):
+    def test_01_query_stockdata(self):
         """测试查询股票数据"""
         df = self.data_mgr.get_stock_data('600519')
         
@@ -83,7 +77,7 @@ class TestMarketDataOperations(unittest.TestCase):
     def test_02_query_date_range(self):
         """测试日期范围查询"""
         query = """
-            SELECT * FROM market_data 
+            SELECT * FROM marketdata 
             WHERE symbol = '600519' 
             AND date BETWEEN '2024-01-01' AND '2024-01-31'
             ORDER BY date
@@ -98,7 +92,7 @@ class TestMarketDataOperations(unittest.TestCase):
     
     def test_03_distinct_symbols(self):
         """测试获取股票列表"""
-        query = "SELECT DISTINCT symbol FROM market_data LIMIT 10"
+        query = "SELECT DISTINCT symbol FROM marketdata LIMIT 10"
         result = self.db.execute_query(query)
         
         self.assertGreater(len(result), 0)
@@ -106,19 +100,19 @@ class TestMarketDataOperations(unittest.TestCase):
     
     def test_04_count_records(self):
         """测试记录数统计"""
-        query = "SELECT COUNT(*) as count FROM market_data"
+        query = "SELECT COUNT(*) as count FROM marketdata"
         result = self.db.execute_query(query)
         
         count = result[0]['count']
         self.assertGreater(count, 0)
         print(f"✅ 总记录数: {count:,}")
     
-    def test_05_data_integrity(self):
+    def test_05data_integrity(self):
         """测试数据完整性"""
         query = """
             SELECT symbol, COUNT(*) as count, 
                    MIN(date) as min_date, MAX(date) as max_date
-            FROM market_data
+            FROM marketdata
             GROUP BY symbol
             LIMIT 5
         """
@@ -130,7 +124,7 @@ class TestMarketDataOperations(unittest.TestCase):
             self.assertIsNotNone(row['min_date'])
             self.assertIsNotNone(row['max_date'])
         
-        print(f"✅ 数据完整性检查通过")
+        print("✅ 数据完整性检查通过")
 
 
 class TestIndexPerformance(unittest.TestCase):
@@ -147,7 +141,7 @@ class TestIndexPerformance(unittest.TestCase):
         # 带索引的查询
         start = time.time()
         query = """
-            SELECT * FROM market_data 
+            SELECT * FROM marketdata 
             WHERE symbol = '600519' AND date = '2024-01-02'
         """
         result = self.db.execute_query(query)
@@ -164,7 +158,7 @@ class TestIndexPerformance(unittest.TestCase):
         
         start = time.time()
         for symbol in symbols * 10:  # 50次查询
-            query = f"SELECT * FROM market_data WHERE symbol = '{symbol}' LIMIT 1"
+            query = f"SELECT * FROM marketdata WHERE symbol = '{symbol}' LIMIT 1"
             self.db.execute_query(query)
         elapsed = time.time() - start
         
@@ -200,11 +194,11 @@ class TestDataConsistency(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        cls.data_mgr = get_optimized_data_manager()
+        cls.data_mgr = get_optimizeddata_manager()
     
     def test_01_price_consistency(self):
         """测试价格数据一致性"""
-        df = self.data_mgr.load_all_data()
+        df = self.data_mgr.load_alldata()
         
         # 检查基本约束
         invalid = df[
@@ -220,7 +214,7 @@ class TestDataConsistency(unittest.TestCase):
     
     def test_02_volume_positive(self):
         """测试成交量为正"""
-        df = self.data_mgr.load_all_data()
+        df = self.data_mgr.load_alldata()
         
         negative_volume = df[df['volume'] < 0]
         
@@ -252,12 +246,12 @@ class TestTableStructure(unittest.TestCase):
     def setUpClass(cls):
         cls.db = get_db_manager()
     
-    def test_01_market_data_columns(self):
-        """测试market_data表结构"""
+    def test_01_marketdata_columns(self):
+        """测试marketdata表结构"""
         query = """
             SELECT column_name, data_type
             FROM information_schema.columns
-            WHERE table_name = 'market_data'
+            WHERE table_name = 'marketdata'
             ORDER BY ordinal_position
         """
         result = self.db.execute_query(query)
@@ -275,7 +269,7 @@ class TestTableStructure(unittest.TestCase):
         query = """
             SELECT indexname
             FROM pg_indexes
-            WHERE tablename = 'market_data'
+            WHERE tablename = 'marketdata'
         """
         result = self.db.execute_query(query)
         

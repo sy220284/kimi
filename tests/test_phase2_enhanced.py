@@ -9,8 +9,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from data import get_stock_data
 from analysis.wave.enhanced_analyzer import EnhancedWaveAnalyzer, analyze_stock_full
-from analysis.wave.adaptive_params import get_adaptive_params
-import pandas as pd
+from analysis.wave.adaptiveparams import get_adaptiveparams
 
 print("="*80)
 print("🔬 Phase 2 测试 - 增强版波浪分析")
@@ -37,14 +36,14 @@ for symbol, name in symbols:
         print(f"📈 数据: {len(df)} 条 ({df['date'].min()} ~ {df['date'].max()})")
         
         # 1. 自适应参数测试
-        print(f"\n【1. 自适应参数优化】")
-        params = get_adaptive_params(df, 'day')
+        print("\n【1. 自适应参数优化】")
+        params = get_adaptiveparams(df, 'day')
         print(f"  ATR周期: {params['atr_period']}")
         print(f"  ATR倍数: {params['atr_mult']:.2f}")
         print(f"  置信度阈值: {params['confidence_threshold']:.2f}")
         
         # 2. 增强版分析
-        print(f"\n【2. 增强版波浪分析】")
+        print("\n【2. 增强版波浪分析】")
         result = analyzer.analyze(symbol, df)
         
         pattern = result.primary_pattern
@@ -54,26 +53,26 @@ for symbol, name in symbols:
         print(f"  市场状态: {result.market_condition}")
         
         # 3. 特殊形态检测
-        print(f"\n【3. 特殊形态检测】")
+        print("\n【3. 特殊形态检测】")
         if result.triangle_detected:
-            print(f"  🔺 三角形调整")
+            print("  🔺 三角形调整")
         if result.wxy_detected:
-            print(f"  📎 WXY联合调整")
+            print("  📎 WXY联合调整")
         if result.complete_structure.warnings:
             for w in result.complete_structure.warnings:
                 print(f"  ⚠️ {w}")
         if not result.triangle_detected and not result.wxy_detected and not result.complete_structure.warnings:
-            print(f"  标准形态")
+            print("  标准形态")
         
         # 4. 多指标共振
-        print(f"\n【4. 多指标共振分析】")
+        print("\n【4. 多指标共振分析】")
         if result.resonance:
             res = result.resonance
             print(f"  综合方向: {res.overall_direction.value}")
             print(f"  共振强度: {res.overall_strength:.1%}")
             print(f"  加权得分: {res.weighted_score:+.2f}")
             
-            print(f"\n  各指标信号:")
+            print("\n  各指标信号:")
             for sig in res.signals:
                 icon = "📈" if hasattr(sig.direction, 'value') and sig.direction.value == 'bullish' else \
                        "📉" if hasattr(sig.direction, 'value') and sig.direction.value == 'bearish' else "➖"

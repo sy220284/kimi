@@ -9,10 +9,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
-import numpy as np
 import psycopg2
-from datetime import datetime, timedelta
-from collections import defaultdict
+from datetime import datetime
 
 from src.analysis.wave.enhanced_detector import enhanced_pivot_detection
 
@@ -26,7 +24,7 @@ def get_stock_data(symbol, start_date, end_date):
     conn = get_db_connection()
     sql = '''
     SELECT date, open, high, low, close, volume, amount
-    FROM market_data
+    FROM marketdata
     WHERE symbol = %s AND date >= %s AND date <= %s
     ORDER BY date
     '''
@@ -40,7 +38,7 @@ def analyze_wave_segments(df):
     返回识别出的A/B/C和1/2/3/4/5浪段
     """
     # 检测极值点
-    pivots = enhanced_pivot_detection(df, atr_period=10, atr_mult=0.5, min_pivots=4)
+    pivots = enhanced_pivot_detection(df, atr_period=10, atr_mult=0.5, minpivots=4)
     
     if len(pivots) < 4:
         return []
@@ -59,7 +57,7 @@ def analyze_wave_segments(df):
             d1 = datetime.strptime(str(p1.date)[:10], '%Y-%m-%d')
             d2 = datetime.strptime(str(p2.date)[:10], '%Y-%m-%d')
             duration = (d2 - d1).days
-        except:
+        except Exception:
             duration = 0
         
         # 判断方向
@@ -128,7 +126,7 @@ def main():
     conn = get_db_connection()
     sql = '''
     SELECT symbol, COUNT(*) as records
-    FROM market_data 
+    FROM marketdata 
     WHERE date >= '2018-01-01'
     GROUP BY symbol
     HAVING COUNT(*) >= 500
@@ -177,7 +175,7 @@ def main():
         b_df = pd.DataFrame(all_b_waves)
         print(f"  平均持续时间: {b_df['duration'].mean():.1f}天")
         print(f"  平均价格变动: {b_df['abs_change_pct'].mean():.2f}%")
-        print(f"  持续时间分布:")
+        print("  持续时间分布:")
         print(f"    <5天: {(b_df['duration'] < 5).sum()} ({(b_df['duration'] < 5).mean()*100:.1f}%)")
         print(f"    5-10天: {((b_df['duration'] >= 5) & (b_df['duration'] < 10)).sum()}")
         print(f"    10-20天: {((b_df['duration'] >= 10) & (b_df['duration'] < 20)).sum()}")
@@ -187,7 +185,7 @@ def main():
         if 'future_5d' in b_df.columns:
             valid = b_df['future_5d'].dropna()
             if len(valid) > 0:
-                print(f"\n  B浪结束后5天:")
+                print("\n  B浪结束后5天:")
                 print(f"    胜率: {(valid > 0).mean()*100:.1f}%")
                 print(f"    平均收益: {valid.mean():.2f}%")
     
@@ -197,7 +195,7 @@ def main():
         w1_df = pd.DataFrame(all_wave1)
         print(f"  平均持续时间: {w1_df['duration'].mean():.1f}天")
         print(f"  平均价格变动: {w1_df['abs_change_pct'].mean():.2f}%")
-        print(f"  持续时间分布:")
+        print("  持续时间分布:")
         print(f"    <3天: {(w1_df['duration'] < 3).sum()} ({(w1_df['duration'] < 3).mean()*100:.1f}%)")
         print(f"    3-5天: {((w1_df['duration'] >= 3) & (w1_df['duration'] < 5)).sum()}")
         print(f"    5-10天: {((w1_df['duration'] >= 5) & (w1_df['duration'] < 10)).sum()}")
@@ -207,7 +205,7 @@ def main():
         if 'future_5d' in w1_df.columns:
             valid = w1_df['future_5d'].dropna()
             if len(valid) > 0:
-                print(f"\n  1浪结束后5天:")
+                print("\n  1浪结束后5天:")
                 print(f"    胜率: {(valid > 0).mean()*100:.1f}%")
                 print(f"    平均收益: {valid.mean():.2f}%")
     

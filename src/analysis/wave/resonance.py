@@ -3,8 +3,7 @@
 Phase 2: 提高信号可靠性
 """
 import pandas as pd
-import numpy as np
-from typing import Dict, List, Optional, Tuple, Any
+from typing import List, Any
 from dataclasses import dataclass
 from enum import Enum
 
@@ -89,7 +88,7 @@ class MACDAnalyzer:
         
         macd_val = latest['macd']
         signal_val = latest['macd_signal']
-        hist_val = latest['macd_hist']
+        _hist_val = latest['macd_hist']
         
         # 判断方向
         direction = SignalDirection.NEUTRAL

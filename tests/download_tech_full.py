@@ -65,7 +65,7 @@ TECH_STOCKS = {
     ],
 }
 
-def save_to_database(db_manager, symbol, df):
+def save_todatabase(db_manager, symbol, df):
     """保存到数据库"""
     if df.empty:
         return 0
@@ -73,7 +73,7 @@ def save_to_database(db_manager, symbol, df):
     count = 0
     try:
         for _, row in df.iterrows():
-            db_manager.pg.insert_market_data(
+            db_manager.pg.insert_marketdata(
                 symbol=symbol,
                 date=row['date'],
                 open_price=float(row['open']),
@@ -105,7 +105,7 @@ def main():
     # 去重
     all_stocks = list(set(all_stocks))
     
-    print(f"\n股票列表:")
+    print("\n股票列表:")
     print(f"  大盘股: {len(TECH_STOCKS['large_cap'])} 只")
     print(f"  中盘股: {len(TECH_STOCKS['mid_cap'])} 只")
     print(f"  小盘股: {len(TECH_STOCKS['small_cap'])} 只")
@@ -133,14 +133,14 @@ def main():
         
         try:
             code = f'hs_{symbol}'
-            df = fetcher.get_data_by_date_range(code, start_date, end_date)
+            df = fetcher.getdata_by_date_range(code, start_date, end_date)
             
             if df is not None and not df.empty:
                 # 添加symbol列
                 df['symbol'] = symbol
                 df = df[['symbol', 'date', 'open', 'high', 'low', 'close', 'volume', 'amount']]
                 
-                records_saved = save_to_database(db_manager, symbol, df)
+                records_saved = save_todatabase(db_manager, symbol, df)
                 if records_saved > 0:
                     print(f"  ✅ 保存 {records_saved} 条记录")
                     success_count += 1
@@ -172,7 +172,7 @@ def main():
     print(f"成功: {success_count} 只 | 失败: {fail_count} 只")
     print(f"总记录: {total_records:,} 条")
     print()
-    print(f"市值分布:")
+    print("市值分布:")
     print(f"  大盘股: {large_success}/{len(TECH_STOCKS['large_cap'])} 只")
     print(f"  中盘股: {mid_success}/{len(TECH_STOCKS['mid_cap'])} 只")
     print(f"  小盘股: {small_success}/{len(TECH_STOCKS['small_cap'])} 只")
@@ -181,7 +181,7 @@ def main():
     try:
         result = db_manager.pg.execute("""
             SELECT symbol, MIN(date) as start_date, MAX(date) as end_date, COUNT(*) as records
-            FROM market_data 
+            FROM marketdata 
             WHERE symbol IN %s
             GROUP BY symbol
             ORDER BY records DESC

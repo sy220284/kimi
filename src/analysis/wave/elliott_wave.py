@@ -9,7 +9,7 @@
 - 斐波那契目标价计算
 - 子波浪嵌套结构
 """
-from typing import List, Dict, Optional, Tuple, Any, NamedTuple
+from typing import List, Dict, Optional, Tuple, Any
 from dataclasses import dataclass, field
 from enum import Enum
 import pandas as pd
@@ -226,7 +226,7 @@ def validate_impulse_rules(points):
     
     try:
         m = ImpulseMetrics.build(points)
-    except:
+    except Exception:
         return False, ["构建失败"], 0.0, {}
     
     violations = []
@@ -351,12 +351,12 @@ class ElliottWaveAnalyzer:
             return []
         
         # 强度分级
-        amplitudes = [abs(prices[i+1] - prices[i]) for i in range(len(prices)-1)]
+        amplitudes = [float(abs(float(prices[i+1]) - float(prices[i]))) for i in range(len(prices)-1)]
         median_amp = float(np.median(amplitudes)) if amplitudes else 1.0
         
         points = []
         for i, (idx, price, ptype) in enumerate(zip(idxs, prices, types)):
-            amp = amplitudes[max(0, i-1)] if i > 0 else (amplitudes[0] if amplitudes else 0)
+            amp = float(amplitudes[max(0, i-1)]) if i > 0 else (float(amplitudes[0]) if amplitudes else 0)
             ratio = amp / (median_amp + 1e-12)
             strength = 3 if ratio >= 2.0 else (2 if ratio >= 1.0 else 1)
             
@@ -487,7 +487,7 @@ class ElliottWaveAnalyzer:
         max_price = max(prices)
         min_price = min(prices)
         max_idx = prices.index(max_price)
-        min_idx = prices.index(min_price)
+        _min_idx = prices.index(min_price)
         
         if direction_up:
             # 上升趋势: 1-2-3-4-5
@@ -751,7 +751,6 @@ class ElliottWaveAnalyzer:
     
     def _create_generic_pattern(self, pivots, df: pd.DataFrame, conf: float) -> WavePattern:
         """创建通用波浪模式"""
-        from .enhanced_detector import PivotPoint
         
         points = self._convert_pivots_to_wavepoints(pivots, df)
         
@@ -792,7 +791,6 @@ class ElliottWaveAnalyzer:
     
     def _convert_pivots_to_wavepoints(self, pivots, df: pd.DataFrame) -> List[WavePoint]:
         """将PivotPoint转换为WavePoint"""
-        from .enhanced_detector import PivotPoint
         
         dates = df['date'].values if 'date' in df.columns else [str(i) for i in range(len(df))]
         volumes = df['volume'].values if 'volume' in df.columns else np.ones(len(df))

@@ -34,13 +34,13 @@ for symbol in SYMBOLS:
     
     signals = analyzer.detect(df, mode='all')
     
-    c_signals = [s for s in signals if s.entry_type.value == 'C']
-    wave2_signals = [s for s in signals if s.entry_type.value == '2']
-    wave4_signals = [s for s in signals if s.entry_type.value == '4']
+    csignals = [s for s in signals if s.entry_type.value == 'C']
+    wave2signals = [s for s in signals if s.entry_type.value == '2']
+    wave4signals = [s for s in signals if s.entry_type.value == '4']
     
-    print(f"  C浪: {len(c_signals)}个, 平均置信度{pd.Series([s.confidence for s in c_signals]).mean():.2f}" if c_signals else "  C浪: 0个")
-    print(f"  2浪: {len(wave2_signals)}个, 平均置信度{pd.Series([s.confidence for s in wave2_signals]).mean():.2f}" if wave2_signals else "  2浪: 0个")
-    print(f"  4浪: {len(wave4_signals)}个" if wave4_signals else "  4浪: 0个")
+    print(f"  C浪: {len(csignals)}个, 平均置信度{pd.Series([s.confidence for s in csignals]).mean():.2f}" if csignals else "  C浪: 0个")
+    print(f"  2浪: {len(wave2signals)}个, 平均置信度{pd.Series([s.confidence for s in wave2signals]).mean():.2f}" if wave2signals else "  2浪: 0个")
+    print(f"  4浪: {len(wave4signals)}个" if wave4signals else "  4浪: 0个")
     
     # 统计检测方法
     methods = {}
@@ -53,10 +53,10 @@ for symbol in SYMBOLS:
     
     results.append({
         'symbol': symbol,
-        'c_count': len(c_signals),
-        'c_confidence': pd.Series([s.confidence for s in c_signals]).mean() if c_signals else 0,
-        'wave2_count': len(wave2_signals),
-        'wave2_confidence': pd.Series([s.confidence for s in wave2_signals]).mean() if wave2_signals else 0,
+        'c_count': len(csignals),
+        'c_confidence': pd.Series([s.confidence for s in csignals]).mean() if csignals else 0,
+        'wave2_count': len(wave2signals),
+        'wave2_confidence': pd.Series([s.confidence for s in wave2signals]).mean() if wave2signals else 0,
     })
 
 print("\n" + "=" * 80)

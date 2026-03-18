@@ -112,7 +112,7 @@ def get_daily_kline_ths(symbol, start_date='20170101', end_date='20241231'):
                     else:
                         record['amount'] = 0
                     records.append(record)
-                except:
+                except Exception:
                     continue
         
         if not records:
@@ -122,7 +122,7 @@ def get_daily_kline_ths(symbol, start_date='20170101', end_date='20241231'):
         df['symbol'] = symbol
         
         return df[['symbol', 'date', 'open', 'high', 'low', 'close', 'volume', 'amount']]
-    except Exception as e:
+    except Exception:
         return None
 
 def main():
@@ -180,7 +180,7 @@ def main():
         
         if df is not None and not df.empty:
             try:
-                records = db_manager.pg.save_market_data(df)
+                db_manager.pg.save_marketdata(df)
                 print(f"✅ {len(df)} 条")
                 success_count += 1
                 total_records += len(df)

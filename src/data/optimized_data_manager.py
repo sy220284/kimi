@@ -214,7 +214,7 @@ def benchmark():
     print("="*80)
     
     mgr = OptimizedDataManager()
-    df = mgr.load_all_data()
+    _df = mgr.load_all_data()
     symbols = list(mgr._cache_by_symbol.keys())
     print(f"\n样本: {len(symbols)}只股票\n")
     

@@ -2,7 +2,7 @@
 数据采集模块 - 统一数据采集接口
 """
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 from enum import Enum
 import pandas as pd
@@ -131,7 +131,7 @@ class DataSourceAdapter(ABC):
             标准化的DataFrame
         """
         # 确保必要的列存在
-        required_cols = ['symbol', 'date', 'open', 'high', 'low', 'close', 'volume']
+        _required_cols = ['symbol', 'date', 'open', 'high', 'low', 'close', 'volume']
         
         # 列名映射（不同数据源可能有不同的列名）
         column_mapping = {

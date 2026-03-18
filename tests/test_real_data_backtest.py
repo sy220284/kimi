@@ -6,11 +6,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 import pandas as pd
-import numpy as np
 from analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy
 from analysis.wave.unified_analyzer import UnifiedWaveAnalyzer
 
-def reconstruct_ohlcv_from_signals(signal_df):
+def reconstruct_ohlcv_fromsignals(signal_df):
     """
     从信号数据重建OHLCV数据
     """
@@ -36,7 +35,7 @@ def main():
     print("="*60)
     
     # 加载真实数据
-    csv_path = Path(__file__).parent / 'results' / 'full_database_v3.csv'
+    csv_path = Path(__file__).parent / 'results' / 'fulldatabase_v3.csv'
     print(f"\n加载数据: {csv_path}")
     
     df_all = pd.read_csv(csv_path)
@@ -46,23 +45,23 @@ def main():
     # 选择几只股票测试
     test_symbols = ['600519', '000858', '600702']  # 茅台、五粮液、舍得
     
-    results_summary = []
+    resultssummary = []
     
     for symbol in test_symbols:
-        stock_signals = df_all[df_all['symbol'] == symbol].copy()
+        stocksignals = df_all[df_all['symbol'] == symbol].copy()
         
-        if len(stock_signals) < 50:
-            print(f"\n⚠️ {symbol}: 数据不足({len(stock_signals)}条),跳过")
+        if len(stocksignals) < 50:
+            print(f"\n⚠️ {symbol}: 数据不足({len(stocksignals)}条),跳过")
             continue
         
-        print(f"\n" + "="*60)
+        print("\n" + "="*60)
         print(f"📊 {symbol}")
         print("="*60)
-        print(f"信号数: {len(stock_signals)}")
-        print(f"日期范围: {stock_signals['date'].min()} ~ {stock_signals['date'].max()}")
+        print(f"信号数: {len(stocksignals)}")
+        print(f"日期范围: {stocksignals['date'].min()} ~ {stocksignals['date'].max()}")
         
         # 重建OHLCV数据
-        ohlcv_df = reconstruct_ohlcv_from_signals(stock_signals)
+        ohlcv_df = reconstruct_ohlcv_fromsignals(stocksignals)
         
         # 创建回测器
         analyzer = UnifiedWaveAnalyzer()
@@ -87,19 +86,19 @@ def main():
             result = backtester.run(symbol, ohlcv_df, reanalyze_every=5)
             
             # 打印简要报告
-            print(f"\n交易次数: {result.total_trades}")
+            print(f"\n交易次数: {result.totaltrades}")
             print(f"胜率: {result.win_rate:.1%}")
             print(f"总收益: {result.total_return_pct:.2f}%")
-            print(f"平均每笔: {result.avg_return_per_trade:.2f}%")
+            print(f"平均每笔: {result.avg_return_pertrade:.2f}%")
             print(f"最大回撤: {result.max_drawdown_pct:.2f}%")
             print(f"Sharpe: {result.sharpe_ratio:.2f}")
             
-            results_summary.append({
+            resultssummary.append({
                 'symbol': symbol,
-                'trades': result.total_trades,
+                'trades': result.totaltrades,
                 'win_rate': result.win_rate,
                 'return': result.total_return_pct,
-                'avg_return': result.avg_return_per_trade,
+                'avg_return': result.avg_return_pertrade,
                 'max_dd': result.max_drawdown_pct,
                 'sharpe': result.sharpe_ratio
             })
@@ -110,12 +109,12 @@ def main():
             traceback.print_exc()
     
     # 汇总报告
-    if results_summary:
+    if resultssummary:
         print("\n" + "="*60)
         print("📈 汇总报告")
         print("="*60)
         
-        summary_df = pd.DataFrame(results_summary)
+        summary_df = pd.DataFrame(resultssummary)
         print(f"\n{'股票':<10} {'交易':<6} {'胜率':<8} {'收益':<10} {'平均':<10} {'回撤':<10} {'Sharpe':<8}")
         print("-" * 70)
         

@@ -6,12 +6,10 @@ import sys
 sys.path.insert(0, 'src')
 
 import pandas as pd
-import numpy as np
-from typing import List, Dict
-from dataclasses import dataclass
+from typing import Dict
 
 from data import get_stock_data
-from analysis.wave import UnifiedWaveAnalyzer, WaveEntryType
+from analysis.wave import UnifiedWaveAnalyzer
 
 
 TEST_STOCKS = [
@@ -39,7 +37,7 @@ def run_optimized_backtest(symbol: str, name: str, market_cap: str) -> Dict:
     # 优化版分析器
     analyzer = UnifiedWaveAnalyzer(
         atr_period=10,          # 优化: 更短周期
-        min_pivots=3,           # 优化: 降低门槛
+        minpivots=3,           # 优化: 降低门槛
         min_retrace=0.382,      # 优化: 收紧至38.2%
         max_wave2_retrace=0.50, # 优化: 收紧至50%
         use_trend_filter=True,  # 优化: 后置趋势过滤
@@ -123,11 +121,11 @@ def run_optimized_backtest(symbol: str, name: str, market_cap: str) -> Dict:
     
     # 各浪型统计
     for wave in ['C', '2', '4']:
-        wave_trades = [t for t in trades if t['entry_type'] == wave]
-        if wave_trades:
-            w_wins = [t for t in wave_trades if t['win']]
-            w_ret = sum(t['pnl_pct'] for t in wave_trades) / len(wave_trades)
-            print(f"  浪{wave}: {len(wave_trades)}笔 胜率{len(w_wins)/len(wave_trades):.1%} 收益{w_ret:+.2f}%")
+        wavetrades = [t for t in trades if t['entry_type'] == wave]
+        if wavetrades:
+            w_wins = [t for t in wavetrades if t['win']]
+            w_ret = sum(t['pnl_pct'] for t in wavetrades) / len(wavetrades)
+            print(f"  浪{wave}: {len(wavetrades)}笔 胜率{len(w_wins)/len(wavetrades):.1%} 收益{w_ret:+.2f}%")
     
     return {
         'symbol': symbol,
@@ -144,7 +142,7 @@ def main():
     print("="*60)
     print("优化内容:")
     print("  • ATR周期: 14→10")
-    print("  • min_pivots: 4→3")
+    print("  • minpivots: 4→3")
     print("  • min_retrace: 30%→38.2%")
     print("  • max_wave2_retrace: 61.8%→50%")
     print("  • 趋势过滤后置")
@@ -161,10 +159,10 @@ def main():
         print(f"\n{'='*60}")
         print("📈 汇总")
         print(f"{'='*60}")
-        avg_trades = sum(r['trades'] for r in results) / len(results)
+        avgtrades = sum(r['trades'] for r in results) / len(results)
         avg_win = sum(r['win_rate'] for r in results) / len(results)
         avg_ret = sum(r['total_return'] for r in results) / len(results)
-        print(f"平均交易: {avg_trades:.0f}笔")
+        print(f"平均交易: {avgtrades:.0f}笔")
         print(f"平均胜率: {avg_win:.1%}")
         print(f"平均收益: {avg_ret:+.2f}%")
     

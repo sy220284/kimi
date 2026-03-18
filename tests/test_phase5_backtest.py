@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from data import get_stock_data
 from analysis.wave import EnhancedWaveAnalyzer
-from analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy
+from analysis.backtest.wave_backtester import WaveBacktester
 
 print("="*80)
 print("📈 Phase 5 测试 - 回测验证")
@@ -66,16 +66,16 @@ print("-"*60)
 
 for item in all_results:
     r = item['result']
-    print(f"{item['name']:<8} {r.total_trades:>8} {r.win_rate:>7.1%} "
+    print(f"{item['name']:<8} {r.totaltrades:>8} {r.win_rate:>7.1%} "
           f"{r.total_return_pct:>9.1f}% {r.max_drawdown_pct:>9.1f}% {r.sharpe_ratio:>7.2f}")
 
 # 计算组合表现
 if all_results:
-    total_trades = sum(r['result'].total_trades for r in all_results)
+    totaltrades = sum(r['result'].totaltrades for r in all_results)
     avg_win_rate = sum(r['result'].win_rate for r in all_results) / len(all_results)
     avg_return = sum(r['result'].total_return_pct for r in all_results) / len(all_results)
     
-    print(f"\n{'组合平均':<8} {total_trades:>8} {avg_win_rate:>7.1%} "
+    print(f"\n{'组合平均':<8} {totaltrades:>8} {avg_win_rate:>7.1%} "
           f"{avg_return:>9.1f}%")
 
 print("\n" + "="*80)

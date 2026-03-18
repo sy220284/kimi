@@ -7,7 +7,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from data import DataAPI, get_stock_data
-import pandas as pd
 
 print("="*80)
 print("🔧 Phase 1: 数据层优化测试")
@@ -34,10 +33,10 @@ else:
     print(f"📅 日期范围: {df['date'].min()} ~ {df['date'].max()}")
     
     if report:
-        print(f"\n🔍 质量报告:")
+        print("\n🔍 质量报告:")
         print(f"  质量评分: {report.score}/100")
         print(f"  是否有效: {'✅' if report.is_valid else '❌'}")
-        print(f"  缺失值: {report.missing_values}")
+        print(f"  缺失值: {report.missingvalues}")
         print(f"  价格异常: {len(report.price_anomalies)} 处")
         print(f"  日期缺失: {len(report.gap_dates)} 处")
 
@@ -46,7 +45,7 @@ print("\n【测试2】批量数据获取")
 print("-"*60)
 
 symbols = ['600138', '002184', '600556']
-batch_result = api.get_batch_data(symbols, '2025-01-01', '2025-12-31')
+batch_result = api.get_batchdata(symbols, '2025-01-01', '2025-12-31')
 
 for symbol, res in batch_result.items():
     if 'error' in res:
@@ -56,11 +55,12 @@ for symbol, res in batch_result.items():
         print(f"  {symbol}: ✅ {len(df)} 条 ({res['source']})")
 
 # 测试3: 缓存系统
+import time
+
 print("\n【测试3】缓存系统")
 print("-"*60)
 
 # 第一次获取（未缓存）
-import time
 t1 = time.time()
 result1 = api.get_stock_data('600138', '2025-06-01', '2025-12-31')
 t2 = time.time()
@@ -73,11 +73,11 @@ t2 = time.time()
 print(f"  缓存命中: {(t2-t1)*1000:.1f}ms ⚡")
 
 # 缓存统计
-cache_stats = api.get_cache_stats()
-print(f"\n  缓存统计:")
-print(f"    内存条目: {cache_stats['memory_entries']}")
-print(f"    文件条目: {cache_stats['file_entries']}")
-print(f"    总大小: {cache_stats['total_size_mb']} MB")
+cachestats = api.get_cachestats()
+print("\n  缓存统计:")
+print(f"    内存条目: {cachestats['memory_entries']}")
+print(f"    文件条目: {cachestats['file_entries']}")
+print(f"    总大小: {cachestats['total_size_mb']} MB")
 
 # 测试4: 数据源状态
 print("\n【测试4】数据源状态监控")

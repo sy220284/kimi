@@ -225,8 +225,24 @@ class DatabaseDataManager:
         try:
             results = self.pg.execute(query, fetch=True)
             return [r['symbol'] for r in results] if results else []
-        except:
+        except Exception:
             return []
+    
+    def execute_query(self, query: str, params: Optional[tuple] = None) -> Optional[list]:
+        """执行SQL查询"""
+        try:
+            return self.pg.execute(query, params, fetch=True)
+        except Exception as e:
+            print(f"查询执行失败: {e}")
+            return None
+    
+    def get_connection(self):
+        """获取数据库连接"""
+        try:
+            # 使用上下文管理器获取连接
+            return self.pg.get_connection()
+        except Exception:
+            return None
     
     def close(self):
         """关闭连接"""

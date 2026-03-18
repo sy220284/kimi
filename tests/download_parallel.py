@@ -6,11 +6,9 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
-import pandas as pd
 import time
 from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from multiprocessing import Manager
 import os
 
 # 必须在导入其他模块前设置环境变量
@@ -35,7 +33,7 @@ def download_single_stock(args):
         db = get_db_connection()
         
         code = f'hs_{symbol}'
-        df = fetcher.get_data_by_date_range(code, start_date, end_date)
+        df = fetcher.getdata_by_date_range(code, start_date, end_date)
         
         if df is None or df.empty:
             return {'symbol': symbol, 'status': 'empty', 'records': 0}
@@ -44,7 +42,7 @@ def download_single_stock(args):
         count = 0
         for _, row in df.iterrows():
             try:
-                db.pg.insert_market_data(
+                db.pg.insert_marketdata(
                     symbol=symbol,
                     date=row['date'],
                     open_price=float(row['open']),
@@ -56,7 +54,7 @@ def download_single_stock(args):
                     source='THS'
                 )
                 count += 1
-            except Exception as e:
+            except Exception:
                 pass  # 忽略重复键等错误
         
         return {'symbol': symbol, 'status': 'success', 'records': count}
@@ -72,9 +70,9 @@ def get_downloaded_stocks():
     """获取已下载的股票"""
     try:
         db = get_db_connection()
-        result = db.pg.execute("SELECT DISTINCT symbol FROM market_data", fetch=True)
+        result = db.pg.execute("SELECT DISTINCT symbol FROM marketdata", fetch=True)
         return {r['symbol'] for r in result}
-    except:
+    except Exception:
         return set()
 
 def main():
@@ -155,10 +153,10 @@ def main():
     try:
         db = get_db_connection()
         result = db.pg.execute(
-            "SELECT COUNT(DISTINCT symbol) as stocks, COUNT(*) as total FROM market_data",
+            "SELECT COUNT(DISTINCT symbol) as stocks, COUNT(*) as total FROM marketdata",
             fetch=True
         )
-        print(f"\n📈 数据库最终:")
+        print("\n📈 数据库最终:")
         print(f"  总股票: {result[0]['stocks']} 只")
         print(f"  总记录: {result[0]['total']:,} 条")
     except Exception as e:

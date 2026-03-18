@@ -7,7 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 # 读取数据
-df = pd.read_csv('tests/results/tech_trade_details_20260318_1053.csv')
+df = pd.read_csv('tests/results/techtrade_details_20260318_1053.csv')
 
 # 亏损股票列表
 loss_symbols = ['688126', '688561', '688521', '688008', '688728', '688981', '300408', '688009', '603893']
@@ -20,7 +20,7 @@ print("="*80)
 print("\n📊 一、盈亏股票整体对比")
 print("-"*80)
 
-symbol_stats = []
+symbolstats = []
 for symbol in df['symbol'].unique():
     symbol_df = df[df['symbol'] == symbol]
     total_pnl = symbol_df['pnl_pct'].sum()
@@ -32,7 +32,7 @@ for symbol in df['symbol'].unique():
     avg_win = symbol_df[symbol_df['pnl_pct'] > 0]['pnl_pct'].mean() if len(symbol_df[symbol_df['pnl_pct'] > 0]) > 0 else 0
     avg_loss = symbol_df[symbol_df['pnl_pct'] <= 0]['pnl_pct'].mean() if len(symbol_df[symbol_df['pnl_pct'] <= 0]) > 0 else 0
     
-    symbol_stats.append({
+    symbolstats.append({
         'symbol': symbol,
         'total_pnl': total_pnl,
         'win_rate': win_rate,
@@ -44,13 +44,13 @@ for symbol in df['symbol'].unique():
         'avg_loss': avg_loss
     })
 
-stats_df = pd.DataFrame(symbol_stats)
+stats_df = pd.DataFrame(symbolstats)
 profitable = stats_df[stats_df['total_pnl'] > 0]
 losing = stats_df[stats_df['total_pnl'] <= 0]
 
-print(f"\n┌─────────────────┬─────────────────┬─────────────────┐")
-print(f"│     指标        │   盈利股票(31只) │   亏损股票(9只)  │")
-print(f"├─────────────────┼─────────────────┼─────────────────┤")
+print("\n┌─────────────────┬─────────────────┬─────────────────┐")
+print("│     指标        │   盈利股票(31只) │   亏损股票(9只)  │")
+print("├─────────────────┼─────────────────┼─────────────────┤")
 print(f"│ 平均总收益      │   {profitable['total_pnl'].mean():>10.2f}%   │   {losing['total_pnl'].mean():>10.2f}%   │")
 print(f"│ 平均胜率        │   {profitable['win_rate'].mean():>10.1%}   │   {losing['win_rate'].mean():>10.1%}   │")
 print(f"│ 平均交易次数    │   {profitable['trades'].mean():>10.1f}   │   {losing['trades'].mean():>10.1f}   │")
@@ -59,31 +59,31 @@ print(f"│ 止损比例        │   {profitable['stop_pct'].mean():>10.1f}%   
 print(f"│ 平均持仓天数    │   {profitable['avg_holding'].mean():>10.1f}天  │   {losing['avg_holding'].mean():>10.1f}天  │")
 print(f"│ 平均盈利单笔    │   +{profitable['avg_win'].mean():>9.2f}%   │   +{losing['avg_win'].mean():>9.2f}%   │")
 print(f"│ 平均亏损单笔    │   {profitable['avg_loss'].mean():>10.2f}%   │   {losing['avg_loss'].mean():>10.2f}%   │")
-print(f"└─────────────────┴─────────────────┴─────────────────┘")
+print("└─────────────────┴─────────────────┴─────────────────┘")
 
 # 二、逐个分析
 print("\n\n📉 二、亏损股票逐个深度分析")
 print("="*80)
 
 for symbol in loss_symbols:
-    symbol_trades = df[df['symbol'] == symbol].copy()
-    if len(symbol_trades) == 0:
+    symboltrades = df[df['symbol'] == symbol].copy()
+    if len(symboltrades) == 0:
         continue
     
-    total_pnl = symbol_trades['pnl_pct'].sum()
-    win_rate = (symbol_trades['pnl_pct'] > 0).mean()
+    total_pnl = symboltrades['pnl_pct'].sum()
+    win_rate = (symboltrades['pnl_pct'] > 0).mean()
     
-    trailing = symbol_trades[symbol_trades['exit_reason'].str.contains('trailing_stop', na=False)]
-    stop_loss = symbol_trades[symbol_trades['exit_reason'] == 'stop_loss']
+    trailing = symboltrades[symboltrades['exit_reason'].str.contains('trailing_stop', na=False)]
+    stop_loss = symboltrades[symboltrades['exit_reason'] == 'stop_loss']
     
-    wins = symbol_trades[symbol_trades['pnl_pct'] > 0]
-    losses = symbol_trades[symbol_trades['pnl_pct'] <= 0]
+    wins = symboltrades[symboltrades['pnl_pct'] > 0]
+    losses = symboltrades[symboltrades['pnl_pct'] <= 0]
     
-    print(f"\n🔹 {symbol} | 总收益: {total_pnl:>7.2f}% | 交易{len(symbol_trades):>2}次")
+    print(f"\n🔹 {symbol} | 总收益: {total_pnl:>7.2f}% | 交易{len(symboltrades):>2}次")
     print("-"*60)
     
     # 基本指标
-    print(f"  胜率: {win_rate:>6.1%} | 平均单笔: {symbol_trades['pnl_pct'].mean():>6.2f}%")
+    print(f"  胜率: {win_rate:>6.1%} | 平均单笔: {symboltrades['pnl_pct'].mean():>6.2f}%")
     
     # 卖出方式分布
     parts = []
@@ -105,7 +105,7 @@ for symbol in loss_symbols:
         print(f"  盈亏比: {pf:.2f} (需要>1才能盈利)")
     
     # 持仓时间
-    print(f"  持仓: 平均{symbol_trades['holding_days'].mean():.0f}天 最长{symbol_trades['holding_days'].max()}天")
+    print(f"  持仓: 平均{symboltrades['holding_days'].mean():.0f}天 最长{symboltrades['holding_days'].max()}天")
 
 # 三、关键发现
 print("\n\n🔍 三、关键发现与洞察")

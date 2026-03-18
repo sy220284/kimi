@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import pandas as pd
 from src.data import get_stock_data
 from src.analysis.wave import UnifiedWaveAnalyzer
-from src.analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy, TradeAction
+from src.analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy
 
 SYMBOL = '600519'
 START = '2024-06-01'  # 使用较近期数据，MA200已可用
@@ -94,6 +94,6 @@ for i in range(200, min(200+50, len(df))):  # 从200开始确保MA200有效
                 print(f"      → {sig.entry_type.value}浪 ¥{sig.entry_price:.2f} 置信{sig.confidence:.2f} 趋势{'✓' if sig.trend_aligned else '✗'} 共振{sig.resonance_score:.2f}")
 
 print("-" * 70)
-print(f"\n诊断结果:")
+print("\n诊断结果:")
 print(f"  检测到 {count} 次潜在买入机会")
 print(f"  实际持仓数: {len(strategy.positions)}")

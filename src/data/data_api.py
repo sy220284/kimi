@@ -4,16 +4,14 @@
 """
 import pandas as pd
 from typing import Optional, Dict, Any
-from datetime import datetime
 from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from data.multi_source import get_data_manager
-from data.quality_monitor import DataQualityMonitor, DataQualityReport
+from data.quality_monitor import DataQualityMonitor
 from data.cache import get_cache
-from data.db_manager import DatabaseDataManager, get_db_manager
+from data.db_manager import get_db_manager
 
 
 class DataAPI:
@@ -60,7 +58,7 @@ class DataAPI:
                 result['source'] = 'database'
             else:
                 df = None
-        except Exception as e:
+        except Exception:
             df = None
         
         if df is None or df.empty:

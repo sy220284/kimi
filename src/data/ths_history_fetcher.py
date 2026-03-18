@@ -7,9 +7,8 @@ import requests
 import json
 import re
 import pandas as pd
-from typing import List, Dict, Optional, Tuple
-from datetime import datetime, timedelta
-from pathlib import Path
+from typing import Dict
+from datetime import datetime
 
 
 class ThsHistoryFetcher:
@@ -267,7 +266,7 @@ def main():
             continue
         
         # 获取最近数据
-        print(f"\n获取最近140天数据...")
+        print("\n获取最近140天数据...")
         try:
             recent_df = fetcher.get_recent_data(code, days=140)
             print(f"✓ 获取 {len(recent_df)} 条")
@@ -276,15 +275,15 @@ def main():
             print(f"✗ 失败: {e}")
         
         # 尝试获取全部数据（按年份）
-        print(f"\n尝试按年份获取完整历史数据...")
+        print("\n尝试按年份获取完整历史数据...")
         try:
             all_df = fetcher.get_all_data(code)
             if not all_df.empty:
                 print(f"\n✓ 总计获取 {len(all_df)} 条数据")
                 print(f"  完整范围: {all_df['date'].min()} ~ {all_df['date'].max()}")
-                print(f"\n  数据预览 (前5条):")
+                print("\n  数据预览 (前5条):")
                 print(all_df.head().to_string(index=False))
-                print(f"\n  数据预览 (后5条):")
+                print("\n  数据预览 (后5条):")
                 print(all_df.tail().to_string(index=False))
             else:
                 print("✗ 未获取到数据")

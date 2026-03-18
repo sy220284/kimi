@@ -8,7 +8,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
-import numpy as np
 
 # 读取分析结果
 df = pd.read_csv('tests/results/batch_wave_analysis.csv')
@@ -28,26 +27,26 @@ total = len(df)
 print(f"  C浪 (调整浪结束): {type_dist.get('C', 0)} ({type_dist.get('C', 0)/total*100:.1f}%)")
 print(f"  2浪 (推动浪回撤): {type_dist.get('2', 0)} ({type_dist.get('2', 0)/total*100:.1f}%)")
 print(f"  4浪 (推动浪回撤): {type_dist.get('4', 0)} ({type_dist.get('4', 0)/total*100:.1f}%)")
-print(f"\n  识别率分析:")
-print(f"  - C浪识别占主导，符合A股市场调整较多的特点")
+print("\n  识别率分析:")
+print("  - C浪识别占主导，符合A股市场调整较多的特点")
 print(f"  - 2浪识别率{(type_dist.get('2', 0)/total*100):.1f}%，推动浪结构识别良好")
-print(f"  - 4浪识别极少，标准推动浪(12345)结构在A股较为罕见")
+print("  - 4浪识别极少，标准推动浪(12345)结构在A股较为罕见")
 
 print("\n【三、信号质量分析】")
 print(f"  平均置信度: {df['confidence'].mean():.3f}")
 print(f"  高置信度(≥0.7): {(df['confidence'] >= 0.7).sum()}个 ({(df['confidence'] >= 0.7).mean()*100:.1f}%)")
 print(f"  中等置信度(0.5-0.7): {((df['confidence'] >= 0.5) & (df['confidence'] < 0.7)).sum()}个")
 
-print(f"\n  共振分析:")
+print("\n  共振分析:")
 print(f"  - 平均共振分数: {df['resonance_score'].mean():.3f}")
 print(f"  - 强共振(≥0.5): {(df['resonance_score'] >= 0.5).sum()}个 ({(df['resonance_score'] >= 0.5).mean()*100:.1f}%)")
 print(f"  - 弱共振(<0.3): {(df['resonance_score'] < 0.3).sum()}个")
 
-print(f"\n  趋势对齐:")
+print("\n  趋势对齐:")
 aligned_pct = df['trend_aligned'].mean() * 100
 print(f"  - 趋势对齐信号: {df['trend_aligned'].sum()}个 ({aligned_pct:.1f}%)")
 print(f"  - 趋势背离信号: {(~df['trend_aligned']).sum()}个 ({100-aligned_pct:.1f}%)")
-print(f"  ⚠️ 注意: 趋势对齐率低，可能因为200日均线过滤较严格")
+print("  ⚠️ 注意: 趋势对齐率低，可能因为200日均线过滤较严格")
 
 print("\n【四、市场状态分布】")
 market_dist = df['market_condition'].value_counts()
@@ -96,10 +95,10 @@ print(f"  目标涨幅中位数: {df['target_diff'].median():.2f}%")
 
 for days in [5, 10, 20]:
     col = f'return_{days}d'
-    valid_data = df[df[col].notna()].copy()
-    if len(valid_data) > 0:
-        target_hit = (valid_data[col] > 0).sum()
-        hit_rate = target_hit / len(valid_data) * 100
+    validdata = df[df[col].notna()].copy()
+    if len(validdata) > 0:
+        target_hit = (validdata[col] > 0).sum()
+        hit_rate = target_hit / len(validdata) * 100
         print(f"  {days}天目标达成率: {hit_rate:.1f}%")
 
 print("\n【八、股票별表现TOP10】")

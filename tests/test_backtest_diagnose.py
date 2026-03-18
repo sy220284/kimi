@@ -57,12 +57,12 @@ for i in range(len(df)-20, len(df)):
     signals = analyzer.detect(window_df, mode='all') if len(window_df) >= 30 else []
     
     # 统计有效信号
-    valid_signals = [s for s in signals if s.is_valid and s.confidence >= 0.5]
+    validsignals = [s for s in signals if s.is_valid and s.confidence >= 0.5]
     
-    print(f"{date:<12} {price:>10.2f} {ma200:>10.2f} {trend:>6} {len(valid_signals):>6}")
+    print(f"{date:<12} {price:>10.2f} {ma200:>10.2f} {trend:>6} {len(validsignals):>6}")
     
-    if valid_signals:
-        for sig in valid_signals:
+    if validsignals:
+        for sig in validsignals:
             aligned = "✓" if sig.trend_aligned else "✗"
             print(f"    → {sig.entry_type.value}浪 ¥{sig.entry_price:.2f} 置信{sig.confidence:.2f} 趋势{aligned}")
 

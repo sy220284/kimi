@@ -21,7 +21,7 @@ def get_stock_batch(offset=0, limit=30):
            MIN(date) as start_date,
            MAX(date) as end_date,
            COUNT(*) as records
-    FROM market_data
+    FROM marketdata
     GROUP BY symbol
     ORDER BY symbol
     OFFSET {offset} LIMIT {limit}
@@ -70,10 +70,10 @@ def run_backtest_for_stock(symbol, analyzer, start_date='2017-01-01', end_date='
 
         return {
             'symbol': symbol,
-            'trades': result.total_trades,
+            'trades': result.totaltrades,
             'win_rate': result.win_rate,
             'return': result.total_return_pct,
-            'avg_return': result.avg_return_per_trade,
+            'avg_return': result.avg_return_pertrade,
             'max_dd': result.max_drawdown_pct,
             'sharpe': result.sharpe_ratio,
             'data_days': len(df)
@@ -94,8 +94,8 @@ def main():
 
     print("\n" + "="*70)
     print(f"🍺 食品饮料板块回测 [移动止盈] | 批次: offset={args.offset}, limit={args.limit}")
-    print(f"回测区间: 2017-01-01 ~ 2024-12-31")
-    print(f"策略: 8%止损 + 8%移动止盈(达标后回撤8%卖出)")
+    print("回测区间: 2017-01-01 ~ 2024-12-31")
+    print("策略: 8%止损 + 8%移动止盈(达标后回撤8%卖出)")
     print("="*70)
     print(f"开始时间: {datetime.now()}")
 
@@ -110,7 +110,7 @@ def main():
 
     analyzer = UnifiedWaveAnalyzer()
     results = []
-    all_trade_details = []
+    alltrade_details = []
 
     for i, row in stocks_df.iterrows():
         symbol = row['symbol']
@@ -121,7 +121,7 @@ def main():
         if result:
             print(f"✅ 交易{result['trades']}次 收益{result['return']:.2f}%")
             results.append(result)
-            all_trade_details.extend(trade_details)
+            alltrade_details.extend(trade_details)
         else:
             print("❌ 跳过")
 
@@ -146,7 +146,7 @@ def main():
         print("📊 统计摘要")
         print(f"{'='*70}")
 
-        print(f"\n总体表现:")
+        print("\n总体表现:")
         print(f"  测试股票: {len(df_results)} 只")
         print(f"  平均胜率: {df_results['win_rate'].mean():.1%}")
         print(f"  平均收益: {df_results['return'].mean():.2f}%")
@@ -154,7 +154,7 @@ def main():
         print(f"  平均Sharpe: {df_results['sharpe'].mean():.2f}")
         print(f"  平均交易次数: {df_results['trades'].mean():.0f}")
 
-        print(f"\n收益分布:")
+        print("\n收益分布:")
         positive = (df_results['return'] > 0).sum()
         negative = (df_results['return'] <= 0).sum()
         print(f"  盈利: {positive} 只 ({positive/len(df_results):.1%})")
@@ -163,11 +163,11 @@ def main():
         print(f"  最差: {df_results['return'].min():.2f}% ({df_results.loc[df_results['return'].idxmin(), 'symbol']})")
 
         # 移动止盈效果分析
-        if all_trade_details:
-            df_trades = pd.DataFrame(all_trade_details)
-            trailing_count = df_trades[df_trades['exit_reason'].str.contains('trailing_stop', na=False)].shape[0]
-            total_count = len(df_trades)
-            print(f"\n移动止盈统计:")
+        if alltrade_details:
+            dftrades = pd.DataFrame(alltrade_details)
+            trailing_count = dftrades[dftrades['exit_reason'].str.contains('trailing_stop', na=False)].shape[0]
+            total_count = len(dftrades)
+            print("\n移动止盈统计:")
             print(f"  移动止盈卖出: {trailing_count} 笔 ({trailing_count/total_count*100:.1f}%)")
 
         # 保存结果
@@ -176,10 +176,10 @@ def main():
         df_results.to_csv(output_file, index=False)
         print(f"\n💾 汇总结果: {output_file}")
 
-        if all_trade_details:
+        if alltrade_details:
             trades_file = f"tests/results/trade_details_batch_{args.offset}_{timestamp}.csv"
-            pd.DataFrame(all_trade_details).to_csv(trades_file, index=False)
-            print(f"💾 交易明细: {trades_file} ({len(all_trade_details)} 笔)")
+            pd.DataFrame(alltrade_details).to_csv(trades_file, index=False)
+            print(f"💾 交易明细: {trades_file} ({len(alltrade_details)} 笔)")
 
     print(f"\n{'='*70}")
     print(f"✅ 回测完成 | {datetime.now()}")

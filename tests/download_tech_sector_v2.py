@@ -56,7 +56,7 @@ def get_all_stocks_with_industry():
             axis=1
         )
         
-        tech_df = df[df['is_tech'] == True].copy()
+        tech_df = df[df['is_tech']].copy()
         print(f"  筛选出 {len(tech_df)} 只科技股票")
         
         return tech_df[['symbol', 'name', 'total_cap', 'float_cap', 'industry']]
@@ -73,14 +73,14 @@ def classify_by_market_cap(df):
     mid_cap = df[(df['total_cap_亿'] >= 100) & (df['total_cap_亿'] < 500)].copy()  # 中盘
     small_cap = df[df['total_cap_亿'] < 100].copy()  # 小盘
     
-    print(f"\n市值分布:")
+    print("\n市值分布:")
     print(f"  大盘股(≥500亿): {len(large_cap)} 只")
     print(f"  中盘股(100-500亿): {len(mid_cap)} 只")
     print(f"  小盘股(<100亿): {len(small_cap)} 只")
     
     return large_cap, mid_cap, small_cap
 
-def download_stock_data(symbol, start_date='2017-01-01', end_date='2024-12-31'):
+def download_stockdata(symbol, start_date='2017-01-01', end_date='2024-12-31'):
     """下载单只股票历史数据"""
     try:
         df = ak.stock_zh_a_hist(
@@ -108,7 +108,7 @@ def download_stock_data(symbol, start_date='2017-01-01', end_date='2024-12-31'):
         df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
         
         return df[['symbol', 'date', 'open', 'high', 'low', 'close', 'volume', 'amount']]
-    except Exception as e:
+    except Exception:
         return None
 
 def main():
@@ -170,16 +170,16 @@ def main():
     for i, symbol in enumerate(selected_stocks, 1):
         print(f"[{i}/{len(selected_stocks)}] {symbol} ...", end=" ", flush=True)
         
-        df = download_stock_data(symbol, start_date, end_date)
+        df = download_stockdata(symbol, start_date, end_date)
         
         if df is not None and not df.empty:
             try:
-                records = db_manager.pg.save_market_data(df)
+                db_manager.pg.save_marketdata(df)
                 print(f"✅ {len(df)} 条")
                 success_count += 1
                 total_records += len(df)
-            except Exception as e:
-                print(f"❌ 保存失败")
+            except Exception:
+                print("❌ 保存失败")
                 fail_count += 1
         else:
             print("❌ 无数据")

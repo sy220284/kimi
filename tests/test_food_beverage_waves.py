@@ -8,15 +8,12 @@ import sys
 sys.path.insert(0, 'src')
 
 import pandas as pd
-import numpy as np
-from typing import List, Dict, Optional, Tuple
+from typing import Dict, Optional
 from dataclasses import dataclass, field
-from datetime import datetime
 from collections import defaultdict
 
 from data import get_stock_data
 from analysis.wave import EnhancedWaveAnalyzer, Wave4Detector, Wave2Detector
-from analysis.backtest.wave_backtester import WaveStrategy, TradeAction
 
 
 # 食品饮料板块10只不同市值股票
@@ -55,21 +52,21 @@ class WaveTrade:
     holding_days: int = 0
     status: str = 'open'
     # 浪型识别评估
-    predicted_next_wave: str = ''  # 预期下一浪
-    actual_next_wave: str = ''     # 实际走出来的浪
+    predictednext_wave: str = ''  # 预期下一浪
+    actualnext_wave: str = ''     # 实际走出来的浪
     prediction_correct: bool = False
 
 
 @dataclass
 class WaveAccuracyMetrics:
     """浪型识别准确度指标"""
-    total_signals: int = 0
+    totalsignals: int = 0
     correct_predictions: int = 0
     wave_accuracy: Dict[str, Dict] = field(default_factory=dict)
     
-    def add_prediction(self, entry_wave: str, predicted_next: str, actual_outcome: str):
+    def add_prediction(self, entry_wave: str, predictednext: str, actual_outcome: str):
         """记录预测结果"""
-        self.total_signals += 1
+        self.totalsignals += 1
         
         if entry_wave not in self.wave_accuracy:
             self.wave_accuracy[entry_wave] = {
@@ -80,7 +77,7 @@ class WaveAccuracyMetrics:
             }
         
         self.wave_accuracy[entry_wave]['total'] += 1
-        self.wave_accuracy[entry_wave]['predictions'][predicted_next] += 1
+        self.wave_accuracy[entry_wave]['predictions'][predictednext] += 1
         self.wave_accuracy[entry_wave]['outcomes'][actual_outcome] += 1
         
         # 判断是否预测正确
@@ -112,9 +109,9 @@ class WavePatternBacktester:
         self.analyzer = EnhancedWaveAnalyzer(use_adaptive=False)
         self.wave4_detector = Wave4Detector()
         self.wave2_detector = Wave2Detector()
-        self.accuracy_metrics = WaveAccuracyMetrics()
+        self.accuracymetrics = WaveAccuracyMetrics()
         
-    def detect_sell_signal(self, df: pd.DataFrame, entry_wave: str) -> Optional[Dict]:
+    def detect_sellsignal(self, df: pd.DataFrame, entry_wave: str) -> Optional[Dict]:
         """
         检测卖点信号
         C浪买入 -> 等待浪1完成
@@ -137,17 +134,17 @@ class WavePatternBacktester:
             latest_price = pattern.points[-1].price
             
             # 判断是否是预期的卖点
-            sell_signal = None
+            sellsignal = None
             if entry_wave == 'C' and latest_wave == '1':
-                sell_signal = {'wave': '1', 'price': latest_price}
+                sellsignal = {'wave': '1', 'price': latest_price}
             elif entry_wave == '2' and latest_wave == '3':
-                sell_signal = {'wave': '3', 'price': latest_price}
+                sellsignal = {'wave': '3', 'price': latest_price}
             elif entry_wave == '4' and latest_wave == '5':
-                sell_signal = {'wave': '5', 'price': latest_price}
+                sellsignal = {'wave': '5', 'price': latest_price}
             
-            return sell_signal
+            return sellsignal
             
-        except Exception as e:
+        except Exception:
             return None
     
     def run(self, symbol: str, name: str, market_cap: str, 
@@ -159,7 +156,7 @@ class WavePatternBacktester:
         
         df = get_stock_data(symbol, start_date, end_date)
         if df is None or len(df) == 0:
-            print(f"❌ 无数据")
+            print("❌ 无数据")
             return {'trades': [], 'metrics': {}}
         
         df['date'] = pd.to_datetime(df['date'])
@@ -195,12 +192,12 @@ class WavePatternBacktester:
                                 position = WaveTrade(
                                     symbol=symbol, name=name, market_cap=market_cap,
                                     entry_date=date_str, entry_price=price, entry_wave='C',
-                                    predicted_next_wave='1'
+                                    predictednext_wave='1'
                                 )
                                 entry_idx = i
                                 wave_counts['C'] += 1
                                 continue
-                    except:
+                    except Exception:
                         pass
                     
                     # 尝试2浪检测
@@ -209,7 +206,7 @@ class WavePatternBacktester:
                         position = WaveTrade(
                             symbol=symbol, name=name, market_cap=market_cap,
                             entry_date=date_str, entry_price=price, entry_wave='2',
-                            predicted_next_wave='3'
+                            predictednext_wave='3'
                         )
                         entry_idx = i
                         wave_counts['2'] += 1
@@ -221,7 +218,7 @@ class WavePatternBacktester:
                         position = WaveTrade(
                             symbol=symbol, name=name, market_cap=market_cap,
                             entry_date=date_str, entry_price=price, entry_wave='4',
-                            predicted_next_wave='5'
+                            predictednext_wave='5'
                         )
                         entry_idx = i
                         wave_counts['4'] += 1
@@ -233,16 +230,16 @@ class WavePatternBacktester:
                     holding_days = i - entry_idx
                     
                     # 检查是否达到预期卖点
-                    sell_signal = self.detect_sell_signal(lookback_df, position.entry_wave)
+                    sellsignal = self.detect_sellsignal(lookback_df, position.entry_wave)
                     
                     # 卖出条件
                     should_sell = False
                     exit_wave = None
                     
                     # 条件1: 达到预期浪型卖点
-                    if sell_signal:
+                    if sellsignal:
                         should_sell = True
-                        exit_wave = sell_signal['wave']
+                        exit_wave = sellsignal['wave']
                     
                     # 条件2: 止盈 (+10%)
                     elif pnl_pct >= 10:
@@ -257,7 +254,7 @@ class WavePatternBacktester:
                     # 条件4: 最大持仓60天
                     elif holding_days >= 60:
                         should_sell = True
-                        exit_wave = 'time_exit'
+                        exit_wave = 'timeexit'
                     
                     if should_sell:
                         position.exit_date = date_str
@@ -269,26 +266,26 @@ class WavePatternBacktester:
                         
                         # 评估预测准确度
                         actual_outcome = 'up' if pnl_pct > 0 else 'down'
-                        is_correct = self.accuracy_metrics.add_prediction(
+                        is_correct = self.accuracymetrics.add_prediction(
                             position.entry_wave,
-                            position.predicted_next_wave,
+                            position.predictednext_wave,
                             actual_outcome
                         )
                         position.prediction_correct = is_correct
-                        position.actual_next_wave = actual_outcome
+                        position.actualnext_wave = actual_outcome
                         
                         trades.append(position)
                         position = None
         
         # 计算结果
-        closed_trades = [t for t in trades if t.status == 'closed']
-        wins = [t for t in closed_trades if t.pnl_pct > 0]
+        closedtrades = [t for t in trades if t.status == 'closed']
+        wins = [t for t in closedtrades if t.pnl_pct > 0]
         
-        if closed_trades:
-            win_rate = len(wins) / len(closed_trades)
-            avg_return = sum(t.pnl_pct for t in closed_trades) / len(closed_trades)
-            total_return = sum(t.pnl_pct for t in closed_trades) / 10  # 模拟10%仓位
-            avg_holding = sum(t.holding_days for t in closed_trades) / len(closed_trades)
+        if closedtrades:
+            win_rate = len(wins) / len(closedtrades)
+            avg_return = sum(t.pnl_pct for t in closedtrades) / len(closedtrades)
+            total_return = sum(t.pnl_pct for t in closedtrades) / 10  # 模拟10%仓位
+            avg_holding = sum(t.holding_days for t in closedtrades) / len(closedtrades)
         else:
             win_rate = 0
             avg_return = 0
@@ -296,39 +293,39 @@ class WavePatternBacktester:
             avg_holding = 0
         
         # 按浪型统计
-        wave_stats = {}
+        wavestats = {}
         for wave in ['C', '2', '4']:
-            wave_trades = [t for t in closed_trades if t.entry_wave == wave]
-            if wave_trades:
-                wave_wins = [t for t in wave_trades if t.pnl_pct > 0]
-                wave_stats[wave] = {
-                    'count': len(wave_trades),
-                    'win_rate': len(wave_wins) / len(wave_trades),
-                    'avg_return': sum(t.pnl_pct for t in wave_trades) / len(wave_trades),
-                    'correct_predictions': sum(1 for t in wave_trades if t.prediction_correct)
+            wavetrades = [t for t in closedtrades if t.entry_wave == wave]
+            if wavetrades:
+                wave_wins = [t for t in wavetrades if t.pnl_pct > 0]
+                wavestats[wave] = {
+                    'count': len(wavetrades),
+                    'win_rate': len(wave_wins) / len(wavetrades),
+                    'avg_return': sum(t.pnl_pct for t in wavetrades) / len(wavetrades),
+                    'correct_predictions': sum(1 for t in wavetrades if t.prediction_correct)
                 }
         
-        print(f"\n📈 回测结果:")
-        print(f"  总交易: {len(closed_trades)} 笔 (C:{wave_counts['C']}, 2:{wave_counts['2']}, 4:{wave_counts['4']})")
+        print("\n📈 回测结果:")
+        print(f"  总交易: {len(closedtrades)} 笔 (C:{wave_counts['C']}, 2:{wave_counts['2']}, 4:{wave_counts['4']})")
         print(f"  胜率: {win_rate:.1%}")
         print(f"  平均收益: {avg_return:+.2f}%")
         print(f"  总收益: {total_return:+.2f}%")
         print(f"  平均持仓: {avg_holding:.1f} 天")
         
-        if wave_stats:
-            print(f"\n  各浪型表现:")
-            for wave, stats in wave_stats.items():
+        if wavestats:
+            print("\n  各浪型表现:")
+            for wave, stats in wavestats.items():
                 print(f"    浪{wave}: {stats['count']}笔 胜率{stats['win_rate']:.1%} 收益{stats['avg_return']:+.2f}% 预测准{stats['correct_predictions']}/{stats['count']}")
         
         return {
             'symbol': symbol,
             'name': name,
             'market_cap': market_cap,
-            'trades': closed_trades,
-            'total_trades': len(closed_trades),
+            'trades': closedtrades,
+            'totaltrades': len(closedtrades),
             'win_rate': win_rate,
             'total_return': total_return,
-            'wave_stats': wave_stats,
+            'wavestats': wavestats,
             'wave_counts': wave_counts
         }
 
@@ -346,12 +343,12 @@ def run_sector_backtest():
     
     for symbol, name, market_cap in FOOD_BEVERAGE_STOCKS:
         result = backtester.run(symbol, name, market_cap)
-        if result['total_trades'] > 0:
+        if result['totaltrades'] > 0:
             results.append(result)
     
     # 汇总统计
     print(f"\n{'='*80}")
-    print(f"📊 板块汇总统计")
+    print("📊 板块汇总统计")
     print(f"{'='*80}")
     
     if not results:
@@ -363,16 +360,16 @@ def run_sector_backtest():
     medium_cap = [r for r in results if r['market_cap'] == 'medium']
     small_cap = [r for r in results if r['market_cap'] == 'small']
     
-    print(f"\n按市值分组:")
-    for group_name, group_data in [('大市值', large_cap), ('中市值', medium_cap), ('小市值', small_cap)]:
-        if group_data:
-            total_trades = sum(r['total_trades'] for r in group_data)
-            avg_win_rate = sum(r['win_rate'] for r in group_data) / len(group_data)
-            avg_return = sum(r['total_return'] for r in group_data) / len(group_data)
-            print(f"  {group_name}: {len(group_data)}只 总交易{total_trades}笔 胜率{avg_win_rate:.1%} 收益{avg_return:+.2f}%")
+    print("\n按市值分组:")
+    for group_name, groupdata in [('大市值', large_cap), ('中市值', medium_cap), ('小市值', small_cap)]:
+        if groupdata:
+            totaltrades = sum(r['totaltrades'] for r in groupdata)
+            avg_win_rate = sum(r['win_rate'] for r in groupdata) / len(groupdata)
+            avg_return = sum(r['total_return'] for r in groupdata) / len(groupdata)
+            print(f"  {group_name}: {len(groupdata)}只 总交易{totaltrades}笔 胜率{avg_win_rate:.1%} 收益{avg_return:+.2f}%")
     
     # 按浪型汇总
-    print(f"\n按浪型汇总:")
+    print("\n按浪型汇总:")
     total_wave_counts = {'C': 0, '2': 0, '4': 0}
     for r in results:
         for wave, count in r['wave_counts'].items():
@@ -380,26 +377,26 @@ def run_sector_backtest():
     
     for wave, count in sorted(total_wave_counts.items(), key=lambda x: -x[1]):
         if count > 0:
-            wave_trades = []
+            wavetrades = []
             for r in results:
-                if wave in r['wave_stats']:
-                    wave_trades.extend([t for t in r['trades'] if t.entry_wave == wave])
+                if wave in r['wavestats']:
+                    wavetrades.extend([t for t in r['trades'] if t.entry_wave == wave])
             
-            if wave_trades:
-                wins = [t for t in wave_trades if t.pnl_pct > 0]
-                correct_preds = sum(1 for t in wave_trades if t.prediction_correct)
-                avg_return = sum(t.pnl_pct for t in wave_trades) / len(wave_trades)
-                print(f"  浪{wave}: {count}次信号 {len(wave_trades)}笔交易 胜率{len(wins)/len(wave_trades):.1%} 预测准{correct_preds}/{len(wave_trades)} 收益{avg_return:+.2f}%")
+            if wavetrades:
+                wins = [t for t in wavetrades if t.pnl_pct > 0]
+                correct_preds = sum(1 for t in wavetrades if t.prediction_correct)
+                avg_return = sum(t.pnl_pct for t in wavetrades) / len(wavetrades)
+                print(f"  浪{wave}: {count}次信号 {len(wavetrades)}笔交易 胜率{len(wins)/len(wavetrades):.1%} 预测准{correct_preds}/{len(wavetrades)} 收益{avg_return:+.2f}%")
     
     # 准确度评估
-    metrics = backtester.accuracy_metrics
-    if metrics.total_signals > 0:
-        print(f"\n浪型预测准确度:")
-        print(f"  总预测: {metrics.total_signals} 次")
+    metrics = backtester.accuracymetrics
+    if metrics.totalsignals > 0:
+        print("\n浪型预测准确度:")
+        print(f"  总预测: {metrics.totalsignals} 次")
         print(f"  正确预测: {metrics.correct_predictions} 次")
-        print(f"  整体准确率: {metrics.correct_predictions/metrics.total_signals:.1%}")
+        print(f"  整体准确率: {metrics.correct_predictions/metrics.totalsignals:.1%}")
         
-        print(f"\n各浪型预测详情:")
+        print("\n各浪型预测详情:")
         for wave, data in metrics.wave_accuracy.items():
             if data['total'] > 0:
                 acc = data['correct'] / data['total']
@@ -409,7 +406,7 @@ def run_sector_backtest():
     
     # 详细结果表
     print(f"\n{'='*80}")
-    print(f"📋 个股详细结果")
+    print("📋 个股详细结果")
     print(f"{'='*80}")
     print(f"{'代码':<10} {'名称':<10} {'市值':<8} {'交易':<6} {'胜率':<8} {'收益':<8} {'C/2/4':<10}")
     print("-" * 70)
@@ -418,9 +415,9 @@ def run_sector_backtest():
         wave_str = f"{counts['C']}/{counts['2']}/{counts['4']}"
         win_rate_str = f"{r['win_rate']:.1%}"
         ret_str = f"{r['total_return']:+.1f}%"
-        print(f"{r['symbol']:<10} {r['name']:<10} {r['market_cap']:<8} {r['total_trades']:<6} {win_rate_str:<8} {ret_str:<8} {wave_str:<10}")
+        print(f"{r['symbol']:<10} {r['name']:<10} {r['market_cap']:<8} {r['totaltrades']:<6} {win_rate_str:<8} {ret_str:<8} {wave_str:<10}")
     
-    print(f"\n✅ 回测完成")
+    print("\n✅ 回测完成")
     return results
 
 

@@ -7,10 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
-from analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy, TradeAction
-from analysis.wave.unified_analyzer import UnifiedWaveAnalyzer
+from datetime import datetime
 from data import get_db_manager
 
 
@@ -21,10 +18,10 @@ def analyze_stop_loss_stocks():
     print("="*70)
     
     # 读取交易明细
-    df_trades = pd.read_csv('tests/results/trade_details_20260318_0921.csv')
-    stop_loss_trades = df_trades[df_trades['exit_reason'] == 'stop_loss'].copy()
+    dftrades = pd.read_csv('tests/results/trade_details_20260318_0921.csv')
+    stop_losstrades = dftrades[dftrades['exit_reason'] == 'stop_loss'].copy()
     
-    print(f"\n总止损交易: {len(stop_loss_trades)} 笔")
+    print(f"\n总止损交易: {len(stop_losstrades)} 笔")
     
     # 获取数据库连接
     db_manager = get_db_manager()
@@ -32,7 +29,7 @@ def analyze_stop_loss_stocks():
     # 统计止损后走势
     results = []
     
-    for idx, trade in stop_loss_trades.iterrows():
+    for idx, trade in stop_losstrades.iterrows():
         symbol = trade['symbol']
         exit_date = trade['exit_date']
         exit_price = trade['exit_price']
@@ -47,15 +44,15 @@ def analyze_stop_loss_stocks():
             exit_dt = pd.to_datetime(exit_date)
             
             # 找到止损日之后的走势
-            future_data = df[df['date'] > exit_dt].copy()
-            if len(future_data) < 5:
+            futuredata = df[df['date'] > exit_dt].copy()
+            if len(futuredata) < 5:
                 continue
             
             # 计算后续各时间点的价格变化
             future_prices = {}
             for days in [1, 3, 5, 10, 20, 60]:
-                if len(future_data) >= days:
-                    future_price = future_data.iloc[days-1]['close']
+                if len(futuredata) >= days:
+                    future_price = futuredata.iloc[days-1]['close']
                     change_pct = (future_price - exit_price) / exit_price * 100
                     future_prices[f'{days}d'] = round(change_pct, 2)
                 else:
@@ -73,8 +70,8 @@ def analyze_stop_loss_stocks():
                 trend = '数据不足'
             
             # 找后续最高点
-            if len(future_data) > 0:
-                max_future_price = future_data.head(60)['close'].max() if len(future_data) >= 60 else future_data['close'].max()
+            if len(futuredata) > 0:
+                max_future_price = futuredata.head(60)['close'].max() if len(futuredata) >= 60 else futuredata['close'].max()
                 max_gain = (max_future_price - exit_price) / exit_price * 100
             else:
                 max_gain = 0
@@ -91,7 +88,7 @@ def analyze_stop_loss_stocks():
                 'trend_judgment': trend
             })
             
-        except Exception as e:
+        except Exception:
             continue
     
     # 汇总分析
@@ -129,13 +126,13 @@ def analyze_stop_loss_stocks():
     washed_out = df_results[df_results['20d'] > 5]
     real_drop = df_results[df_results['20d'] < -5]
     
-    print(f"\n被洗盘（止损后20天涨>5%）:")
+    print("\n被洗盘（止损后20天涨>5%）:")
     print(f"  笔数: {len(washed_out)} ({len(washed_out)/len(df_results):.1%})")
     print(f"  平均止损亏损: {washed_out['pnl_pct'].mean():.2f}%")
     print(f"  止损后平均涨幅: {washed_out['20d'].mean():.2f}%")
     print(f"  60天内最高涨幅: {washed_out['max_60d_gain'].mean():.2f}%")
     
-    print(f"\n真走坏（止损后20天跌>5%）:")
+    print("\n真走坏（止损后20天跌>5%）:")
     print(f"  笔数: {len(real_drop)} ({len(real_drop)/len(df_results):.1%})")
     print(f"  平均止损亏损: {real_drop['pnl_pct'].mean():.2f}%")
     print(f"  止损后平均跌幅: {real_drop['20d'].mean():.2f}%")

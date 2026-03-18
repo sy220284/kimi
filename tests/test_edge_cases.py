@@ -11,7 +11,7 @@ import unittest
 import pandas as pd
 import numpy as np
 
-from data.optimized_data_manager import get_optimized_data_manager
+from data.optimizeddata_manager import get_optimizeddata_manager
 
 
 class TestExtremeValues(unittest.TestCase):
@@ -19,7 +19,7 @@ class TestExtremeValues(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        cls.data_mgr = get_optimized_data_manager()
+        cls.data_mgr = get_optimizeddata_manager()
     
     def test_01_very_small_prices(self):
         """测试极小价格"""
@@ -33,7 +33,7 @@ class TestExtremeValues(unittest.TestCase):
             'volume': [1000]*10
         })
         
-        result = self.data_mgr.calculate_returns(df)
+        result = self.data_mgr.calculatereturns(df)
         self.assertIsNotNone(result)
         print("✅ 极小价格处理正常")
     
@@ -49,7 +49,7 @@ class TestExtremeValues(unittest.TestCase):
             'volume': [1000]*10
         })
         
-        result = self.data_mgr.calculate_returns(df)
+        result = self.data_mgr.calculatereturns(df)
         self.assertIsNotNone(result)
         print("✅ 极大价格处理正常")
     
@@ -64,7 +64,6 @@ class TestExtremeValues(unittest.TestCase):
             'close': [100]*10,
             'volume': [1e18]*10  # 极大成交量
         })
-        
         result = self.data_mgr.calculate_ma(df, 5)
         self.assertIsNotNone(result)
         print("✅ 极端成交量处理正常")
@@ -80,7 +79,6 @@ class TestExtremeValues(unittest.TestCase):
             'close': [100]*10,
             'volume': [0]*10
         })
-        
         result = self.data_mgr.calculate_ma(df, 5)
         self.assertIsNotNone(result)
         print("✅ 零成交量处理正常")
@@ -91,7 +89,7 @@ class TestEdgeCases(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        cls.data_mgr = get_optimized_data_manager()
+        cls.data_mgr = get_optimizeddata_manager()
     
     def test_01_single_row(self):
         """测试单行数据"""
@@ -107,7 +105,7 @@ class TestEdgeCases(unittest.TestCase):
         
         # 各种计算应该不崩溃
         try:
-            result = self.data_mgr.calculate_ma(df, 5)
+        result = self.data_mgr.calculate_ma(df, 5)
             print("✅ 单行数据处理正常")
         except Exception as e:
             print(f"⚠️ 单行数据异常: {e}")
@@ -124,11 +122,11 @@ class TestEdgeCases(unittest.TestCase):
             'volume': [1000000, 1100000]
         })
         
-        result = self.data_mgr.calculate_returns(df)
+        result = self.data_mgr.calculatereturns(df)
         self.assertIsNotNone(result)
         print("✅ 两行数据处理正常")
     
-    def test_03_all_same_values(self):
+    def test_03_all_samevalues(self):
         """测试全部相同值"""
         df = pd.DataFrame({
             'symbol': ['TEST']*20,
@@ -139,18 +137,17 @@ class TestEdgeCases(unittest.TestCase):
             'close': [100]*20,
             'volume': [1000000]*20
         })
-        
         result = self.data_mgr.calculate_ma(df, 5)
-        result = self.data_mgr.calculate_returns(result)
+        result = self.data_mgr.calculatereturns(result)
         
         # 收益应该为0
-        returns = result['returns'].dropna()
+        returns = result['daily_return'].dropna()
         if len(returns) > 0:
             self.assertTrue(all(abs(r) < 0.0001 for r in returns))
         
         print("✅ 全部相同值处理正常")
     
-    def test_04_alternating_values(self):
+    def test_04_alternatingvalues(self):
         """测试交替变化值"""
         df = pd.DataFrame({
             'symbol': ['TEST']*20,
@@ -172,7 +169,7 @@ class TestMissingData(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        cls.data_mgr = get_optimized_data_manager()
+        cls.data_mgr = get_optimizeddata_manager()
     
     def test_01_missing_prices(self):
         """测试缺失价格"""
@@ -185,7 +182,6 @@ class TestMissingData(unittest.TestCase):
             'close': [100, 101, np.nan, 103, 104, 105, 106, 107, 108, 109],
             'volume': [1000000]*10
         })
-        
         result = self.data_mgr.calculate_ma(df, 5)
         self.assertIsNotNone(result)
         print("✅ 缺失价格处理正常")
@@ -204,7 +200,7 @@ class TestMissingData(unittest.TestCase):
         
         # 应该不崩溃
         try:
-            result = self.data_mgr.calculate_ma(df, 5)
+        result = self.data_mgr.calculate_ma(df, 5)
             print("✅ 全部缺失数据处理正常")
         except Exception as e:
             print(f"⚠️ 全部缺失数据异常: {e}")
@@ -215,7 +211,7 @@ class TestLargeDatasets(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        cls.data_mgr = get_optimized_data_manager()
+        cls.data_mgr = get_optimizeddata_manager()
     
     def test_01_thousand_rows(self):
         """测试1000行数据"""

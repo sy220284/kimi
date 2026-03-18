@@ -17,16 +17,16 @@ from datetime import datetime
 UNIT_TESTS = [
     'test_indicators_full',
     'test_utils_full',
-    'test_config_system',
+    'testconfig_system',
     'test_logging_system',
     'test_exception_handling',
     'test_edge_cases',
-    'test_data_quality',
+    'testdata_quality',
 ]
 
 INTEGRATION_TESTS = [
     'test_agent_integration',
-    'test_database_full',
+    'testdatabase_full',
     'test_redis_cache',
     'test_backtest_full',
 ]
@@ -90,7 +90,7 @@ def run_test_suite(test_names, suite_name):
             print(f"⚠️ 加载测试失败 {test_name}: {e}")
     
     if suite.countTestCases() == 0:
-        print(f"⚠️ 没有测试用例可运行")
+        print("⚠️ 没有测试用例可运行")
         return None
     
     # 运行测试
@@ -112,7 +112,7 @@ def run_quick_smoke_tests():
     # 选择核心测试
     smoke_tests = [
         'test_indicators_full.TestMovingAverages',
-        'test_database_full.TestDatabaseConnection',
+        'testdatabase_full.TestDatabaseConnection',
         'test_exception_handling.TestDataExceptionHandling',
     ]
     
@@ -120,12 +120,12 @@ def run_quick_smoke_tests():
     
     # 简化版冒烟测试
     try:
-        from data.optimized_data_manager import get_optimized_data_manager
+        from data.optimizeddata_manager import get_optimizeddata_manager
         
         print("  📦 测试数据加载...")
         start = time.time()
-        mgr = get_optimized_data_manager()
-        df = mgr.load_all_data()
+        mgr = get_optimizeddata_manager()
+        df = mgr.load_alldata()
         elapsed = time.time() - start
         print(f"     ✅ 数据加载正常 ({len(df):,}条, {elapsed:.1f}s)")
         
@@ -133,7 +133,7 @@ def run_quick_smoke_tests():
         df_sample = df[df['symbol'] == '600519'].head(100)
         if len(df_sample) > 0:
             result = mgr.calculate_ma(df_sample, 20)
-            print(f"     ✅ 指标计算正常")
+            print("     ✅ 指标计算正常")
         
         print("  🔍 测试数据查询...")
         sample = mgr.get_stock_data('600519')

@@ -11,7 +11,7 @@ import unittest
 import pandas as pd
 import numpy as np
 
-from data.optimized_data_manager import get_optimized_data_manager
+from data.optimizeddata_manager import get_optimized_data_manager
 from agents.wave_analyst import WaveAnalystAgent
 from agents.tech_analyst import TechAnalystAgent
 
@@ -41,7 +41,7 @@ class TestDataExceptionHandling(unittest.TestCase):
         self.assertIsNone(result)
         print("✅ None代码处理正常")
     
-    def test_04_malformed_dataframe(self):
+    def test_04_malformeddataframe(self):
         """测试损坏的DataFrame"""
         # 缺少必要列
         bad_df = pd.DataFrame({
@@ -53,13 +53,13 @@ class TestDataExceptionHandling(unittest.TestCase):
         # 应该抛出异常或被处理
         try:
             result = self.data_mgr.calculate_ma(bad_df, 20)
-            # 如果没有symbol列，get_stock_data会失败
+            # 如果没有symbol列，get_stockdata会失败
             print("✅ 损坏数据框处理正常 (返回结果)")
         except Exception as e:
             # 如果抛出异常也接受，只要系统不崩溃
             print(f"✅ 损坏数据框抛出预期异常: {type(e).__name__}")
     
-    def test_05_empty_dataframe(self):
+    def test_05_emptydataframe(self):
         """测试空DataFrame"""
         empty_df = pd.DataFrame()
         
@@ -70,7 +70,7 @@ class TestDataExceptionHandling(unittest.TestCase):
         except Exception as e:
             print(f"✅ 空数据框抛出预期异常: {type(e).__name__}")
     
-    def test_06_insufficient_data(self):
+    def test_06_insufficientdata(self):
         """测试数据不足"""
         # 只有5条数据，计算MA20
         small_df = pd.DataFrame({
@@ -91,7 +91,7 @@ class TestDataExceptionHandling(unittest.TestCase):
         except Exception as e:
             print(f"✅ 数据不足抛出预期异常: {type(e).__name__}")
     
-    def test_07_nan_values(self):
+    def test_07_nanvalues(self):
         """测试NaN值处理"""
         df_with_nan = pd.DataFrame({
             'symbol': ['TEST']*10,
@@ -111,7 +111,7 @@ class TestDataExceptionHandling(unittest.TestCase):
         except Exception as e:
             print(f"✅ NaN值处理抛出预期异常: {type(e).__name__}")
     
-    def test_08_extreme_values(self):
+    def test_08_extremevalues(self):
         """测试极端值处理"""
         extreme_df = pd.DataFrame({
             'symbol': ['TEST']*10,
@@ -124,7 +124,7 @@ class TestDataExceptionHandling(unittest.TestCase):
         })
         
         try:
-            result = self.data_mgr.calculate_returns(extreme_df)
+            result = self.data_mgr.calculatereturns(extreme_df)
             self.assertIsNotNone(result)
             print("✅ 极端值处理正常")
         except Exception as e:
@@ -139,13 +139,13 @@ class TestAgentExceptionHandling(unittest.TestCase):
         cls.wave_agent = WaveAnalystAgent()
         cls.tech_agent = TechAnalystAgent()
     
-    def test_01_wave_agent_empty_data(self):
+    def test_01_wave_agent_emptydata(self):
         """测试波浪分析空数据"""
         result = self.wave_agent.analyze(pd.DataFrame())
         self.assertEqual(result, [])
         print("✅ 波浪分析空数据处理正常")
     
-    def test_02_wave_agent_none_data(self):
+    def test_02_wave_agent_nonedata(self):
         """测试波浪分析None数据"""
         result = self.wave_agent.analyze(None)
         self.assertEqual(result, [])
@@ -165,13 +165,13 @@ class TestAgentExceptionHandling(unittest.TestCase):
         except Exception as e:
             print(f"⚠️ 波浪分析缺少列抛出异常: {type(e).__name__}")
     
-    def test_04_tech_agent_empty_data(self):
+    def test_04_tech_agent_emptydata(self):
         """测试技术分析空数据"""
         result = self.tech_agent.analyze(pd.DataFrame())
         # 应该返回空结果或默认值
         print("✅ 技术分析空数据处理正常")
     
-    def test_05_tech_agent_none_data(self):
+    def test_05_tech_agent_nonedata(self):
         """测试技术分析None数据"""
         result = self.tech_agent.analyze(None)
         print("✅ 技术分析None数据处理正常")
@@ -180,7 +180,7 @@ class TestAgentExceptionHandling(unittest.TestCase):
 class TestBoundaryConditions(unittest.TestCase):
     """边界条件测试"""
     
-    def test_01_single_row_data(self):
+    def test_01_single_rowdata(self):
         """测试单行数据"""
         data_mgr = get_optimized_data_manager()
         
@@ -202,12 +202,13 @@ class TestBoundaryConditions(unittest.TestCase):
         except Exception as e:
             print(f"✅ 单行数据处理抛出预期异常: {type(e).__name__}")
     
-    def test_02_large_dataset(self):
+    def test_02_largedataset(self):
         """测试大数据集"""
         data_mgr = get_optimized_data_manager()
         
         # 生成大量数据
         large_df = pd.DataFrame({
+            'symbol': ['TEST']*10000,
             'date': pd.date_range('2000-01-01', periods=10000, freq='D'),
             'open': np.random.randn(10000) * 10 + 100,
             'high': np.random.randn(10000) * 10 + 105,
@@ -236,7 +237,7 @@ class TestBoundaryConditions(unittest.TestCase):
         })
         
         try:
-            result = data_mgr.calculate_returns(zero_vol_df)
+            result = data_mgr.calculatereturns(zero_vol_df)
             self.assertIsNotNone(result)
             print("✅ 零成交量处理正常")
         except Exception as e:
@@ -259,7 +260,7 @@ class TestBoundaryConditions(unittest.TestCase):
         try:
             result = data_mgr.calculate_returns(zero_price_df)
             print("✅ 零价格处理正常")
-        except:
+        except Exception:
             print("⚠️ 零价格抛出异常（可能符合预期）")
     
     def test_05_negative_price(self):
@@ -290,7 +291,6 @@ class TestConcurrencySafety(unittest.TestCase):
     def test_01_thread_safety(self):
         """测试线程安全"""
         import threading
-        import time
         
         data_mgr = get_optimized_data_manager()
         results = []
@@ -320,7 +320,6 @@ class TestConcurrencySafety(unittest.TestCase):
     
     def test_02_singleton_pattern(self):
         """测试单例模式"""
-        from data.optimized_data_manager import OptimizedDataManager
         
         mgr1 = get_optimized_data_manager()
         mgr2 = get_optimized_data_manager()

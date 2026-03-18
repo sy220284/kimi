@@ -56,7 +56,7 @@ class LoggerError(Exception):
     pass
 
 
-class Logger:
+class Logger(logging.Logger):
     """结构化日志系统，支持文件+控制台双输出"""
     
     # 日志级别映射
@@ -98,11 +98,7 @@ class Logger:
             structured_format: 是否使用JSON结构化格式
             detailed_format: 是否使用详细格式
         """
-        self.name = name
-        self.logger = logging.getLogger(name)
-        self.logger.setLevel(self._parse_level(level))
-        self.logger.handlers = []  # 清除现有处理器
-        
+        super().__init__(name, self._parse_level(level))
         self.structured_format = structured_format
         
         # 选择格式
@@ -117,7 +113,7 @@ class Logger:
         if console_output:
             console_handler = logging.StreamHandler(sys.stdout)
             console_handler.setFormatter(formatter)
-            self.logger.addHandler(console_handler)
+            self.addHandler(console_handler)
         
         # 文件处理器
         if file_output and log_file:
@@ -132,7 +128,7 @@ class Logger:
                 encoding='utf-8'
             )
             file_handler.setFormatter(formatter)
-            self.logger.addHandler(file_handler)
+            self.addHandler(file_handler)
     
     def _parse_level(self, level: Union[str, int]) -> int:
         """解析日志级别"""
@@ -156,14 +152,14 @@ class Logger:
         
         return int(size_str)
     
-    def _log(
+    def _log_with_extra(
         self,
         level: int,
         message: str,
         extra: Optional[Dict[str, Any]] = None,
         exc_info: Optional[bool] = None
     ) -> None:
-        """内部日志方法"""
+        """内部日志方法（支持extra参数）"""
         extra_attrs = {}
         if extra:
             if self.structured_format:
@@ -173,19 +169,28 @@ class Logger:
                 extra_str = ' | '.join(f'{k}={v}' for k, v in extra.items())
                 message = f"{message} [{extra_str}]"
         
-        self.logger.log(level, message, extra=extra_attrs, exc_info=exc_info)
+        super().log(level, message, extra=extra_attrs, exc_info=exc_info)
     
     def debug(self, message: str, extra: Optional[Dict[str, Any]] = None) -> None:
         """记录DEBUG级别日志"""
-        self._log(logging.DEBUG, message, extra)
+        if extra:
+            self._log_with_extra(logging.DEBUG, message, extra)
+        else:
+            super().debug(message)
     
     def info(self, message: str, extra: Optional[Dict[str, Any]] = None) -> None:
         """记录INFO级别日志"""
-        self._log(logging.INFO, message, extra)
+        if extra:
+            self._log_with_extra(logging.INFO, message, extra)
+        else:
+            super().info(message)
     
     def warning(self, message: str, extra: Optional[Dict[str, Any]] = None) -> None:
         """记录WARNING级别日志"""
-        self._log(logging.WARNING, message, extra)
+        if extra:
+            self._log_with_extra(logging.WARNING, message, extra)
+        else:
+            super().warning(message)
     
     def error(
         self,
@@ -194,7 +199,10 @@ class Logger:
         exc_info: bool = True
     ) -> None:
         """记录ERROR级别日志"""
-        self._log(logging.ERROR, message, extra, exc_info=exc_info)
+        if extra:
+            self._log_with_extra(logging.ERROR, message, extra, exc_info=exc_info)
+        else:
+            super().error(message, exc_info=exc_info)
     
     def critical(
         self,
@@ -203,11 +211,14 @@ class Logger:
         exc_info: bool = True
     ) -> None:
         """记录CRITICAL级别日志"""
-        self._log(logging.CRITICAL, message, extra, exc_info=exc_info)
+        if extra:
+            self._log_with_extra(logging.CRITICAL, message, extra, exc_info=exc_info)
+        else:
+            super().critical(message, exc_info=exc_info)
     
     def exception(self, message: str, extra: Optional[Dict[str, Any]] = None) -> None:
         """记录异常信息"""
-        self._log(logging.ERROR, message, extra, exc_info=True)
+        self._log_with_extra(logging.ERROR, message, extra, exc_info=True)
 
 
 # 全局日志器缓存

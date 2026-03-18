@@ -49,7 +49,7 @@ def get_tech_sector_stocks():
                 print(f"  获取到 {len(stocks)} 只股票")
                 all_stocks.extend([(s, name) for s in stocks])
             else:
-                print(f"  未获取到数据")
+                print("  未获取到数据")
         except Exception as e:
             print(f"  获取失败: {e}")
     
@@ -89,7 +89,7 @@ def get_stock_market_cap(symbols):
         print(f"  获取市值失败: {e}")
         return {'large': [], 'mid': [], 'small': [], 'all': pd.DataFrame()}
 
-def download_stock_data(symbol, start_date='2017-01-01', end_date='2024-12-31'):
+def download_stockdata(symbol, start_date='2017-01-01', end_date='2024-12-31'):
     """下载单只股票历史数据"""
     try:
         df = ak.stock_zh_a_hist(
@@ -167,12 +167,12 @@ def main():
     for i, symbol in enumerate(selected_stocks, 1):
         print(f"[{i}/{len(selected_stocks)}] {symbol} ...", end=" ", flush=True)
         
-        df = download_stock_data(symbol, start_date, end_date)
+        df = download_stockdata(symbol, start_date, end_date)
         
         if df is not None and not df.empty:
             try:
                 # 保存到数据库
-                records = db_manager.pg.save_market_data(df)
+                db_manager.pg.save_marketdata(df)
                 print(f"✅ {len(df)} 条记录")
                 success_count += 1
                 total_records += len(df)
@@ -195,7 +195,7 @@ def main():
     try:
         result = db_manager.pg.execute("""
             SELECT symbol, MIN(date) as start_date, MAX(date) as end_date, COUNT(*) as records
-            FROM market_data 
+            FROM marketdata 
             WHERE symbol IN %s
             GROUP BY symbol
         """, (tuple(selected_stocks),), fetch=True)

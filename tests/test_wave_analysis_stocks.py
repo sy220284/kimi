@@ -8,7 +8,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from data import ThsAdapter
-from analysis.wave.elliott_wave import ElliottWaveAnalyzer
 from analysis.wave.wave_detector import WaveDetector
 import pandas as pd
 
@@ -31,7 +30,7 @@ def analyze_stock(symbol: str, name: str, adapter: ThsAdapter, detector: WaveDet
         df = adapter.get_full_history(symbol, start_year=start_year, end_year=end_year)
         
         if df.empty:
-            print(f"   ✗ 无数据")
+            print("   ✗ 无数据")
             return None
         
         # 过滤最近6个月数据
@@ -40,7 +39,7 @@ def analyze_stock(symbol: str, name: str, adapter: ThsAdapter, detector: WaveDet
         df['date'] = df['date'].dt.strftime('%Y-%m-%d')
         
         if df.empty:
-            print(f"   ✗ 过滤后无数据")
+            print("   ✗ 过滤后无数据")
             return None
         
         print(f"   ✓ 获取 {len(df)} 条数据")
@@ -48,11 +47,11 @@ def analyze_stock(symbol: str, name: str, adapter: ThsAdapter, detector: WaveDet
         print(f"   最新价格: {df['close'].iloc[-1]:.2f}")
         
         # 2. 波浪检测
-        print(f"\n2. 波浪形态检测...")
+        print("\n2. 波浪形态检测...")
         signal = detector.detect(symbol, df)
         
         if not signal:
-            print(f"   - 未识别到明确波浪形态")
+            print("   - 未识别到明确波浪形态")
             return None
         
         pattern = signal.wave_pattern
@@ -62,13 +61,13 @@ def analyze_stock(symbol: str, name: str, adapter: ThsAdapter, detector: WaveDet
         print(f"   波浪数量: {len(pattern.points)}")
         
         # 3. 波浪详情
-        print(f"\n3. 波浪详情:")
+        print("\n3. 波浪详情:")
         for point in pattern.points:
-            wave_type = "波峰📈" if point.is_peak else ("波谷📉" if point.is_trough else "-")
+            wave_type = "波峰📈" if point.ispeak else ("波谷📉" if point.is_trough else "-")
             print(f"   {point.wave_num}: {point.date} - {point.price:.2f} {wave_type}")
         
         # 4. 交易信号
-        print(f"\n4. 交易信号:")
+        print("\n4. 交易信号:")
         print(f"   信号类型: {signal.signal_type.upper()}")
         print(f"   分析日期: {signal.analysis_date}")
         print(f"   理由: {signal.reason}")
@@ -82,7 +81,7 @@ def analyze_stock(symbol: str, name: str, adapter: ThsAdapter, detector: WaveDet
             print(f"   止损价: {signal.stop_loss:.2f}")
         
         # 5. 统计数据
-        print(f"\n5. 近期统计数据:")
+        print("\n5. 近期统计数据:")
         recent = df.tail(20)
         print(f"   20日涨幅: {(recent['close'].iloc[-1] / recent['close'].iloc[0] - 1) * 100:.2f}%")
         print(f"   20日最高: {recent['high'].max():.2f}")
@@ -146,24 +145,24 @@ def main():
         print("\n" + summary_df.to_string(index=False))
         
         # 买入信号
-        buy_signals = [r for r in results if r['signal'] == 'buy']
-        if buy_signals:
-            print(f"\n✅ 买入信号 ({len(buy_signals)}个):")
-            for s in buy_signals:
+        buysignals = [r for r in results if r['signal'] == 'buy']
+        if buysignals:
+            print(f"\n✅ 买入信号 ({len(buysignals)}个):")
+            for s in buysignals:
                 print(f"   {s['name']}({s['symbol']}) - 置信度: {s['confidence']:.2%}")
         
         # 卖出信号
-        sell_signals = [r for r in results if r['signal'] == 'sell']
-        if sell_signals:
-            print(f"\n❌ 卖出信号 ({len(sell_signals)}个):")
-            for s in sell_signals:
+        sellsignals = [r for r in results if r['signal'] == 'sell']
+        if sellsignals:
+            print(f"\n❌ 卖出信号 ({len(sellsignals)}个):")
+            for s in sellsignals:
                 print(f"   {s['name']}({s['symbol']}) - 置信度: {s['confidence']:.2%}")
         
         # 观望信号
-        watch_signals = [r for r in results if r['signal'] not in ['buy', 'sell']]
-        if watch_signals:
-            print(f"\n👀 观望信号 ({len(watch_signals)}个):")
-            for s in watch_signals:
+        watchsignals = [r for r in results if r['signal'] not in ['buy', 'sell']]
+        if watchsignals:
+            print(f"\n👀 观望信号 ({len(watchsignals)}个):")
+            for s in watchsignals:
                 print(f"   {s['name']}({s['symbol']}) - {s['signal']}")
     else:
         print("\n未发现有效波浪信号")

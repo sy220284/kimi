@@ -9,10 +9,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 import unittest
 import time
-from datetime import datetime
 
 from data.cache import DataCache
-from data.optimized_data_manager import get_optimized_data_manager
+from data.optimizeddata_manager import get_optimizeddata_manager
 
 
 class TestDataCache(unittest.TestCase):
@@ -36,26 +35,26 @@ class TestDataCache(unittest.TestCase):
         self.assertIsNotNone(self.cache)
         print("✅ 缓存初始化正常")
     
-    def test_02_data_manager_cache(self):
+    def test_02data_manager_cache(self):
         """测试数据管理器缓存功能"""
-        data_mgr = get_optimized_data_manager()
+        data_mgr = get_optimizeddata_manager()
         
         # 测试数据加载
         start = time.time()
-        df1 = data_mgr.load_all_data()
+        df1 = data_mgr.load_alldata()
         elapsed1 = time.time() - start
         
         # 再次加载（应该从内存缓存）
         start = time.time()
-        df2 = data_mgr.load_all_data()
+        df2 = data_mgr.load_alldata()
         elapsed2 = time.time() - start
         
         self.assertEqual(len(df1), len(df2))
         print(f"✅ 数据缓存正常 (首次{elapsed1:.2f}s, 缓存{elapsed2:.2f}s)")
     
-    def test_03_stock_data_consistency(self):
+    def test_03_stockdata_consistency(self):
         """测试股票数据一致性"""
-        data_mgr = get_optimized_data_manager()
+        data_mgr = get_optimizeddata_manager()
         
         # 多次查询同一只股票
         results = []

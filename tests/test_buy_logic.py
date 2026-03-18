@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import pandas as pd
 from src.data import get_stock_data
 from src.analysis.wave import UnifiedWaveAnalyzer
-from src.analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy, TradeAction
+from src.analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy
 
 SYMBOL = '600519'
 START = '2024-06-01'
@@ -73,13 +73,13 @@ for i, sig in enumerate(signals):
     can_buy = sig.is_valid and sig.confidence >= 0.5 and sig.direction == 'up'
     print(f"  可买入: {can_buy}")
 
-# 模拟回测器的 _get_best_trade_signal
+# 模拟回测器的 _get_besttradesignal
 print("\n" + "-" * 70)
 print("回测器内部逻辑模拟:")
 print("-" * 70)
 
-backtester._current_signals = signals
-best = backtester._get_best_trade_signal(price)
+backtester.currentsignals = signals
+best = backtester._get_besttradesignal(price)
 
 if best:
     print(f"最佳信号: {best.entry_type.value}浪")

@@ -7,9 +7,7 @@ sys.path.insert(0, 'src')
 
 import pandas as pd
 import numpy as np
-from typing import List, Optional, Dict, Tuple
-from dataclasses import dataclass
-from enum import Enum
+from typing import List, Dict, Tuple
 from data import get_stock_data
 from analysis.wave import EnhancedWaveAnalyzer
 from analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy, TradeAction, Trade
@@ -28,7 +26,7 @@ class ImpulseWaveOptimizer:
         self.max_wave2_retrace = max_wave2_retrace
         self.max_wave4_retrace = max_wave4_retrace
     
-    def find_buy_signals(self, df: pd.DataFrame) -> List[Dict]:
+    def find_buysignals(self, df: pd.DataFrame) -> List[Dict]:
         """
         寻找推动浪2浪和4浪买入信号
         
@@ -46,7 +44,7 @@ class ImpulseWaveOptimizer:
         dates = df['date'].values
         
         # 找极值点
-        pivots = self._find_pivots(prices, dates, window=3)
+        pivots = self._findpivots(prices, dates, window=3)
         if len(pivots) < 4:
             return []
         
@@ -133,17 +131,17 @@ class ImpulseWaveOptimizer:
         
         return signals
     
-    def _find_pivots(self, prices: np.ndarray, dates: np.ndarray, window: int = 3) -> List[Tuple]:
+    def _findpivots(self, prices: np.ndarray, dates: np.ndarray, window: int = 3) -> List[Tuple]:
         """寻找极值点"""
         pivots = []
         for i in range(window, len(prices) - window):
-            is_peak = all(prices[i] >= prices[i-j] for j in range(1, window+1)) and \
+            ispeak = all(prices[i] >= prices[i-j] for j in range(1, window+1)) and \
                      all(prices[i] >= prices[i+j] for j in range(1, window+1))
             
             is_trough = all(prices[i] <= prices[i-j] for j in range(1, window+1)) and \
                        all(prices[i] <= prices[i+j] for j in range(1, window+1))
             
-            if is_peak or is_trough:
+            if ispeak or is_trough:
                 pivots.append((i, prices[i], dates[i]))
         
         return pivots
@@ -193,7 +191,7 @@ class OptimizedWaveBacktester(WaveBacktester):
         current_analysis = None
         position = None
         
-        wave_stats = {'C': 0, '4': 0, '2': 0, 'other': 0}
+        wavestats = {'C': 0, '4': 0, '2': 0, 'other': 0}
         
         for i, (idx, row) in enumerate(df.iterrows()):
             date = row['date'].strftime('%Y-%m-%d')
@@ -205,7 +203,7 @@ class OptimizedWaveBacktester(WaveBacktester):
                 analysis_df = df.iloc[lookback_start:i+1].copy()
                 
                 current_analysis = None
-                impulse_signals = []
+                impulsesignals = []
                 
                 if len(analysis_df) >= 20:
                     try:
@@ -213,9 +211,9 @@ class OptimizedWaveBacktester(WaveBacktester):
                         current_analysis = self.analyzer.analyze(symbol, analysis_df)
                         
                         # 2. 推动浪优化检测
-                        impulse_signals = self.impulse_optimizer.find_buy_signals(analysis_df)
+                        impulsesignals = self.impulse_optimizer.find_buysignals(analysis_df)
                         
-                    except Exception as e:
+                    except Exception:
                         pass
             
             # 生成信号
@@ -225,17 +223,17 @@ class OptimizedWaveBacktester(WaveBacktester):
             stop_loss = None
             
             # 优先使用推动浪信号（如果找到4浪买入点）
-            if impulse_signals and not position:
-                best_signal = max(impulse_signals, key=lambda x: x['confidence'])
-                if best_signal['confidence'] >= self.strategy.min_confidence:
+            if impulsesignals and not position:
+                bestsignal = max(impulsesignals, key=lambda x: x['confidence'])
+                if bestsignal['confidence'] >= self.strategy.min_confidence:
                     # 检查日期匹配
-                    signal_date = pd.to_datetime(best_signal['entry_date']).strftime('%Y-%m-%d')
+                    signal_date = pd.to_datetime(bestsignal['entry_date']).strftime('%Y-%m-%d')
                     if signal_date == date:
                         signal = TradeAction.BUY
                         entry_wave = '4'
-                        target_price = best_signal['target_price']
-                        stop_loss = best_signal['stop_loss']
-                        wave_stats['4'] += 1
+                        target_price = bestsignal['target_price']
+                        stop_loss = bestsignal['stop_loss']
+                        wavestats['4'] += 1
             
             # 如果没有推动浪信号，使用原始信号
             if signal is None and current_analysis and current_analysis.primary_pattern:
@@ -245,14 +243,14 @@ class OptimizedWaveBacktester(WaveBacktester):
                 latest_wave = pattern.points[-1].wave_num if pattern.points else None
                 
                 if latest_wave in ['2', '4', 'C', 'A', 'B'] and not position:
-                    signal = self.strategy.generate_signal(current_analysis, price)
+                    signal = self.strategy.generatesignal(current_analysis, price)
                     if signal == TradeAction.BUY:
                         entry_wave = latest_wave
                         target_price = pattern.target_price
                         stop_loss = pattern.stop_loss
-                        wave_stats[latest_wave if latest_wave in ['2', '4', 'C'] else 'other'] += 1
+                        wavestats[latest_wave if latest_wave in ['2', '4', 'C'] else 'other'] += 1
                 elif position:
-                    signal = self.strategy.generate_signal(current_analysis, price)
+                    signal = self.strategy.generatesignal(current_analysis, price)
             
             # 执行交易
             if signal == TradeAction.BUY and not position:
@@ -304,26 +302,26 @@ class OptimizedWaveBacktester(WaveBacktester):
             equity.append(current_equity)
         
         # 计算结果
-        closed_trades = [t for t in trades if t.status == 'closed']
-        wins = [t for t in closed_trades if t.pnl_pct > 0]
+        closedtrades = [t for t in trades if t.status == 'closed']
+        wins = [t for t in closedtrades if t.pnl_pct > 0]
         
         total_return = (equity[-1] / self.strategy.initial_capital - 1) * 100
-        win_rate = len(wins) / len(closed_trades) if closed_trades else 0
+        win_rate = len(wins) / len(closedtrades) if closedtrades else 0
         
-        print(f"\n📈 结果统计:")
-        print(f"  总交易: {len(closed_trades)} 笔")
+        print("\n📈 结果统计:")
+        print(f"  总交易: {len(closedtrades)} 笔")
         print(f"  胜率: {win_rate:.1%}")
         print(f"  总收益: {total_return:+.2f}%")
-        print(f"\n  买入浪号分布:")
-        for wave, count in sorted(wave_stats.items()):
+        print("\n  买入浪号分布:")
+        for wave, count in sorted(wavestats.items()):
             if count > 0:
                 print(f"    浪{wave}: {count} 次")
         
         return {
-            'trades': closed_trades,
+            'trades': closedtrades,
             'total_return': total_return,
             'win_rate': win_rate,
-            'wave_stats': wave_stats
+            'wavestats': wavestats
         }
 
 

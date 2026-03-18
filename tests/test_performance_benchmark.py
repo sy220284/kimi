@@ -9,10 +9,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 import unittest
 import time
-import pandas as pd
-import numpy as np
 
-from data.optimized_data_manager import get_optimized_data_manager
+from data.optimizeddata_manager import get_optimizeddata_manager
 
 
 class TestPerformanceBenchmark(unittest.TestCase):
@@ -21,8 +19,8 @@ class TestPerformanceBenchmark(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """准备测试数据"""
-        cls.data_mgr = get_optimized_data_manager()
-        cls.data_mgr.load_all_data()
+        cls.data_mgr = get_optimizeddata_manager()
+        cls.data_mgr.load_alldata()
         
         # 获取一些测试股票
         cls.test_symbols = ['600519', '000858', '002594', '000001']
@@ -112,8 +110,8 @@ class TestPerformanceBenchmark(unittest.TestCase):
         """测试全表加载速度"""
         # 创建新实例测试加载
         start = time.time()
-        mgr = get_optimized_data_manager()
-        df = mgr.load_all_data()
+        mgr = get_optimizeddata_manager()
+        df = mgr.load_alldata()
         load_time = time.time() - start
         
         rows = len(df)
@@ -137,8 +135,8 @@ class TestPerformanceBenchmark(unittest.TestCase):
             mem_before = process.memory_info().rss / 1024 / 1024  # MB
             
             # 重新加载数据
-            mgr = get_optimized_data_manager()
-            _ = mgr.load_all_data()
+            mgr = get_optimizeddata_manager()
+            _ = mgr.load_alldata()
             
             # 加载后内存
             mem_after = process.memory_info().rss / 1024 / 1024
@@ -152,9 +150,9 @@ class TestPerformanceBenchmark(unittest.TestCase):
             print("⚠️  跳过内存测试 (psutil未安装)")
             self.skipTest("psutil未安装")
     
-    def test_07_dataframe_operations(self):
+    def test_07dataframe_operations(self):
         """测试DataFrame操作性能"""
-        df = self.data_mgr.load_all_data()
+        df = self.data_mgr.load_alldata()
         
         # groupby操作
         start = time.time()
@@ -168,7 +166,7 @@ class TestPerformanceBenchmark(unittest.TestCase):
         
         # 排序操作
         start = time.time()
-        sorted_df = df.sort_values(['symbol', 'date'])
+        _sorteddf = df.sort_values(['symbol', 'date'])
         sort_time = (time.time() - start) * 1000
         
         print(f"✅ DataFrame操作: groupby={groupby_time:.1f}ms, filter={filter_time:.1f}ms, sort={sort_time:.1f}ms")
@@ -184,7 +182,7 @@ class TestPerformanceRegression(unittest.TestCase):
     
     def test_query_regression(self):
         """测试查询性能是否退化"""
-        data_mgr = get_optimized_data_manager()
+        data_mgr = get_optimizeddata_manager()
         
         # 基准时间
         baseline_time = 0.05  # 50ms for 100 queries
@@ -200,7 +198,7 @@ class TestPerformanceRegression(unittest.TestCase):
     
     def test_calculation_regression(self):
         """测试计算性能是否退化"""
-        data_mgr = get_optimized_data_manager()
+        data_mgr = get_optimizeddata_manager()
         df = data_mgr.get_stock_data('600519')
         
         if df is None:

@@ -8,8 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 import pandas as pd
-import numpy as np
-from data import get_stock_data
+from data import get_stock_data, get_db_manager
 from analysis.wave import EnhancedWaveAnalyzer
 from analysis.backtest.wave_backtester import WaveBacktester
 
@@ -18,7 +17,6 @@ print("📈 全量个股波浪回测 - 自适应参数优化")
 print("="*80)
 
 # 获取股票列表
-from data import get_db_manager
 manager = get_db_manager()
 all_symbols = manager.get_stored_symbols()
 
@@ -31,7 +29,7 @@ food_beverage = [
 # 取交集
 test_symbols = [s for s in food_beverage if s in all_symbols]
 print(f"\n测试股票: {len(test_symbols)} 只")
-print(f"回测周期: 2021-01-01 ~ 2026-03-16\n")
+print("回测周期: 2021-01-01 ~ 2026-03-16\n")
 
 # 回测结果
 results = []
@@ -44,7 +42,7 @@ for idx, symbol in enumerate(test_symbols, 1):
         # 获取数据
         df = get_stock_data(symbol, '2021-01-01', '2026-03-16')
         if len(df) < 200:
-            print(f"   ⚠️ 数据不足，跳过\n")
+            print("   ⚠️ 数据不足，跳过\n")
             continue
         
         print(f"   数据: {len(df)}条")
@@ -58,7 +56,7 @@ for idx, symbol in enumerate(test_symbols, 1):
         
         # 计算得分
         score = 0
-        if result.total_trades >= 3:
+        if result.totaltrades >= 3:
             score = (
                 result.win_rate * 0.3 +
                 result.total_return_pct / 100 * 0.3 +
@@ -72,11 +70,11 @@ for idx, symbol in enumerate(test_symbols, 1):
             'return_pct': result.total_return_pct,
             'max_dd': result.max_drawdown_pct,
             'sharpe': result.sharpe_ratio,
-            'trades': result.total_trades,
+            'trades': result.totaltrades,
             'score': score
         })
         
-        print(f"   ✅ 胜率{result.win_rate:.1%} | 收益{result.total_return_pct:.1f}% | 回撤{result.max_drawdown_pct:.1f}% | 交易{result.total_trades}次\n")
+        print(f"   ✅ 胜率{result.win_rate:.1%} | 收益{result.total_return_pct:.1f}% | 回撤{result.max_drawdown_pct:.1f}% | 交易{result.totaltrades}次\n")
         
     except Exception as e:
         print(f"   ❌ 失败: {str(e)[:50]}\n")
@@ -90,7 +88,7 @@ if results:
     df = pd.DataFrame(results)
     
     print(f"\n成功回测: {len(df)} 只股票")
-    print(f"\n【整体表现】")
+    print("\n【整体表现】")
     print(f"  平均胜率: {df['win_rate'].mean():.1%}")
     print(f"  平均收益: {df['return_pct'].mean():.1f}%")
     print(f"  平均回撤: {df['max_dd'].mean():.1f}%")
@@ -98,7 +96,7 @@ if results:
     print(f"  平均交易: {df['trades'].mean():.1f}次")
     
     # 按收益排序
-    print(f"\n【收益排名】")
+    print("\n【收益排名】")
     df_sorted = df.sort_values('return_pct', ascending=False)
     for _, row in df_sorted.iterrows():
         print(f"  {row['symbol']}: 收益{row['return_pct']:.1f}% | 胜率{row['win_rate']:.1%} | {int(row['trades'])}笔交易")

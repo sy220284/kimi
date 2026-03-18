@@ -7,7 +7,6 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import pandas as pd
 from src.data import get_stock_data
 from src.analysis.wave import UnifiedWaveAnalyzer
 from src.analysis.backtest.wave_backtester import WaveBacktester
@@ -36,7 +35,7 @@ print("-" * 70)
 
 analyzer1 = UnifiedWaveAnalyzer(
     use_resonance=False,
-    use_adaptive_params=False,
+    use_adaptiveparams=False,
     trend_ma_period=200
 )
 
@@ -54,7 +53,7 @@ print("-" * 70)
 analyzer2 = UnifiedWaveAnalyzer(
     use_resonance=True,
     min_resonance_score=0.3,
-    use_adaptive_params=False,
+    use_adaptiveparams=False,
     trend_ma_period=200
 )
 
@@ -71,13 +70,13 @@ print("测试3: 回测框架集成")
 print("-" * 70)
 
 backtester = WaveBacktester(analyzer2)
-print(f"✓ WaveBacktester 初始化成功")
+print("✓ WaveBacktester 初始化成功")
 print(f"✓ 策略200日均线: {backtester.strategy.trend_ma_period}日")
 
 result = backtester.run(SYMBOL, df, reanalyze_every=10)
 
-print(f"\n📊 回测结果:")
-print(f"  交易次数: {result.total_trades}")
+print("\n📊 回测结果:")
+print(f"  交易次数: {result.totaltrades}")
 print(f"  胜率: {result.win_rate:.1%}")
 print(f"  总收益: {result.total_return_pct:+.2f}%")
 print(f"  最大回撤: {result.max_drawdown_pct:.2f}%")

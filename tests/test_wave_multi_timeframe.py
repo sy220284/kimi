@@ -9,7 +9,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from data import ThsAdapter
-from analysis.wave.elliott_wave import ElliottWaveAnalyzer
 from analysis.wave.wave_detector import WaveDetector
 import pandas as pd
 from datetime import datetime, timedelta
@@ -61,7 +60,7 @@ def analyze_stock_multi_timeframe(symbol: str, name: str, adapter: ThsAdapter):
     
     # 不同周期使用不同参数
     end_date = datetime.now()
-    periods_config = {
+    periodsconfig = {
         '短期(1月)': {
             'days': 30,
             'params': {'atr_period': 7, 'atr_mult': 0.3, 'confidence_threshold': 0.4}
@@ -78,7 +77,7 @@ def analyze_stock_multi_timeframe(symbol: str, name: str, adapter: ThsAdapter):
     
     results = []
     
-    for period_name, config in periods_config.items():
+    for period_name, config in periodsconfig.items():
         # 过滤数据
         start_date = end_date - timedelta(days=config['days'])
         df_period = df_full[df_full['date'] >= start_date].copy()
@@ -164,7 +163,7 @@ def synthesize_timeframes(results: list, current_price: float) -> str:
     output.append(f"📉 方向统计: 上升{up_count}个 | 下降{down_count}个")
     
     # 趋势一致性
-    output.append(f"\n🎯 趋势一致性:")
+    output.append("\n🎯 趋势一致性:")
     if up_count == len(results) and len(results) >= 2:
         output.append("  ✅ 全周期共振上升 - 强势看涨")
     elif down_count == len(results) and len(results) >= 2:
@@ -177,7 +176,7 @@ def synthesize_timeframes(results: list, current_price: float) -> str:
         output.append("  ⚖️ 多空分歧，震荡格局")
     
     # 信号一致性
-    output.append(f"\n💡 操作建议:")
+    output.append("\n💡 操作建议:")
     if buy_count >= 2 and sell_count == 0:
         output.append("  🔥 多周期买入共振 - 强烈建议买入")
     elif sell_count >= 2 and buy_count == 0:
@@ -192,7 +191,7 @@ def synthesize_timeframes(results: list, current_price: float) -> str:
     # 浪末警告
     latest_waves = [r['latest_wave'] for r in results if r['latest_wave']]
     if '5' in latest_waves or 'C' in latest_waves:
-        output.append(f"\n⚠️ 风险提示:")
+        output.append("\n⚠️ 风险提示:")
         output.append("  多周期显示处于浪末阶段(5浪/C浪)，可能面临趋势转折")
     
     return '\n'.join(output)

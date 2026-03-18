@@ -7,13 +7,11 @@ import sys
 sys.path.insert(0, 'src')
 
 import pandas as pd
-import numpy as np
-from typing import List, Dict, Tuple
+from typing import Dict
 from dataclasses import dataclass
-from itertools import product
 
 from data import get_stock_data
-from analysis.wave import UnifiedWaveAnalyzer, WaveEntryType
+from analysis.wave import UnifiedWaveAnalyzer
 
 
 # 测试股票 (选择3只代表性股票)
@@ -66,7 +64,7 @@ PARAM_SETS = [
 ]
 
 
-def run_backtest_with_params(symbol: str, name: str, param_set: ParamSet) -> Dict:
+def run_backtest_withparams(symbol: str, name: str, param_set: ParamSet) -> Dict:
     """使用指定参数运行回测"""
     df = get_stock_data(symbol, '2023-01-01', '2026-03-16')
     if df is None or len(df) == 0:
@@ -141,9 +139,9 @@ def run_backtest_with_params(symbol: str, name: str, param_set: ParamSet) -> Dic
     
     # 统计
     wins = [t for t in trades if t['win']]
-    c_trades = [t for t in trades if t['entry_type'] == 'C']
-    w2_trades = [t for t in trades if t['entry_type'] == '2']
-    w4_trades = [t for t in trades if t['entry_type'] == '4']
+    ctrades = [t for t in trades if t['entry_type'] == 'C']
+    w2trades = [t for t in trades if t['entry_type'] == '2']
+    w4trades = [t for t in trades if t['entry_type'] == '4']
     
     return {
         'symbol': symbol,
@@ -153,11 +151,11 @@ def run_backtest_with_params(symbol: str, name: str, param_set: ParamSet) -> Dic
         'win_rate': len(wins) / len(trades),
         'avg_return': sum(t['pnl_pct'] for t in trades) / len(trades),
         'total_return': sum(t['pnl_pct'] for t in trades) / 10,
-        'c_count': len(c_trades),
-        'w2_count': len(w2_trades),
-        'w4_count': len(w4_trades),
-        'c_win_rate': sum(1 for t in c_trades if t['win']) / len(c_trades) if c_trades else 0,
-        'w2_win_rate': sum(1 for t in w2_trades if t['win']) / len(w2_trades) if w2_trades else 0,
+        'c_count': len(ctrades),
+        'w2_count': len(w2trades),
+        'w4_count': len(w4trades),
+        'c_win_rate': sum(1 for t in ctrades if t['win']) / len(ctrades) if ctrades else 0,
+        'w2_win_rate': sum(1 for t in w2trades if t['win']) / len(w2trades) if w2trades else 0,
     }
 
 
@@ -179,13 +177,13 @@ def main():
         
         param_results = []
         for symbol, name in TEST_STOCKS:
-            result = run_backtest_with_params(symbol, name, param_set)
+            result = run_backtest_withparams(symbol, name, param_set)
             if result:
                 param_results.append(result)
                 print(f"  {symbol}: {result['trades']}笔 胜率{result['win_rate']:.1%} 收益{result['total_return']:+.2f}% (C:{result['c_count']}/2:{result['w2_count']}/4:{result['w4_count']})")
         
         if param_results:
-            avg_trades = sum(r['trades'] for r in param_results) / len(param_results)
+            avgtrades = sum(r['trades'] for r in param_results) / len(param_results)
             avg_win_rate = sum(r['win_rate'] for r in param_results) / len(param_results)
             avg_return = sum(r['total_return'] for r in param_results) / len(param_results)
             total_c = sum(r['c_count'] for r in param_results)
@@ -194,7 +192,7 @@ def main():
             
             all_results.append({
                 'param': param_set.name,
-                'avg_trades': avg_trades,
+                'avgtrades': avgtrades,
                 'avg_win_rate': avg_win_rate,
                 'avg_return': avg_return,
                 'total_c': total_c,
@@ -203,11 +201,11 @@ def main():
                 'score': avg_win_rate * 0.5 + (avg_return / 10) * 0.5  # 综合评分
             })
             
-            print(f"\n  平均: {avg_trades:.0f}笔 胜率{avg_win_rate:.1%} 收益{avg_return:+.2f}%")
+            print(f"\n  平均: {avgtrades:.0f}笔 胜率{avg_win_rate:.1%} 收益{avg_return:+.2f}%")
     
     # 汇总对比
     print(f"\n{'='*80}")
-    print(f"📊 参数对比汇总")
+    print("📊 参数对比汇总")
     print(f"{'='*80}")
     print(f"{'参数':<15} {'交易':<8} {'胜率':<10} {'收益':<10} {'C/2/4':<12} {'评分':<8}")
     print("-" * 80)
@@ -217,14 +215,14 @@ def main():
     
     for r in all_results:
         wave_str = f"{r['total_c']}/{r['total_w2']}/{r['total_w4']}"
-        print(f"{r['param']:<15} {r['avg_trades']:<8.0f} {r['avg_win_rate']:<10.1%} {r['avg_return']:<+10.1f}% {wave_str:<12} {r['score']:<8.3f}")
+        print(f"{r['param']:<15} {r['avgtrades']:<8.0f} {r['avg_win_rate']:<10.1%} {r['avg_return']:<+10.1f}% {wave_str:<12} {r['score']:<8.3f}")
     
     # 最佳参数
     if all_results:
         best = all_results[0]
         print(f"\n{'='*80}")
         print(f"🏆 最佳参数: {best['param']}")
-        print(f"  平均交易: {best['avg_trades']:.0f}笔")
+        print(f"  平均交易: {best['avgtrades']:.0f}笔")
         print(f"  平均胜率: {best['avg_win_rate']:.1%}")
         print(f"  平均收益: {best['avg_return']:+.2f}%")
         print(f"{'='*80}")

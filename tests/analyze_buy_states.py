@@ -5,7 +5,6 @@
 import sys
 sys.path.insert(0, 'src')
 
-import pandas as pd
 from data import get_stock_data
 from analysis.wave import EnhancedWaveAnalyzer
 

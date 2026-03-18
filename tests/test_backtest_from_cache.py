@@ -11,7 +11,7 @@ import pandas as pd
 from analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy
 from analysis.wave.unified_analyzer import UnifiedWaveAnalyzer
 
-def load_cached_data():
+def load_cacheddata():
     """从.cache目录加载所有股票数据"""
     cache_dir = Path(__file__).parent.parent / '.cache'
     stocks = {}
@@ -42,7 +42,7 @@ def main():
     
     # 加载缓存数据
     print("\n加载缓存数据...")
-    stocks = load_cached_data()
+    stocks = load_cacheddata()
     
     print(f"找到 {len(stocks)} 只股票:")
     for symbol, df in stocks.items():
@@ -83,20 +83,20 @@ def main():
         try:
             result = backtester.run(symbol, df, reanalyze_every=5)
             
-            print(f"\n【结果】")
-            print(f"  交易次数: {result.total_trades}")
+            print("\n【结果】")
+            print(f"  交易次数: {result.totaltrades}")
             print(f"  胜率: {result.win_rate:.1%}")
             print(f"  总收益: {result.total_return_pct:.2f}%")
-            print(f"  平均每笔: {result.avg_return_per_trade:.2f}%")
+            print(f"  平均每笔: {result.avg_return_pertrade:.2f}%")
             print(f"  最大回撤: {result.max_drawdown_pct:.2f}%")
             print(f"  Sharpe: {result.sharpe_ratio:.2f}")
             
             results.append({
                 'symbol': symbol,
-                'trades': result.total_trades,
+                'trades': result.totaltrades,
                 'win_rate': result.win_rate,
                 'return': result.total_return_pct,
-                'avg': result.avg_return_per_trade,
+                'avg': result.avg_return_pertrade,
                 'dd': result.max_drawdown_pct,
                 'sharpe': result.sharpe_ratio
             })
@@ -122,7 +122,7 @@ def main():
                   f"{row['win_rate']:>6.1%} {row['return']:>8.2f}% "
                   f"{row['avg']:>8.2f}% {row['dd']:>8.2f}% {row['sharpe']:>6.2f}")
         
-        print(f"\n平均:")
+        print("\n平均:")
         print(f"  胜率: {df_results['win_rate'].mean():.1%}")
         print(f"  收益: {df_results['return'].mean():.2f}%")
         print(f"  Sharpe: {df_results['sharpe'].mean():.2f}")

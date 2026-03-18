@@ -9,9 +9,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
-import numpy as np
 import psycopg2
-from datetime import datetime, timedelta
+from datetime import datetime
 import json
 import time
 
@@ -34,7 +33,7 @@ def get_all_stocks():
     conn = get_db_connection()
     sql = '''
     SELECT symbol, MIN(date) as start_date, MAX(date) as end_date, COUNT(*) as records
-    FROM market_data 
+    FROM marketdata 
     GROUP BY symbol
     ORDER BY records DESC
     '''
@@ -46,7 +45,7 @@ def get_stock_data(symbol, start_date, end_date):
     conn = get_db_connection()
     sql = '''
     SELECT date, open, high, low, close, volume, amount
-    FROM market_data
+    FROM marketdata
     WHERE symbol = %s AND date >= %s AND date <= %s
     ORDER BY date
     '''
@@ -123,7 +122,7 @@ def main():
     print(f"总记录数: {stock_list['records'].sum():,}")
     
     # 统计信息
-    print(f"\n数据分布:")
+    print("\n数据分布:")
     print(f"  10年以上数据: {(stock_list['records'] > 2000).sum()} 只")
     print(f"  5-10年数据: {((stock_list['records'] >= 1000) & (stock_list['records'] <= 2000)).sum()} 只")
     print(f"  5年以下数据: {(stock_list['records'] < 1000).sum()} 只")
@@ -133,41 +132,41 @@ def main():
         use_resonance=True,
         min_resonance_score=0.3,
         trend_ma_period=200,
-        use_adaptive_params=False,
+        use_adaptiveparams=False,
     )
     
     # 批量分析所有股票
-    all_signals = []
+    allsignals = []
     start_time = time.time()
     
-    print(f"\n开始全量分析...")
+    print("\n开始全量分析...")
     for idx, row in stock_list.iterrows():
         symbol = row['symbol']
         signals = analyze_stock(symbol, analyzer)
         if signals:
-            all_signals.extend(signals)
+            allsignals.extend(signals)
         
         if (idx + 1) % 10 == 0 or (idx + 1) == len(stock_list):
             elapsed = time.time() - start_time
             progress = (idx + 1) / len(stock_list) * 100
             eta = (elapsed / (idx + 1)) * (len(stock_list) - idx - 1) if idx > 0 else 0
             print(f"  [{idx+1}/{len(stock_list)} {progress:.1f}%] {symbol} | "
-                  f"信号:{len(all_signals)} | 已用:{elapsed/60:.1f}分 | 预计:{eta/60:.1f}分")
+                  f"信号:{len(allsignals)} | 已用:{elapsed/60:.1f}分 | 预计:{eta/60:.1f}分")
     
     # 保存结果
     output_dir = Path('tests/results')
     output_dir.mkdir(exist_ok=True)
     
-    if all_signals:
-        df = pd.DataFrame(all_signals)
-        output_file = output_dir / 'full_database_v2.csv'
+    if allsignals:
+        df = pd.DataFrame(allsignals)
+        output_file = output_dir / 'fulldatabase_v2.csv'
         df.to_csv(output_file, index=False, encoding='utf-8-sig')
         
         # 生成详细报告
         report = {
             'timestamp': datetime.now().isoformat(),
             'total_stocks': len(stock_list),
-            'total_signals': len(all_signals),
+            'totalsignals': len(allsignals),
             'by_type': df['entry_type'].value_counts().to_dict(),
             'by_method': df['detection_method'].value_counts().to_dict(),
             'avg_confidence': df['confidence'].mean(),
@@ -186,7 +185,7 @@ def main():
         if 'b_wave_valid' in df.columns:
             b_df = df[df['entry_type'] == 'C']
             if len(b_df) > 0:
-                report['b_wave_stats'] = {
+                report['b_wavestats'] = {
                     'total': len(b_df),
                     'valid': b_df['b_wave_valid'].sum(),
                     'valid_rate': b_df['b_wave_valid'].mean() * 100,
@@ -196,40 +195,40 @@ def main():
         if 'wave1_valid' in df.columns:
             w1_df = df[df['entry_type'] == '2']
             if len(w1_df) > 0:
-                report['wave1_stats'] = {
+                report['wave1stats'] = {
                     'total': len(w1_df),
                     'valid': w1_df['wave1_valid'].sum(),
                     'valid_rate': w1_df['wave1_valid'].mean() * 100,
                 }
         
-        with open(output_dir / 'full_database_v2_summary.json', 'w') as f:
+        with open(output_dir / 'fulldatabase_v2summary.json', 'w') as f:
             json.dump(report, f, indent=2, default=str)
         
         # 打印报告
         print("\n" + "=" * 90)
         print("📊 全量回测结果")
         print("=" * 90)
-        print(f"总信号数: {report['total_signals']:,}")
-        print(f"\n浪型分布:")
+        print(f"总信号数: {report['totalsignals']:,}")
+        print("\n浪型分布:")
         for wave_type, count in report['by_type'].items():
-            print(f"  {wave_type}浪: {count} ({count/report['total_signals']*100:.1f}%)")
-        print(f"\n置信度分布:")
+            print(f"  {wave_type}浪: {count} ({count/report['totalsignals']*100:.1f}%)")
+        print("\n置信度分布:")
         for rng, count in report['confidence_distribution'].items():
-            print(f"  {rng}: {count} ({count/report['total_signals']*100:.1f}%)")
-        print(f"\n胜率:")
+            print(f"  {rng}: {count} ({count/report['totalsignals']*100:.1f}%)")
+        print("\n胜率:")
         print(f"  5天后: {report['win_rate_5d']:.1f}%")
         print(f"  10天后: {report['win_rate_10d']:.1f}%")
         print(f"  20天后: {report['win_rate_20d']:.1f}%")
         
-        if 'b_wave_stats' in report:
-            print(f"\nB浪验证:")
-            print(f"  总数: {report['b_wave_stats']['total']}")
-            print(f"  通过验证: {report['b_wave_stats']['valid']} ({report['b_wave_stats']['valid_rate']:.1f}%)")
+        if 'b_wavestats' in report:
+            print("\nB浪验证:")
+            print(f"  总数: {report['b_wavestats']['total']}")
+            print(f"  通过验证: {report['b_wavestats']['valid']} ({report['b_wavestats']['valid_rate']:.1f}%)")
         
-        if 'wave1_stats' in report:
-            print(f"\n1浪验证:")
-            print(f"  总数: {report['wave1_stats']['total']}")
-            print(f"  通过验证: {report['wave1_stats']['valid']} ({report['wave1_stats']['valid_rate']:.1f}%)")
+        if 'wave1stats' in report:
+            print("\n1浪验证:")
+            print(f"  总数: {report['wave1stats']['total']}")
+            print(f"  通过验证: {report['wave1stats']['valid']} ({report['wave1stats']['valid_rate']:.1f}%)")
         
         print(f"\n💾 详细结果: {output_file}")
     

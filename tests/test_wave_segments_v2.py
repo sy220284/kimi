@@ -8,9 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
-import numpy as np
 import psycopg2
-from datetime import datetime
 
 from src.analysis.wave.enhanced_detector import enhanced_pivot_detection
 
@@ -24,7 +22,7 @@ def get_stock_data(symbol, start_date, end_date):
     conn = get_db_connection()
     sql = '''
     SELECT date, open, high, low, close, volume, amount
-    FROM market_data
+    FROM marketdata
     WHERE symbol = %s AND date >= %s AND date <= %s
     ORDER BY date
     '''
@@ -46,7 +44,7 @@ def analyze_stock_waves(symbol):
         window_df = df.iloc[start_idx:start_idx+120].copy().reset_index(drop=True)
         
         # 检测极值点
-        pivots = enhanced_pivot_detection(window_df, atr_period=10, atr_mult=0.5, min_pivots=4)
+        pivots = enhanced_pivot_detection(window_df, atr_period=10, atr_mult=0.5, minpivots=4)
         
         if len(pivots) < 4:
             continue
@@ -95,13 +93,13 @@ def analyze_stock_waves(symbol):
                         possible_waves.append('2')
             
             # 计算后续走势
-            future_returns = {}
+            futurereturns = {}
             if p2.idx + 20 < len(window_df):
                 p2_price = p2.price
                 for days in [5, 10, 20]:
                     future_price = window_df.iloc[p2.idx + days]['close']
                     future_ret = (future_price - p2_price) / p2_price * 100
-                    future_returns[f'future_{days}d'] = future_ret
+                    futurereturns[f'future_{days}d'] = future_ret
             
             segment = {
                 'symbol': symbol,
@@ -114,14 +112,14 @@ def analyze_stock_waves(symbol):
                 'duration': duration,
                 'direction': 'up' if direction_up else 'down',
                 'possible_waves': ','.join(possible_waves) if possible_waves else '',
-                **future_returns
+                **futurereturns
             }
             
             all_segments.append(segment)
     
     return all_segments
 
-def print_wave_stats(name, df, wave_type):
+def print_wavestats(name, df, wave_type):
     """打印浪型统计"""
     wave_df = df[df['possible_waves'].str.contains(wave_type, na=False)]
     
@@ -134,7 +132,7 @@ def print_wave_stats(name, df, wave_type):
     print(f"  价格变动范围: {wave_df['abs_change_pct'].min():.1f}% ~ {wave_df['abs_change_pct'].max():.1f}%")
     
     # 持续时间分布
-    print(f"  持续时间分布:")
+    print("  持续时间分布:")
     print(f"    <3天: {(wave_df['duration'] < 3).sum()} ({(wave_df['duration'] < 3).mean()*100:.1f}%)")
     print(f"    3-7天: {((wave_df['duration'] >= 3) & (wave_df['duration'] < 7)).sum()}")
     print(f"    7-15天: {((wave_df['duration'] >= 7) & (wave_df['duration'] < 15)).sum()}")
@@ -162,7 +160,7 @@ def main():
     conn = get_db_connection()
     sql = '''
     SELECT symbol, COUNT(*) as records
-    FROM market_data 
+    FROM marketdata 
     WHERE date >= '2018-01-01'
     GROUP BY symbol
     HAVING COUNT(*) >= 500
@@ -193,10 +191,10 @@ def main():
     print("=" * 90)
     
     # 各浪型分析
-    b_df = print_wave_stats("B浪", df, 'B')
-    w1_df = print_wave_stats("1浪", df, '1')
-    a_df = print_wave_stats("A浪", df, 'A')
-    w2_df = print_wave_stats("2浪", df, '2')
+    b_df = print_wavestats("B浪", df, 'B')
+    w1_df = print_wavestats("1浪", df, '1')
+    _adf = print_wavestats("A浪", df, 'A')
+    _w2df = print_wavestats("2浪", df, '2')
     
     # 保存数据
     output_file = 'tests/results/wave_segments_v2.csv'
@@ -209,14 +207,14 @@ def main():
     print("=" * 90)
     
     if len(b_df) > 0:
-        print(f"\nB浪特征:")
+        print("\nB浪特征:")
         print(f"  - 平均持续{b_df['duration'].mean():.1f}天，但分布很散")
         print(f"  - 反弹幅度{b_df['abs_change_pct'].mean():.1f}%±{b_df['abs_change_pct'].std():.1f}%")
         short_b = (b_df['duration'] < 3).sum()
         print(f"  - 有{short_b}个B浪(<3天)占比{short_b/len(b_df)*100:.1f}%，原验证条件(≥3天)会过滤掉")
     
     if len(w1_df) > 0:
-        print(f"\n1浪特征:")
+        print("\n1浪特征:")
         print(f"  - 平均持续{w1_df['duration'].mean():.1f}天")
         short_1 = (w1_df['duration'] < 3).sum()
         print(f"  - 有{short_1}个1浪(<3天)占比{short_1/len(w1_df)*100:.1f}%")

@@ -10,7 +10,7 @@ import pandas as pd
 import numpy as np
 
 # 读取数据
-df = pd.read_csv('tests/results/full_database_v2.csv')
+df = pd.read_csv('tests/results/fulldatabase_v2.csv')
 
 # 清理异常值
 for col in ['return_5d', 'return_10d', 'return_20d']:
@@ -25,8 +25,8 @@ w2_df = df[df['entry_type'] == '2'].copy()
 print(f"\n2浪信号总数: {len(w2_df)}")
 
 # 按验证状态分组
-w2_valid = w2_df[w2_df['wave1_valid'] == True]
-w2_invalid = w2_df[w2_df['wave1_valid'] == False]
+w2_valid = w2_df[w2_df['wave1_valid']]
+w2_invalid = w2_df[~w2_df['wave1_valid']]
 
 print(f"\n验证通过: {len(w2_valid)} 个")
 print(f"验证失败: {len(w2_invalid)} 个")
@@ -76,15 +76,15 @@ for conf_range, group in w2_df.groupby('conf_bin'):
     total_count = len(group)
     valid_rate = valid_count / total_count * 100 if total_count > 0 else 0
     
-    valid_returns = group[group['wave1_valid'] == True]['return_5d'].dropna()
-    invalid_returns = group[group['wave1_valid'] == False]['return_5d'].dropna()
+    validreturns = group[group['wave1_valid']]['return_5d'].dropna()
+    invalidreturns = group[~group['wave1_valid']]['return_5d'].dropna()
     
     print(f"\n置信度 {conf_range} ({total_count} 个):")
     print(f"  验证通过率: {valid_rate:.1f}%")
-    if len(valid_returns) > 0:
-        print(f"  验证通过收益: {valid_returns.mean():.2f}% ({len(valid_returns)} 个)")
-    if len(invalid_returns) > 0:
-        print(f"  验证失败收益: {invalid_returns.mean():.2f}% ({len(invalid_returns)} 个)")
+    if len(validreturns) > 0:
+        print(f"  验证通过收益: {validreturns.mean():.2f}% ({len(validreturns)} 个)")
+    if len(invalidreturns) > 0:
+        print(f"  验证失败收益: {invalidreturns.mean():.2f}% ({len(invalidreturns)} 个)")
 
 # 可能原因分析
 print("\n" + "=" * 80)

@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 from typing import List, Dict, Optional, Tuple, Any
 from dataclasses import dataclass, field
-from enum import Enum, auto
+from enum import Enum
 
 
 class TriangleType(Enum):
@@ -252,7 +252,7 @@ class SubWaveDetector:
         # 对父级波浪内部进行小级别波浪分析
         from .elliott_wave import ElliottWaveAnalyzer
         
-        analyzer = ElliottWaveAnalyzer(
+        _analyzer = ElliottWaveAnalyzer(
             atr_period=max(5, 14 - current_level * 4),  # 小周期用更短ATR
             atr_mult=0.3 + current_level * 0.1,         # 小周期用更小倍数
             confidence_threshold=0.4

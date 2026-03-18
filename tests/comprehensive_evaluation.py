@@ -2,7 +2,6 @@
 综合评估报告 - 波浪策略回测（2017-2024）
 """
 import pandas as pd
-import numpy as np
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
@@ -15,27 +14,27 @@ print("策略: 8%止损 + 8%移动止盈")
 print("="*80)
 
 # 加载数据
-tech_df = pd.read_csv('tests/results/tech_trade_details_20260318_1053.csv')
-tech_summary = pd.read_csv('tests/results/tech_backtest_20260318_1053.csv')
+tech_df = pd.read_csv('tests/results/techtrade_details_20260318_1053.csv')
+techsummary = pd.read_csv('tests/results/tech_backtest_20260318_1053.csv')
 
 # 尝试加载食品饮料数据
 try:
     fb_df = pd.read_csv('tests/results/trade_details_batch_30_20260318_1035.csv')
-    fb_summary = pd.read_csv('tests/results/batch_backtest_30_70_20260318_1035.csv')
+    fbsummary = pd.read_csv('tests/results/batch_backtest_30_70_20260318_1035.csv')
     has_fb = True
-except:
+except Exception:
     has_fb = False
 
 # ==================== 一、整体业绩评估 ====================
 print("\n\n🏆 一、整体业绩评估")
 print("="*80)
 
-tech_total_return = tech_summary['return'].mean()
-tech_win_rate = tech_summary['win_rate'].mean()
-tech_sharpe = tech_summary['sharpe'].mean()
-tech_max_dd = tech_summary['max_dd'].mean()
-tech_profitable = (tech_summary['return'] > 0).sum()
-tech_total = len(tech_summary)
+tech_total_return = techsummary['return'].mean()
+tech_win_rate = techsummary['win_rate'].mean()
+tech_sharpe = techsummary['sharpe'].mean()
+tech_max_dd = techsummary['max_dd'].mean()
+tech_profitable = (techsummary['return'] > 0).sum()
+tech_total = len(techsummary)
 
 print(f"""
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -52,12 +51,12 @@ print(f"""
 
 # 与食品饮料对比
 if has_fb:
-    fb_total_return = fb_summary['return'].mean()
-    fb_win_rate = fb_summary['win_rate'].mean()
-    fb_sharpe = fb_summary['sharpe'].mean()
-    fb_max_dd = fb_summary['max_dd'].mean()
-    fb_profitable = (fb_summary['return'] > 0).sum()
-    fb_total = len(fb_summary)
+    fb_total_return = fbsummary['return'].mean()
+    fb_win_rate = fbsummary['win_rate'].mean()
+    fb_sharpe = fbsummary['sharpe'].mean()
+    fb_max_dd = fbsummary['max_dd'].mean()
+    fb_profitable = (fbsummary['return'] > 0).sum()
+    fb_total = len(fbsummary)
     
     print(f"""
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -91,15 +90,15 @@ print("\n\n⚙️ 二、策略核心机制评估")
 print("="*80)
 
 # 移动止盈效果
-trailing_trades = tech_df[tech_df['exit_reason'].str.contains('trailing_stop', na=False)]
-stop_loss_trades = tech_df[tech_df['exit_reason'] == 'stop_loss']
+trailingtrades = tech_df[tech_df['exit_reason'].str.contains('trailing_stop', na=False)]
+stop_losstrades = tech_df[tech_df['exit_reason'] == 'stop_loss']
 
-trailing_pct = len(trailing_trades) / len(tech_df) * 100
-trailing_avg_return = trailing_trades['pnl_pct'].mean()
-trailing_win_rate = (trailing_trades['pnl_pct'] > 0).mean()
+trailing_pct = len(trailingtrades) / len(tech_df) * 100
+trailing_avg_return = trailingtrades['pnl_pct'].mean()
+trailing_win_rate = (trailingtrades['pnl_pct'] > 0).mean()
 
-stop_pct = len(stop_loss_trades) / len(tech_df) * 100
-stop_avg_return = stop_loss_trades['pnl_pct'].mean()
+stop_pct = len(stop_losstrades) / len(tech_df) * 100
+stop_avg_return = stop_losstrades['pnl_pct'].mean()
 
 print(f"""
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -107,16 +106,16 @@ print(f"""
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
 │  📈 移动止盈交易                                                        │
-│     • 占比:      {trailing_pct:5.1f}% ({len(trailing_trades)}/{len(tech_df)} 笔)                          │
+│     • 占比:      {trailing_pct:5.1f}% ({len(trailingtrades)}/{len(tech_df)} 笔)                          │
 │     • 平均收益:  {trailing_avg_return:+6.2f}%                                        │
 │     • 胜率:      {trailing_win_rate:5.1%}                                       │
-│     • 平均持仓:  {trailing_trades['holding_days'].mean():.0f}天                                        │
+│     • 平均持仓:  {trailingtrades['holding_days'].mean():.0f}天                                        │
 │                                                                         │
 │  📉 止损交易                                                            │
-│     • 占比:      {stop_pct:5.1f}% ({len(stop_loss_trades)}/{len(tech_df)} 笔)                          │
+│     • 占比:      {stop_pct:5.1f}% ({len(stop_losstrades)}/{len(tech_df)} 笔)                          │
 │     • 平均收益:  {stop_avg_return:+6.2f}%                                        │
 │     • 胜率:      0.0% (止损定义)                                          │
-│     • 平均持仓:  {stop_loss_trades['holding_days'].mean():.0f}天                                        │
+│     • 平均持仓:  {stop_losstrades['holding_days'].mean():.0f}天                                        │
 │                                                                         │
 │  💡 盈亏比: {abs(trailing_avg_return/stop_avg_return):.2f}:1                                              │
 │                                                                         │
@@ -124,8 +123,8 @@ print(f"""
 """)
 
 # 入场波浪效果
-wave2_trades = tech_df[tech_df['entry_wave'] == 2]
-wavec_trades = tech_df[tech_df['entry_wave'] == 'C']
+wave2trades = tech_df[tech_df['entry_wave'] == 2]
+wavectrades = tech_df[tech_df['entry_wave'] == 'C']
 
 print(f"""
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -133,18 +132,18 @@ print(f"""
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
 │  🌊 Wave 2 入场 (趋势跟踪)                                              │
-│     • 占比:      {len(wave2_trades)/len(tech_df)*100:5.1f}% ({len(wave2_trades)} 笔)                              │
-│     • 平均收益:  {wave2_trades['pnl_pct'].mean():+6.2f}%                                       │
-│     • 胜率:      {(wave2_trades['pnl_pct'] > 0).mean():5.1%}                                      │
-│     • 平均持仓:  {wave2_trades['holding_days'].mean():.0f}天                                       │
+│     • 占比:      {len(wave2trades)/len(tech_df)*100:5.1f}% ({len(wave2trades)} 笔)                              │
+│     • 平均收益:  {wave2trades['pnl_pct'].mean():+6.2f}%                                       │
+│     • 胜率:      {(wave2trades['pnl_pct'] > 0).mean():5.1%}                                      │
+│     • 平均持仓:  {wave2trades['holding_days'].mean():.0f}天                                       │
 │                                                                         │
 │  🌊 Wave C 入场 (反转抄底)                                              │
-│     • 占比:      {len(wavec_trades)/len(tech_df)*100:5.1f}% ({len(wavec_trades)} 笔)                              │
-│     • 平均收益:  {wavec_trades['pnl_pct'].mean():+6.2f}%                                       │
-│     • 胜率:      {(wavec_trades['pnl_pct'] > 0).mean():5.1%}                                      │
-│     • 平均持仓:  {wavec_trades['holding_days'].mean():.0f}天                                       │
+│     • 占比:      {len(wavectrades)/len(tech_df)*100:5.1f}% ({len(wavectrades)} 笔)                              │
+│     • 平均收益:  {wavectrades['pnl_pct'].mean():+6.2f}%                                       │
+│     • 胜率:      {(wavectrades['pnl_pct'] > 0).mean():5.1%}                                      │
+│     • 平均持仓:  {wavectrades['holding_days'].mean():.0f}天                                       │
 │                                                                         │
-│  💡 Wave 2 收益是 Wave C 的 {wave2_trades['pnl_pct'].mean()/wavec_trades['pnl_pct'].mean():.1f} 倍                              │
+│  💡 Wave 2 收益是 Wave C 的 {wave2trades['pnl_pct'].mean()/wavectrades['pnl_pct'].mean():.1f} 倍                              │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 """)
@@ -154,9 +153,9 @@ print("\n\n⚖️ 三、风险收益评估")
 print("="*80)
 
 # 计算综合指标
-tech_returns = tech_summary['return']
-winners = tech_returns[tech_returns > 0]
-losers = tech_returns[tech_returns <= 0]
+techreturns = techsummary['return']
+winners = techreturns[techreturns > 0]
+losers = techreturns[techreturns <= 0]
 
 profit_factor = abs(winners.sum() / losers.sum()) if len(losers) > 0 else float('inf')
 calmar = tech_total_return / tech_max_dd if tech_max_dd > 0 else 0
@@ -168,10 +167,10 @@ print(f"""
 │                                                                         │
 │  📊 基础指标                                                            │
 │     • 平均收益率:     {tech_total_return:+8.2f}%                                    │
-│     • 收益率标准差:   {tech_returns.std():8.2f}%                                    │
-│     • 收益中位数:     {tech_returns.median():+8.2f}%                                    │
-│     • 最好收益:       {tech_returns.max():+8.2f}% ({tech_summary.loc[tech_returns.idxmax(), 'symbol']})                    │
-│     • 最差收益:       {tech_returns.min():+8.2f}% ({tech_summary.loc[tech_returns.idxmin(), 'symbol']})                    │
+│     • 收益率标准差:   {techreturns.std():8.2f}%                                    │
+│     • 收益中位数:     {techreturns.median():+8.2f}%                                    │
+│     • 最好收益:       {techreturns.max():+8.2f}% ({techsummary.loc[techreturns.idxmax(), 'symbol']})                    │
+│     • 最差收益:       {techreturns.min():+8.2f}% ({techsummary.loc[techreturns.idxmin(), 'symbol']})                    │
 │                                                                         │
 │  📈 风险调整指标                                                        │
 │     • Sharpe比率:     {tech_sharpe:8.2f}                                      │
@@ -180,7 +179,7 @@ print(f"""
 │                                                                         │
 │  📉 风险指标                                                            │
 │     • 平均最大回撤:   {tech_max_dd:8.2f}%                                    │
-│     • 最大回撤范围:   {tech_summary['max_dd'].min():.2f}% ~ {tech_summary['max_dd'].max():.2f}%                       │
+│     • 最大回撤范围:   {techsummary['max_dd'].min():.2f}% ~ {techsummary['max_dd'].max():.2f}%                       │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 """)
@@ -345,7 +344,7 @@ print("""
 print("\n\n📝 七、总体评价")
 print("="*80)
 
-print(f"""
+print("""
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                           总体评分                                       │
 ├─────────────────────────────────────────────────────────────────────────┤

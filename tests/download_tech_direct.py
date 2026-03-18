@@ -118,7 +118,7 @@ def get_daily_kline_ths(symbol, start_date='20170101', end_date='20241231'):
                     else:
                         record['amount'] = 0
                     records.append(record)
-                except:
+                except Exception:
                     continue
         
         if not records:
@@ -128,7 +128,7 @@ def get_daily_kline_ths(symbol, start_date='20170101', end_date='20241231'):
         df['symbol'] = symbol
         
         return df[['symbol', 'date', 'open', 'high', 'low', 'close', 'volume', 'amount']]
-    except Exception as e:
+    except Exception:
         return None
 
 def main():
@@ -146,7 +146,7 @@ def main():
     # 去重
     all_stocks = list(set(all_stocks))
     
-    print(f"\n股票列表:")
+    print("\n股票列表:")
     print(f"  大盘股: {len(TECH_STOCKS['large_cap'])} 只")
     print(f"  中盘股: {len(TECH_STOCKS['mid_cap'])} 只")
     print(f"  小盘股: {len(TECH_STOCKS['small_cap'])} 只")
@@ -175,7 +175,7 @@ def main():
         
         if df is not None and not df.empty:
             try:
-                records = db_manager.pg.save_market_data(df)
+                db_manager.pg.save_marketdata(df)
                 print(f"✅ {len(df)} 条")
                 success_count += 1
                 total_records += len(df)
@@ -203,7 +203,7 @@ def main():
     print(f"成功: {success_count} 只 | 失败: {fail_count} 只")
     print(f"总记录: {total_records:,} 条")
     print()
-    print(f"市值分布:")
+    print("市值分布:")
     print(f"  大盘股: {large_success}/{len(TECH_STOCKS['large_cap'])} 只")
     print(f"  中盘股: {mid_success}/{len(TECH_STOCKS['mid_cap'])} 只")
     print(f"  小盘股: {small_success}/{len(TECH_STOCKS['small_cap'])} 只")
@@ -212,7 +212,7 @@ def main():
     try:
         result = db_manager.pg.execute("""
             SELECT symbol, MIN(date) as start_date, MAX(date) as end_date, COUNT(*) as records
-            FROM market_data 
+            FROM marketdata 
             WHERE symbol IN %s
             GROUP BY symbol
             ORDER BY records DESC

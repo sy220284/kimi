@@ -17,7 +17,7 @@ session.headers.update({
 })
 
 
-def parse_js_data(js_text: str) -> pd.DataFrame:
+def parse_jsdata(js_text: str) -> pd.DataFrame:
     """解析同花顺JS数据"""
     pattern = r'quotebridge_v4_line_[^(]+\((.*)\)'
     match = re.search(pattern, js_text)
@@ -65,15 +65,15 @@ def parse_js_data(js_text: str) -> pd.DataFrame:
     return df.sort_values('date').reset_index(drop=True)
 
 
-def fetch_data(code: str) -> pd.DataFrame:
+def fetchdata(code: str) -> pd.DataFrame:
     """获取数据"""
     url = f"{BASE_URL}/{code}/01/last.js"
     stock_code = code.replace('hs_', '')
     try:
         resp = session.get(url, headers={'Referer': f'http://stockpage.10jqka.com.cn/{stock_code}/'}, timeout=30)
         if resp.status_code == 200:
-            return parse_js_data(resp.text)
-    except:
+            return parse_jsdata(resp.text)
+    except Exception:
         pass
     return pd.DataFrame()
 
@@ -97,7 +97,7 @@ def main():
     
     stock_results = []
     for code, name in stocks:
-        df = fetch_data(code)
+        df = fetchdata(code)
         if not df.empty:
             days = len(df)
             start_date = df['date'].min()
@@ -115,8 +115,8 @@ def main():
     print(stock_df.to_string(index=False))
     
     # 检查详细字段
-    print(f"\n📋 数据字段详情（以茅台为例）:")
-    df_sample = fetch_data("hs_600519")
+    print("\n📋 数据字段详情（以茅台为例）:")
+    df_sample = fetchdata("hs_600519")
     print(f"   字段列表: {list(df_sample.columns)}")
     print(f"   字段数: {len(df_sample.columns)}")
     print("\n   第一条数据示例:")
@@ -141,7 +141,7 @@ def main():
     
     index_results = []
     for code, name in indices:
-        df = fetch_data(code)
+        df = fetchdata(code)
         status = "✓ 可用" if not df.empty else "✗ 不可用"
         days = len(df) if not df.empty else 0
         index_results.append({
@@ -174,7 +174,7 @@ def main():
     
     industry_results = []
     for code, name in industries:
-        df = fetch_data(code)
+        df = fetchdata(code)
         status = "✓ 可用" if not df.empty else "✗ 不可用"
         days = len(df) if not df.empty else 0
         industry_results.append({
@@ -202,18 +202,18 @@ def main():
         try:
             resp = session.get(url, headers={'Referer': 'http://stockpage.10jqka.com.cn/600519/'}, timeout=30)
             if resp.status_code == 200:
-                df = parse_js_data(resp.text)
+                df = parse_jsdata(resp.text)
                 print(f"   {name}({ktype}): ✓ {len(df)} 条数据")
             else:
                 print(f"   {name}({ktype}): ✗ HTTP {resp.status_code}")
-        except Exception as e:
+        except Exception:
             print(f"   {name}({ktype}): ✗ 错误")
     
     # ========== 5. 数据质量检查 ==========
     print("\n\n🔍 5. 数据质量检查（茅台）")
     print("-" * 70)
     
-    df = fetch_data("hs_600519")
+    df = fetchdata("hs_600519")
     if not df.empty:
         # 检查是否有缺失值
         missing = df.isnull().sum()

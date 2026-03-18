@@ -1,16 +1,15 @@
 """
 智能体框架 - 波浪分析师智能体 (简化版)
 """
-from typing import Any, Dict, Optional
-from datetime import datetime
+from typing import Optional
 from pathlib import Path
 import sys
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from .base_agent import BaseAgent, AgentInput, AgentOutput, AnalysisType, AgentState
-from analysis.wave.elliott_wave import ElliottWaveAnalyzer, WavePattern, WaveType
+from .base_agent import BaseAgent, AnalysisType
+from analysis.wave.elliott_wave import ElliottWaveAnalyzer
 
 
 class WaveAnalystAgent(BaseAgent):
@@ -78,7 +77,7 @@ def main():
             result = agent.analyze(df)
             print(f"  ✅ 发现 {len(result)} 个波浪模式")
         else:
-            print(f"  ⚠️ 无数据")
+            print("  ⚠️ 无数据")
 
 
 if __name__ == '__main__':

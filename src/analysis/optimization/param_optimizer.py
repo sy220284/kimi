@@ -6,10 +6,8 @@ Phase 3+5 增强: 数据驱动的参数调优
 import pandas as pd
 import numpy as np
 from typing import List, Dict, Optional, Tuple, Any
-from dataclasses import dataclass, field
-from datetime import datetime
+from dataclasses import dataclass
 import random
-from concurrent.futures import ProcessPoolExecutor, as_completed
 import json
 import hashlib
 
@@ -250,7 +248,7 @@ class ParameterOptimizer:
             List[OptimizationResult]
         """
         print(f"\n{'='*70}")
-        print(f"🔧 开始参数优化")
+        print("🔧 开始参数优化")
         print(f"{'='*70}")
         print(f"搜索空间: {len(self.SEARCH_SPACE)} 个参数")
         print(f"迭代次数: {n_iterations}")
@@ -264,7 +262,7 @@ class ParameterOptimizer:
             # 加载数据
             df = data_loader(symbol)
             if df is None or len(df) < 100:
-                print(f"  数据不足，跳过")
+                print("  数据不足，跳过")
                 continue
             
             # 分割训练/验证集
@@ -318,7 +316,7 @@ class ParameterOptimizer:
         验证集测试 - 防止过拟合
         """
         print(f"\n{'='*70}")
-        print(f"🧪 验证集测试 (防过拟合)")
+        print("🧪 验证集测试 (防过拟合)")
         print(f"{'='*70}")
         
         validation_scores = []

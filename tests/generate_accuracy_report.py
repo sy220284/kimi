@@ -9,12 +9,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
-import numpy as np
 import json
 
 # 读取特征库
 with open('tests/results/wave_feature_library.json', 'r') as f:
-    feature_stats = json.load(f)
+    featurestats = json.load(f)
 
 # 读取批量分析结果
 batch_df = pd.read_csv('tests/results/batch_wave_analysis.csv')
@@ -27,7 +26,7 @@ print("=" * 90)
 print("\n【一、事后真实浪型特征库】")
 print("基于230个完整周期的统计结果：\n")
 
-for wave_type, stats in feature_stats.items():
+for wave_type, stats in featurestats.items():
     print(f"【{wave_type}】 样本{stats['sample_count']}个")
     print(f"  持续时间: {stats['avg_duration']:.1f} ± {stats['duration_std']:.1f} 天")
     print(f"  价格变动: {stats['avg_price_change']:.2f}% ± {stats['price_change_std']:.2f}%")
@@ -67,13 +66,13 @@ print("\n【三、准确率分析】")
 print("由于缺少一一对应的真实标注，我们用胜率作为准确率代理指标：\n")
 
 # 总体准确率
-total_signals = len(batch_df)
+totalsignals = len(batch_df)
 correct_5d = (batch_df['return_5d'] > 0).sum()
 correct_20d = (batch_df['return_20d'] > 0).sum()
 
-print(f"总体信号数: {total_signals}")
-print(f"5天后正确(盈利): {correct_5d} ({correct_5d/total_signals*100:.1f}%)")
-print(f"20天后正确(盈利): {correct_20d} ({correct_20d/total_signals*100:.1f}%)")
+print(f"总体信号数: {totalsignals}")
+print(f"5天后正确(盈利): {correct_5d} ({correct_5d/totalsignals*100:.1f}%)")
+print(f"20天后正确(盈利): {correct_20d} ({correct_20d/totalsignals*100:.1f}%)")
 
 print("\n按浪型分组准确率:")
 for wave_type in ['C', '2']:
@@ -96,8 +95,8 @@ print("-" * 80)
 print(f"{'指标':<20} {'真实C浪':<15} {'识别C浪':<15} {'差异':<15}")
 print("-" * 80)
 
-if 'C浪' in feature_stats:
-    real_c = feature_stats['C浪']
+if 'C浪' in featurestats:
+    real_c = featurestats['C浪']
     detected_c = batch_df[batch_df['entry_type'] == 'C']
     
     # 价格变动对比
@@ -124,10 +123,10 @@ print("   改进: 增加信号有效期窗口(已实现3天窗口)")
 
 print("\n2. 浪型混淆问题:")
 print("   现象: C浪和2浪特征相似，容易混淆")
-print("   真实C浪: 持续时间", feature_stats.get('C浪', {}).get('avg_duration', 'N/A'), 
-      "天, 幅度", feature_stats.get('C浪', {}).get('avg_price_change', 'N/A'), "%")
-print("   真实2浪: 持续时间", feature_stats.get('2浪', {}).get('avg_duration', 'N/A'),
-      "天, 幅度", feature_stats.get('2浪', {}).get('avg_price_change', 'N/A'), "%")
+print("   真实C浪: 持续时间", featurestats.get('C浪', {}).get('avg_duration', 'N/A'), 
+      "天, 幅度", featurestats.get('C浪', {}).get('avg_price_change', 'N/A'), "%")
+print("   真实2浪: 持续时间", featurestats.get('2浪', {}).get('avg_duration', 'N/A'),
+      "天, 幅度", featurestats.get('2浪', {}).get('avg_price_change', 'N/A'), "%")
 print("   改进: 根据持续时间和幅度设置不同阈值")
 
 print("\n3. 假信号问题:")
@@ -140,24 +139,24 @@ print("\n【六、优化建议】")
 print("\n基于特征库的优化方向:")
 
 print("\n1. 时间特征优化:")
-if 'C浪' in feature_stats and '2浪' in feature_stats:
-    c_duration = feature_stats['C浪']['avg_duration']
-    c2_duration = feature_stats['2浪']['avg_duration']
+if 'C浪' in featurestats and '2浪' in featurestats:
+    c_duration = featurestats['C浪']['avg_duration']
+    c2_duration = featurestats['2浪']['avg_duration']
     print(f"   - C浪平均持续{c_duration:.0f}天，2浪平均持续{c2_duration:.0f}天")
     print(f"   - 建议: C浪检测使用{c_duration*0.5:.0f}-{c_duration*1.5:.0f}天窗口")
     print(f"   - 建议: 2浪检测使用{c2_duration*0.5:.0f}-{c2_duration*1.5:.0f}天窗口")
 
 print("\n2. 幅度特征优化:")
-if 'C浪' in feature_stats:
-    c_change = feature_stats['C浪']['avg_price_change']
-    c_std = feature_stats['C浪']['price_change_std']
+if 'C浪' in featurestats:
+    c_change = featurestats['C浪']['avg_price_change']
+    c_std = featurestats['C浪']['price_change_std']
     print(f"   - C浪平均幅度{c_change:.1f}%±{c_std:.1f}%")
     print(f"   - 建议: C浪回撤幅度阈值设为{c_change-c_std:.1f}%-{c_change+c_std:.1f}%")
 
 print("\n3. 成交量特征优化:")
-if 'C浪' in feature_stats:
-    c_expand = feature_stats['C浪']['volume_expansion_pct']
-    c_contract = feature_stats['C浪']['volume_contraction_pct']
+if 'C浪' in featurestats:
+    c_expand = featurestats['C浪']['volume_expansion_pct']
+    c_contract = featurestats['C浪']['volume_contraction_pct']
     print(f"   - C浪成交量扩张{c_expand:.1f}%，收缩{c_contract:.1f}%")
     print(f"   - 建议: C浪结束信号配合成交量收缩({c_contract:.0f}%以上概率)")
 

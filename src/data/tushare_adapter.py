@@ -1,10 +1,9 @@
 """
 数据采集模块 - Tushare数据源适配器
 """
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 import pandas as pd
 import tushare as ts
-from datetime import datetime
 from .data_collector import DataSourceAdapter, DataSourceType, DataFetchError
 
 

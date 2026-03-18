@@ -3,23 +3,30 @@
 支持PostgreSQL、Redis、MongoDB
 """
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 from contextlib import contextmanager
 import json
 
 # PostgreSQL
-import psycopg2
-from psycopg2 import sql
 from psycopg2.pool import ThreadedConnectionPool
 from psycopg2.extras import RealDictCursor
 
 # Redis
-from redis import Redis, ConnectionPool as RedisConnectionPool
+try:
+    from redis import Redis, ConnectionPool as RedisConnectionPool
+except ImportError:
+    Redis = None
+    RedisConnectionPool = None
 
-# MongoDB
-from pymongo import MongoClient
-from pymongo.database import Database
-from pymongo.collection import Collection
+# MongoDB (可选依赖)
+try:
+    from pymongo import MongoClient
+    from pymongo.database import Database
+    from pymongo.collection import Collection
+except ImportError:
+    MongoClient = None
+    Database = None
+    Collection = None
 
 
 class DatabaseError(Exception):
@@ -313,6 +320,9 @@ class RedisConnector(DatabaseConnector):
             password: 密码
             max_connections: 最大连接数
         """
+        if Redis is None:
+            raise ImportError("redis not installed. Run: pip install redis")
+        
         self.host = host
         self.port = port
         self.db = db
@@ -477,6 +487,9 @@ class MongoDBConnector(DatabaseConnector):
             username: 用户名
             password: 密码
         """
+        if MongoClient is None:
+            raise ImportError("pymongo not installed. Run: pip install pymongo")
+        
         self.host = host
         self.port = port
         self.database_name = database

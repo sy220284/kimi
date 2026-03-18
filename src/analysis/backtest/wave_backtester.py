@@ -4,19 +4,18 @@
 """
 import pandas as pd
 import numpy as np
-from typing import List, Dict, Optional, Tuple, Any
+from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
 from enum import Enum
 
 # 导入 UnifiedWaveAnalyzer
 try:
-    from ..wave.unified_analyzer import UnifiedWaveAnalyzer, UnifiedWaveSignal, WaveEntryType
+    from ..wave.unified_analyzer import UnifiedWaveAnalyzer, UnifiedWaveSignal
 except ImportError:
     import sys
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).parent.parent))
-    from wave.unified_analyzer import UnifiedWaveAnalyzer, UnifiedWaveSignal, WaveEntryType
+    from wave.unified_analyzer import UnifiedWaveAnalyzer, UnifiedWaveSignal
 
 
 class TradeAction(Enum):
@@ -76,7 +75,7 @@ class Trade:
                 exit_dt = datetime.strptime(self.exit_date, '%Y-%m-%d')
                 entry_dt = datetime.strptime(self.entry_date, '%Y-%m-%d')
                 holding_days = (exit_dt - entry_dt).days
-            except:
+            except Exception:
                 holding_days = None
         
         return {
@@ -399,7 +398,7 @@ class WaveStrategy:
             distance_to_target = abs(trade.target_price - price) / price
             
             if distance_to_target <= self.target_proximity_pct:
-                self.execute_trade(symbol, date, price, TradeAction.CLOSE, data_idx=data_idx, is_limit_down=is_limit_down, reason=f"target_proximity")
+                self.execute_trade(symbol, date, price, TradeAction.CLOSE, data_idx=data_idx, is_limit_down=is_limit_down, reason="target_proximity")
                 return f"target_proximity({trade.target_price:.2f})"
             
             if price >= trade.target_price:
@@ -433,6 +432,9 @@ class WaveStrategy:
         recent_df['tr'] = recent_df[['high_low', 'high_close', 'low_close']].max(axis=1)
         atr = recent_df['tr'].mean()
         atr_pct = atr / recent_df['close'].mean() if recent_df['close'].mean() > 0 else 0
+        
+        # 综合波动率: 结合日收益率标准差和ATR百分比
+        combined_volatility = max(annual_volatility, atr_pct)
         
         # 便捷函数
         return max(combined_volatility, 0.10)
@@ -492,6 +494,29 @@ class WaveBacktester:
             BacktestResult
         """
         print(f"\n开始回测 {symbol}...")
+        
+        # 空数据检查
+        if df is None or df.empty:
+            print("⚠️ 数据为空，跳过回测")
+            return BacktestResult(
+                symbol=symbol,
+                start_date="",
+                end_date="",
+                total_trades=0,
+                winning_trades=0,
+                losing_trades=0,
+                win_rate=0.0,
+                total_return=0.0,
+                total_return_pct=0.0,
+                avg_return_per_trade=0.0,
+                max_drawdown=0.0,
+                max_drawdown_pct=0.0,
+                sharpe_ratio=0.0,
+                profit_factor=0.0,
+                trades=[],
+                equity_curve=[]
+            )
+        
         print(f"数据范围: {df['date'].min()} ~ {df['date'].max()}, {len(df)} 条")
         
         df = df.copy()
@@ -692,27 +717,27 @@ class WaveBacktester:
         lines.append(f"📊 {result.symbol} 回测报告")
         lines.append('='*60)
         
-        lines.append(f"\n【回测周期】")
+        lines.append("\n【回测周期】")
         lines.append(f"  {result.start_date} ~ {result.end_date}")
         
-        lines.append(f"\n【交易统计】")
+        lines.append("\n【交易统计】")
         lines.append(f"  总交易次数: {result.total_trades}")
         lines.append(f"  盈利次数: {result.winning_trades}")
         lines.append(f"  亏损次数: {result.losing_trades}")
         lines.append(f"  胜率: {result.win_rate:.1%}")
         
-        lines.append(f"\n【收益表现】")
+        lines.append("\n【收益表现】")
         lines.append(f"  总收益率: {result.total_return_pct:.2f}%")
         lines.append(f"  平均每笔收益: {result.avg_return_per_trade:.2f}%")
         lines.append(f"  最大回撤: {result.max_drawdown_pct:.2f}%")
         
-        lines.append(f"\n【风险指标】")
+        lines.append("\n【风险指标】")
         lines.append(f"  Sharpe比率: {result.sharpe_ratio:.2f}")
         lines.append(f"  盈亏比: {result.profit_factor:.2f}")
         
         # 最近5笔交易
         if result.trades:
-            lines.append(f"\n【最近交易】")
+            lines.append("\n【最近交易】")
             for trade in result.trades[-5:]:
                 status_icon = "✅" if trade.pnl > 0 else "❌" if trade.pnl < 0 else "⏸️"
                 lines.append(f"  {status_icon} {trade.entry_date} 买入¥{trade.entry_price:.2f} -> "

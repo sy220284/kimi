@@ -5,7 +5,6 @@
 import sys
 sys.path.insert(0, 'src')
 
-import pandas as pd
 from data import get_stock_data
 from analysis.wave import EnhancedWaveAnalyzer
 from analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy
@@ -38,7 +37,7 @@ for symbol, name in test_stocks:
         (712, 772, '最近60天')
     ]
     
-    print(f"\n分段浪型识别:")
+    print("\n分段浪型识别:")
     for start, end, label in test_segments:
         segment_df = df.iloc[start:end].copy()
         result = analyzer.analyze(symbol, segment_df)
@@ -51,7 +50,7 @@ for symbol, name in test_stocks:
             print(f"  {label}: 未识别")
     
     # 运行完整回测
-    print(f"\n回测结果:")
+    print("\n回测结果:")
     strategy = WaveStrategy(
         initial_capital=1000000,
         position_size=0.2,
@@ -69,12 +68,12 @@ for symbol, name in test_stocks:
     
     result = backtester.run(symbol, df, reanalyze_every=30)
     
-    print(f"  交易: {result.total_trades}次 | 胜率: {result.win_rate:.1%} | 收益: {result.total_return_pct:+.1f}%")
+    print(f"  交易: {result.totaltrades}次 | 胜率: {result.win_rate:.1%} | 收益: {result.total_return_pct:+.1f}%")
     
     if result.trades:
         from collections import Counter
         wave_dist = Counter([t.entry_wave for t in result.trades if t.entry_wave])
-        print(f"\n  买入浪号分布:")
+        print("\n  买入浪号分布:")
         for wave, count in sorted(wave_dist.items(), key=lambda x: str(x[0])):
             print(f"    浪{wave}: {count}次")
 

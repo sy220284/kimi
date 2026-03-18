@@ -7,11 +7,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
+from datetime import timedelta
 from data import get_db_manager
 
-def get_stock_data_after_exit(symbol, exit_date, days=60):
+def get_stockdata_afterexit(symbol, exit_date, days=60):
     """获取卖出后的股价数据"""
     try:
         db_manager = get_db_manager()
@@ -23,7 +22,7 @@ def get_stock_data_after_exit(symbol, exit_date, days=60):
         # 查询后续数据
         query = """
         SELECT date, close, high, low
-        FROM market_data
+        FROM marketdata
         WHERE symbol = %s AND date > %s AND date <= %s
         ORDER BY date
         """
@@ -37,7 +36,7 @@ def get_stock_data_after_exit(symbol, exit_date, days=60):
         print(f"  获取数据失败 {symbol}: {e}")
         return None
 
-def analyze_profitable_trades():
+def analyze_profitabletrades():
     """分析盈利交易卖出后的走势"""
     
     # 读取交易明细
@@ -79,7 +78,7 @@ def analyze_profitable_trades():
         entry_wave = row['entry_wave']
         
         # 获取后续数据 - 确保symbol是字符串
-        df_after = get_stock_data_after_exit(str(symbol), exit_date, days=60)
+        df_after = get_stockdata_afterexit(str(symbol), exit_date, days=60)
         
         if df_after is not None and len(df_after) > 0:
             # 计算不同时间点的涨跌幅
@@ -142,7 +141,7 @@ def analyze_profitable_trades():
     print(f"{'='*70}")
     
     # 总体分类统计
-    print(f"\n卖出决策判断 (基于20天走势):")
+    print("\n卖出决策判断 (基于20天走势):")
     for cls in ['sell_too_early', 'sell_right', 'consolidation']:
         count = (df_results['classification'] == cls).sum()
         pct = count / len(df_results) * 100
@@ -150,7 +149,7 @@ def analyze_profitable_trades():
         print(f"  {cls}: {count}笔 ({pct:.1f}%), 卖出时平均收益 {avg_profit:.2f}%")
     
     # 按卖出原因分析
-    print(f"\n按卖出原因分析:")
+    print("\n按卖出原因分析:")
     for reason in df_results['exit_reason'].unique():
         group = df_results[df_results['exit_reason'] == reason]
         early_pct = (group['classification'] == 'sell_too_early').sum() / len(group) * 100
@@ -163,7 +162,7 @@ def analyze_profitable_trades():
         print(f"    20天后平均涨跌: {avg_20d:+.2f}%")
     
     # 按买入浪型分析
-    print(f"\n按买入浪型分析:")
+    print("\n按买入浪型分析:")
     for wave in df_results['entry_wave'].unique():
         if pd.isna(wave):
             continue
@@ -185,7 +184,7 @@ def analyze_profitable_trades():
     
     # 卖飞最严重的
     sell_early = df_results[df_results['classification'] == 'sell_too_early'].nlargest(5, 'change_20d')
-    print(f"\n🏃 卖飞最严重 (卖出后继续大涨):")
+    print("\n🏃 卖飞最严重 (卖出后继续大涨):")
     for _, row in sell_early.iterrows():
         print(f"  {row['symbol']} @ {row['exit_date'][:10]}")
         print(f"    卖出收益: {row['pnl_pct']:+.2f}%, 卖出原因: {row['exit_reason']}")
@@ -193,18 +192,18 @@ def analyze_profitable_trades():
     
     # 卖对最明显的
     sell_right = df_results[df_results['classification'] == 'sell_right'].nsmallest(5, 'change_20d')
-    print(f"\n✅ 卖对最明显 (卖出后大跌):")
+    print("\n✅ 卖对最明显 (卖出后大跌):")
     for _, row in sell_right.iterrows():
         print(f"  {row['symbol']} @ {row['exit_date'][:10]}")
         print(f"    卖出收益: {row['pnl_pct']:+.2f}%, 卖出原因: {row['exit_reason']}")
         print(f"    20天后跌: {row['change_20d']:+.2f}%, 60天最低: {row['max_down_60d']:+.2f}%")
     
     # 保存结果
-    output_file = Path(__file__).parent / 'results' / 'profitable_trades_analysis.csv'
+    output_file = Path(__file__).parent / 'results' / 'profitabletrades_analysis.csv'
     df_results.to_csv(output_file, index=False)
     print(f"\n💾 详细结果已保存: {output_file}")
     
     return df_results
 
 if __name__ == '__main__':
-    analyze_profitable_trades()
+    analyze_profitabletrades()

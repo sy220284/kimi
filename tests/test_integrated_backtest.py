@@ -7,14 +7,12 @@ import sys
 sys.path.insert(0, 'src')
 
 import pandas as pd
-import numpy as np
-from typing import List, Dict, Optional
-from dataclasses import dataclass, field
-from datetime import datetime
+from typing import Dict, Optional
+from dataclasses import dataclass
 
 from data import get_stock_data
 from analysis.wave import EnhancedWaveAnalyzer, Wave4Detector, Wave2Detector
-from analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy, TradeAction, Trade
+from analysis.backtest.wave_backtester import WaveStrategy, TradeAction
 
 
 @dataclass
@@ -72,8 +70,8 @@ class IntegratedWaveBacktester:
         position = None
         current_analysis = None
         
-        wave_stats = {'C': 0, '4': 0, '2': 0, 'other': 0}
-        source_stats = {'original': 0, 'wave4': 0, 'wave2': 0}
+        wavestats = {'C': 0, '4': 0, '2': 0, 'other': 0}
+        sourcestats = {'original': 0, 'wave4': 0, 'wave2': 0}
         
         for i, row in df.iterrows():
             date = row['date']
@@ -86,69 +84,69 @@ class IntegratedWaveBacktester:
                 analysis_df = df.iloc[lookback_start:i+1].copy()
                 
                 current_analysis = None
-                wave4_signal = None
-                wave2_signal = None
+                wave4signal = None
+                wave2signal = None
                 
                 if len(analysis_df) >= 20:
                     if self.use_original:
                         try:
                             current_analysis = self.analyzer.analyze(symbol, analysis_df)
-                        except:
+                        except Exception:
                             pass
                     
                     if self.use_wave4:
                         try:
-                            wave4_signal = self.wave4_detector.detect(analysis_df)
-                        except:
+                            wave4signal = self.wave4_detector.detect(analysis_df)
+                        except Exception:
                             pass
                     
                     if self.use_wave2:
                         try:
-                            wave2_signal = self.wave2_detector.detect(analysis_df)
-                        except:
+                            wave2signal = self.wave2_detector.detect(analysis_df)
+                        except Exception:
                             pass
             
             # 生成买入信号 (优先级: 4浪 > 2浪 > 原始检测)
-            buy_signal = None
+            buysignal = None
             entry_wave = None
             signal_source = None
             target_price = None
             stop_loss = None
             
             # 优先级1: 4浪信号
-            if wave4_signal and wave4_signal.is_valid and wave4_signal.confidence >= self.wave4_confidence:
+            if wave4signal and wave4signal.is_valid and wave4signal.confidence >= self.wave4_confidence:
                 if not position:
-                    buy_signal = True
+                    buysignal = True
                     entry_wave = '4'
                     signal_source = 'wave4'
-                    target_price = wave4_signal.target_price
-                    stop_loss = wave4_signal.stop_loss
+                    target_price = wave4signal.target_price
+                    stop_loss = wave4signal.stop_loss
             
             # 优先级2: 2浪信号
-            if not buy_signal and wave2_signal and wave2_signal.is_valid and wave2_signal.confidence >= self.wave2_confidence:
+            if not buysignal and wave2signal and wave2signal.is_valid and wave2signal.confidence >= self.wave2_confidence:
                 if not position:
-                    buy_signal = True
+                    buysignal = True
                     entry_wave = '2'
                     signal_source = 'wave2'
-                    target_price = wave2_signal.target_price
-                    stop_loss = wave2_signal.stop_loss
+                    target_price = wave2signal.target_price
+                    stop_loss = wave2signal.stop_loss
             
             # 优先级3: 原始检测
-            if not buy_signal and current_analysis and current_analysis.primary_pattern:
+            if not buysignal and current_analysis and current_analysis.primary_pattern:
                 pattern = current_analysis.primary_pattern
                 latest_wave = pattern.points[-1].wave_num if pattern.points else None
                 
                 if latest_wave in ['2', '4', 'C', 'A', 'B'] and not position:
-                    signal = self.strategy.generate_signal(current_analysis, price)
+                    signal = self.strategy.generatesignal(current_analysis, price)
                     if signal == TradeAction.BUY:
-                        buy_signal = True
+                        buysignal = True
                         entry_wave = latest_wave if latest_wave else 'C'
                         signal_source = 'original'
                         target_price = pattern.target_price
                         stop_loss = pattern.stop_loss
             
             # 执行买入
-            if buy_signal and not position:
+            if buysignal and not position:
                 trade = IntegratedTrade(
                     symbol=symbol,
                     entry_date=date_str,
@@ -158,13 +156,13 @@ class IntegratedWaveBacktester:
                 )
                 position = trade
                 
-                if entry_wave in wave_stats:
-                    wave_stats[entry_wave] += 1
+                if entry_wave in wavestats:
+                    wavestats[entry_wave] += 1
                 else:
-                    wave_stats['other'] += 1
+                    wavestats['other'] += 1
                 
-                if signal_source in source_stats:
-                    source_stats[signal_source] += 1
+                if signal_source in sourcestats:
+                    sourcestats[signal_source] += 1
             
             # 检查卖出条件
             if position:
@@ -196,32 +194,32 @@ class IntegratedWaveBacktester:
                         position = None
         
         # 计算结果
-        closed_trades = [t for t in trades if t.status == 'closed']
-        wins = [t for t in closed_trades if t.pnl_pct > 0]
+        closedtrades = [t for t in trades if t.status == 'closed']
+        wins = [t for t in closedtrades if t.pnl_pct > 0]
         
-        total_return = sum(t.pnl_pct for t in closed_trades) / 10 if closed_trades else 0
-        win_rate = len(wins) / len(closed_trades) if closed_trades else 0
+        total_return = sum(t.pnl_pct for t in closedtrades) / 10 if closedtrades else 0
+        win_rate = len(wins) / len(closedtrades) if closedtrades else 0
         
-        print(f"\n📈 回测结果:")
-        print(f"  总交易: {len(closed_trades)} 笔")
+        print("\n📈 回测结果:")
+        print(f"  总交易: {len(closedtrades)} 笔")
         print(f"  胜率: {win_rate:.1%}")
         print(f"  总收益: {total_return:+.2f}%")
-        print(f"\n  买入浪号分布:")
-        for wave, count in sorted(wave_stats.items()):
+        print("\n  买入浪号分布:")
+        for wave, count in sorted(wavestats.items()):
             if count > 0:
                 print(f"    浪{wave}: {count} 次")
-        print(f"\n  信号来源:")
-        for source, count in sorted(source_stats.items()):
+        print("\n  信号来源:")
+        for source, count in sorted(sourcestats.items()):
             if count > 0:
                 print(f"    {source}: {count} 次")
         
         return {
-            'trades': closed_trades,
-            'total_trades': len(closed_trades),
+            'trades': closedtrades,
+            'totaltrades': len(closedtrades),
             'win_rate': win_rate,
             'total_return': total_return,
-            'wave_distribution': wave_stats,
-            'source_distribution': source_stats
+            'wave_distribution': wavestats,
+            'source_distribution': sourcestats
         }
 
 
@@ -244,13 +242,13 @@ def run_comparison(symbol: str, name: str, df: pd.DataFrame):
     )
     
     # 原策略 (仅原始检测)
-    print(f"\n[1] 原策略 (仅波浪检测)")
+    print("\n[1] 原策略 (仅波浪检测)")
     backtester1 = IntegratedWaveBacktester(use_original=True, use_wave4=False, use_wave2=False)
     backtester1.set_strategy(strategy)
     result1 = backtester1.run(symbol, df, reanalyze_every=30)
     
     # 集成策略 (波浪检测 + 4浪 + 2浪)
-    print(f"\n[2] 完整集成策略 (波浪检测 + 4浪 + 2浪)")
+    print("\n[2] 完整集成策略 (波浪检测 + 4浪 + 2浪)")
     backtester2 = IntegratedWaveBacktester(
         use_original=True, 
         use_wave4=True, 
@@ -263,14 +261,14 @@ def run_comparison(symbol: str, name: str, df: pd.DataFrame):
     
     # 对比结果
     print(f"\n{'='*80}")
-    print(f"📊 对比结果")
+    print("📊 对比结果")
     print(f"{'='*80}")
     print(f"{'指标':<20} {'原策略':<15} {'集成策略':<15} {'改进':<10}")
     sep = "-" * 60
     print(sep)
     
-    trades_diff = result2['total_trades'] - result1['total_trades']
-    print(f"{'总交易':<20} {result1['total_trades']:<15} {result2['total_trades']:<15} {trades_diff:<+10}")
+    trades_diff = result2['totaltrades'] - result1['totaltrades']
+    print(f"{'总交易':<20} {result1['totaltrades']:<15} {result2['totaltrades']:<15} {trades_diff:<+10}")
     
     win_rate_diff = result2['win_rate'] - result1['win_rate']
     print(f"{'胜率':<20} {result1['win_rate']:.1%}{'':<8} {result2['win_rate']:.1%}{'':<8} {win_rate_diff:+.1%}")
@@ -305,7 +303,7 @@ if __name__ == "__main__":
     
     # 汇总
     print(f"\n{'='*80}")
-    print(f"📈 汇总对比")
+    print("📈 汇总对比")
     print(f"{'='*80}")
     print(f"{'股票':<10} {'原收益':<12} {'集成收益':<12} {'改进':<10}")
     print("-" * 50)
@@ -321,4 +319,4 @@ if __name__ == "__main__":
     print("-" * 50)
     print(f"{'平均':<10} {avg_orig:>+10.1f}% {avg_integrated:>+10.1f}% {avg_improvement:>+8.1f}%")
     
-    print(f"\n✅ 测试完成")
+    print("\n✅ 测试完成")

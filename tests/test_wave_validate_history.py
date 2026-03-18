@@ -9,9 +9,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from data import ThsAdapter
 from analysis.wave.wave_detector import WaveDetector
-from analysis.wave.elliott_wave import ElliottWaveAnalyzer
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 
 def validate_history(symbol, name, adapter):
@@ -30,7 +29,7 @@ def validate_history(symbol, name, adapter):
     df['date'] = pd.to_datetime(df['date'])
     
     # 数据统计
-    print(f"\n📈 数据概况:")
+    print("\n📈 数据概况:")
     print(f"  总记录数: {len(df)}")
     print(f"  日期范围: {df['date'].min().strftime('%Y-%m-%d')} ~ {df['date'].max().strftime('%Y-%m-%d')}")
     print(f"  时间跨度: {(df['date'].max() - df['date'].min()).days} 天")
@@ -38,12 +37,12 @@ def validate_history(symbol, name, adapter):
     # 按年统计
     df['year'] = df['date'].dt.year
     yearly = df.groupby('year').size()
-    print(f"\n📅 按年分布:")
+    print("\n📅 按年分布:")
     for year, count in yearly.items():
         print(f"  {year}: {count} 条")
     
     # 检查数据质量
-    print(f"\n🔍 数据质量检查:")
+    print("\n🔍 数据质量检查:")
     print(f"  收盘价范围: ¥{df['close'].min():.2f} ~ ¥{df['close'].max():.2f}")
     print(f"  成交量范围: {df['volume'].min():,.0f} ~ {df['volume'].max():,.0f}")
     print(f"  缺失值: 收盘价{df['close'].isna().sum()}, 成交量{df['volume'].isna().sum()}")
@@ -160,13 +159,13 @@ def analyze_all_timeframes(symbol, name, df_full):
         
         # 趋势一致性
         if up_count == len(results):
-            print(f"\n✅ 全周期共振上升 - 趋势强劲")
+            print("\n✅ 全周期共振上升 - 趋势强劲")
         elif down_count == len(results):
-            print(f"\n⚠️ 全周期共振下降 - 趋势弱势")
+            print("\n⚠️ 全周期共振下降 - 趋势弱势")
         elif up_count > down_count:
-            print(f"\n📈 整体偏强，短期可能有波动")
+            print("\n📈 整体偏强，短期可能有波动")
         else:
-            print(f"\n📉 整体偏弱，关注反弹机会")
+            print("\n📉 整体偏弱，关注反弹机会")
     else:
         print("\n⚠️ 未在任何周期识别到明确波浪形态")
     

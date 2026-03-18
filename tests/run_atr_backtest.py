@@ -61,7 +61,6 @@ class ATRWaveBacktester(WaveBacktester):
     
     def run(self, symbol: str, df: pd.DataFrame, reanalyze_every: int = 5) -> 'BacktestResult':
         """运行回测（支持ATR动态止损）"""
-        from dataclasses import dataclass
         
         df = df.copy()
         df['date'] = pd.to_datetime(df['date'])
@@ -94,12 +93,12 @@ class ATRWaveBacktester(WaveBacktester):
             
             # 定期分析波浪结构
             if i - last_analysis_idx >= reanalyze_every:
-                hist_data = df.iloc[:i+1].copy()
+                histdata = df.iloc[:i+1].copy()
                 try:
-                    analysis = self.analyzer.analyze(hist_data)
+                    analysis = self.analyzer.analyze(histdata)
                     analysis_cache[i] = analysis
                     last_analysis_idx = i
-                except Exception as e:
+                except Exception:
                     analysis = analysis_cache.get(last_analysis_idx, None)
             else:
                 analysis = analysis_cache.get(last_analysis_idx, None)
@@ -128,18 +127,18 @@ class ATRWaveBacktester(WaveBacktester):
                         )
                         
                         if current_low <= trailing_stop:
-                            self._close_trade(trade, current_date, trailing_stop, 'trailing_stop(ATR)')
+                            self._closetrade(trade, current_date, trailing_stop, 'trailing_stop(ATR)')
                             continue
                     
                     # 固定ATR止损
                     if current_low <= stop_loss:
-                        self._close_trade(trade, current_date, stop_loss, 'stop_loss(ATR)')
+                        self._closetrade(trade, current_date, stop_loss, 'stop_loss(ATR)')
                         continue
                 
                 else:
                     # 原百分比止损逻辑
                     if trade.stop_loss and current_low <= trade.stop_loss:
-                        self._close_trade(trade, current_date, trade.stop_loss, 'stop_loss')
+                        self._closetrade(trade, current_date, trade.stop_loss, 'stop_loss')
                         continue
                     
                     # 移动止盈
@@ -152,7 +151,7 @@ class ATRWaveBacktester(WaveBacktester):
                         trailing_price = trade.highest_price * (1 - self.strategy.trailing_stop_pct)
                         
                         if current_low <= trailing_price:
-                            self._close_trade(trade, current_date, trailing_price, f'trailing_stop({self.strategy.trailing_stop_pct*100:.0f}%)')
+                            self._closetrade(trade, current_date, trailing_price, f'trailing_stop({self.strategy.trailing_stop_pct*100:.0f}%)')
                             continue
                 
                 # 检查是否达到目标价（激活移动止盈）
@@ -168,7 +167,7 @@ class ATRWaveBacktester(WaveBacktester):
                 if trade.target_price:
                     proximity = abs(current_price - trade.target_price) / trade.target_price
                     if proximity <= self.strategy.target_proximity_pct:
-                        self._close_trade(trade, current_date, current_price, 'target_proximity')
+                        self._closetrade(trade, current_date, current_price, 'target_proximity')
                         continue
             
             # 检查买入信号
@@ -230,11 +229,11 @@ class ATRWaveBacktester(WaveBacktester):
             final_price = df.iloc[-1]['close']
             final_date = df.iloc[-1]['date'].strftime('%Y-%m-%d')
             for trade in list(self.strategy.positions.values()):
-                self._close_trade(trade, final_date, final_price, 'end_of_period')
+                self._closetrade(trade, final_date, final_price, 'end_of_period')
         
         return self._create_result(symbol, df)
     
-    def _close_trade(self, trade, date, price, reason):
+    def _closetrade(self, trade, date, price, reason):
         """平仓交易"""
         trade.close(date, price, reason)
         self.strategy.capital += trade.quantity * price * (1 - self.strategy.commission_rate - 
@@ -252,19 +251,19 @@ class ATRWaveBacktester(WaveBacktester):
     def _create_result(self, symbol, df):
         """创建回测结果"""
         
-        closed_trades = [t for t in self.strategy.trades if t.status == 'closed']
-        if not closed_trades:
+        closedtrades = [t for t in self.strategy.trades if t.status == 'closed']
+        if not closedtrades:
             return BacktestResult(
                 symbol=symbol,
                 start_date=df.iloc[0]['date'].strftime('%Y-%m-%d'),
                 end_date=df.iloc[-1]['date'].strftime('%Y-%m-%d'),
-                total_trades=0,
-                winning_trades=0,
-                losing_trades=0,
+                totaltrades=0,
+                winningtrades=0,
+                losingtrades=0,
                 win_rate=0.0,
                 total_return=0,
                 total_return_pct=0,
-                avg_return_per_trade=0,
+                avg_return_pertrade=0,
                 max_drawdown=0,
                 max_drawdown_pct=0,
                 sharpe_ratio=0,
@@ -273,47 +272,47 @@ class ATRWaveBacktester(WaveBacktester):
                 equity_curve=self.strategy.equity_curve
             )
         
-        winning_trades = sum(1 for t in closed_trades if t.pnl_pct > 0)
-        losing_trades = len(closed_trades) - winning_trades
-        win_rate = winning_trades / len(closed_trades) if closed_trades else 0
+        winningtrades = sum(1 for t in closedtrades if t.pnl_pct > 0)
+        losingtrades = len(closedtrades) - winningtrades
+        win_rate = winningtrades / len(closedtrades) if closedtrades else 0
         
-        total_pnl = sum(t.pnl for t in closed_trades)
+_        total_pnl = sum(t.pnl for t in closedtrades)
         initial_value = self.strategy.initial_capital
         final_value = self.strategy.capital
         
-        returns = [t.pnl_pct for t in closed_trades]
+        returns = [t.pnl_pct for t in closedtrades]
         avg_return = np.mean(returns) if returns else 0
         
         # 计算最大回撤
-        equity_values = [e['value'] for e in self.strategy.equity_curve]
+        equityvalues = [e['value'] for e in self.strategy.equity_curve]
         max_dd = 0
-        peak = equity_values[0]
-        for value in equity_values:
+        peak = equityvalues[0]
+        for value in equityvalues:
             if value > peak:
                 peak = value
             dd = (peak - value) / peak
             max_dd = max(max_dd, dd)
         
         # 计算Sharpe
-        equity_returns = pd.Series(equity_values).pct_change().dropna()
-        sharpe = (equity_returns.mean() / equity_returns.std() * np.sqrt(252)) if equity_returns.std() > 0 else 0
+        equityreturns = pd.Series(equityvalues).pct_change().dropna()
+        sharpe = (equityreturns.mean() / equityreturns.std() * np.sqrt(252)) if equityreturns.std() > 0 else 0
         
         # 计算Profit Factor
-        gross_profit = sum(t.pnl for t in closed_trades if t.pnl > 0)
-        gross_loss = abs(sum(t.pnl for t in closed_trades if t.pnl <= 0))
+        gross_profit = sum(t.pnl for t in closedtrades if t.pnl > 0)
+        gross_loss = abs(sum(t.pnl for t in closedtrades if t.pnl <= 0))
         profit_factor = gross_profit / gross_loss if gross_loss > 0 else float('inf')
         
         return BacktestResult(
             symbol=symbol,
             start_date=df.iloc[0]['date'].strftime('%Y-%m-%d'),
             end_date=df.iloc[-1]['date'].strftime('%Y-%m-%d'),
-            total_trades=len(closed_trades),
-            winning_trades=winning_trades,
-            losing_trades=losing_trades,
+            totaltrades=len(closedtrades),
+            winningtrades=winningtrades,
+            losingtrades=losingtrades,
             win_rate=win_rate,
             total_return=final_value - initial_value,
             total_return_pct=(final_value - initial_value) / initial_value * 100,
-            avg_return_per_trade=avg_return,
+            avg_return_pertrade=avg_return,
             max_drawdown=max_dd * initial_value,
             max_drawdown_pct=max_dd * 100,
             sharpe_ratio=sharpe,
@@ -344,7 +343,7 @@ def run_atr_backtest():
     analyzer = UnifiedWaveAnalyzer()
     
     results = []
-    all_trade_details = []
+    alltrade_details = []
     
     for i, symbol in enumerate(tech_symbols, 1):
         try:
@@ -382,16 +381,16 @@ def run_atr_backtest():
             results.append({
                 'symbol': symbol,
                 'tier': '科创' if symbol.startswith('688') else '主板',
-                'trades': result.total_trades,
+                'trades': result.totaltrades,
                 'win_rate': result.win_rate,
                 'return': result.total_return_pct,
-                'avg_return': result.avg_return_per_trade,
+                'avg_return': result.avg_return_pertrade,
                 'max_dd': result.max_drawdown_pct,
                 'sharpe': result.sharpe_ratio,
             })
-            all_trade_details.extend(trade_details)
+            alltrade_details.extend(trade_details)
             
-            print(f"[{i}/{len(tech_symbols)}] {symbol}: 收益{result.total_return_pct:+.2f}% 交易{result.total_trades}次")
+            print(f"[{i}/{len(tech_symbols)}] {symbol}: 收益{result.total_return_pct:+.2f}% 交易{result.totaltrades}次")
             
         except Exception as e:
             print(f"[{i}/{len(tech_symbols)}] {symbol}: 错误 - {e}")
@@ -423,8 +422,8 @@ def run_atr_backtest():
         # 保存
         timestamp = datetime.now().strftime('%Y%m%d_%H%M')
         df_results.to_csv(f"tests/results/tech_atr_{timestamp}.csv", index=False)
-        if all_trade_details:
-            pd.DataFrame(all_trade_details).to_csv(f"tests/results/tech_atr_trades_{timestamp}.csv", index=False)
+        if alltrade_details:
+            pd.DataFrame(alltrade_details).to_csv(f"tests/results/tech_atrtrades_{timestamp}.csv", index=False)
         
         return df_results
     

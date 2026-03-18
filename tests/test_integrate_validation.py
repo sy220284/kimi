@@ -13,8 +13,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
-import numpy as np
-from datetime import datetime
 import json
 
 from src.data import get_stock_data
@@ -37,91 +35,91 @@ END_DATE = '2026-03-16'
 CONFIGS = [
     {
         'name': '基础配置',
-        'analyzer_params': {
+        'analyzerparams': {
             'use_resonance': False,
-            'use_adaptive_params': False,
+            'use_adaptiveparams': False,
             'trend_ma_period': 200,
             'min_confidence': 0.5,
         },
-        'strategy_params': {
+        'strategyparams': {
             'use_trend_filter': True,
             'trend_ma_period': 200,
         }
     },
     {
         'name': '共振分析(低阈值)',
-        'analyzer_params': {
+        'analyzerparams': {
             'use_resonance': True,
             'min_resonance_score': 0.2,
-            'use_adaptive_params': False,
+            'use_adaptiveparams': False,
             'trend_ma_period': 200,
         },
-        'strategy_params': {
+        'strategyparams': {
             'use_trend_filter': True,
             'trend_ma_period': 200,
         }
     },
     {
         'name': '共振分析(标准)',
-        'analyzer_params': {
+        'analyzerparams': {
             'use_resonance': True,
             'min_resonance_score': 0.3,
-            'use_adaptive_params': False,
+            'use_adaptiveparams': False,
             'trend_ma_period': 200,
         },
-        'strategy_params': {
+        'strategyparams': {
             'use_trend_filter': True,
             'trend_ma_period': 200,
         }
     },
     {
         'name': '共振分析(严格)',
-        'analyzer_params': {
+        'analyzerparams': {
             'use_resonance': True,
             'min_resonance_score': 0.5,
-            'use_adaptive_params': False,
+            'use_adaptiveparams': False,
             'trend_ma_period': 200,
         },
-        'strategy_params': {
+        'strategyparams': {
             'use_trend_filter': True,
             'trend_ma_period': 200,
         }
     },
     {
         'name': '自适应参数',
-        'analyzer_params': {
+        'analyzerparams': {
             'use_resonance': True,
             'min_resonance_score': 0.3,
-            'use_adaptive_params': True,
+            'use_adaptiveparams': True,
             'trend_ma_period': 200,
         },
-        'strategy_params': {
+        'strategyparams': {
             'use_trend_filter': True,
             'trend_ma_period': 200,
         }
     },
     {
         'name': '60日均线',
-        'analyzer_params': {
+        'analyzerparams': {
             'use_resonance': True,
             'min_resonance_score': 0.3,
-            'use_adaptive_params': False,
+            'use_adaptiveparams': False,
             'trend_ma_period': 60,
         },
-        'strategy_params': {
+        'strategyparams': {
             'use_trend_filter': True,
             'trend_ma_period': 60,
         }
     },
     {
         'name': '120日均线',
-        'analyzer_params': {
+        'analyzerparams': {
             'use_resonance': True,
             'min_resonance_score': 0.3,
-            'use_adaptive_params': False,
+            'use_adaptiveparams': False,
             'trend_ma_period': 120,
         },
-        'strategy_params': {
+        'strategyparams': {
             'use_trend_filter': True,
             'trend_ma_period': 120,
         }
@@ -141,8 +139,8 @@ def run_single_test(symbol, name, config):
             return None
         
         # 创建分析器和策略
-        analyzer = UnifiedWaveAnalyzer(**config['analyzer_params'])
-        strategy = WaveStrategy(**config['strategy_params'])
+        analyzer = UnifiedWaveAnalyzer(**config['analyzerparams'])
+        strategy = WaveStrategy(**config['strategyparams'])
         
         # 创建回测器
         backtester = WaveBacktester(analyzer)
@@ -159,13 +157,13 @@ def run_single_test(symbol, name, config):
                 if wave in signals_by_type:
                     signals_by_type[wave] += 1
         
-        print(f"✓ 交易{result.total_trades}次 胜率{result.win_rate:.1%} 收益{result.total_return_pct:+.2f}%")
+        print(f"✓ 交易{result.totaltrades}次 胜率{result.win_rate:.1%} 收益{result.total_return_pct:+.2f}%")
         
         return {
             'symbol': symbol,
             'name': name,
             'config_name': config['name'],
-            'trades': result.total_trades,
+            'trades': result.totaltrades,
             'win_rate': result.win_rate,
             'return_pct': result.total_return_pct,
             'max_drawdown': result.max_drawdown_pct,

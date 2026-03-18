@@ -7,11 +7,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 import pandas as pd
 import akshare as ak
-from datetime import datetime, timedelta
+from datetime import datetime
 from analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy
 from analysis.wave.unified_analyzer import UnifiedWaveAnalyzer
 
-def get_stock_data_akshare(symbol, start_date, end_date):
+def get_stockdata_akshare(symbol, start_date, end_date):
     """使用akshare获取股票数据"""
     try:
         print(f"  获取 {symbol} 数据...")
@@ -65,10 +65,10 @@ def main():
         print('='*60)
         
         # 获取数据
-        df = get_stock_data_akshare(symbol, start_date, end_date)
+        df = get_stockdata_akshare(symbol, start_date, end_date)
         
         if df is None or len(df) < 200:
-            print(f"  ⚠️ 数据不足,跳过")
+            print("  ⚠️ 数据不足,跳过")
             continue
         
         print(f"  数据量: {len(df)}条")
@@ -96,21 +96,21 @@ def main():
         try:
             result = backtester.run(symbol, df, reanalyze_every=5)
             
-            print(f"\n【结果】")
-            print(f"  交易次数: {result.total_trades}")
+            print("\n【结果】")
+            print(f"  交易次数: {result.totaltrades}")
             print(f"  胜率: {result.win_rate:.1%}")
             print(f"  总收益: {result.total_return_pct:.2f}%")
-            print(f"  平均每笔: {result.avg_return_per_trade:.2f}%")
+            print(f"  平均每笔: {result.avg_return_pertrade:.2f}%")
             print(f"  最大回撤: {result.max_drawdown_pct:.2f}%")
             print(f"  Sharpe: {result.sharpe_ratio:.2f}")
             
             results.append({
                 'symbol': symbol,
                 'name': name,
-                'trades': result.total_trades,
+                'trades': result.totaltrades,
                 'win_rate': result.win_rate,
                 'return': result.total_return_pct,
-                'avg': result.avg_return_per_trade,
+                'avg': result.avg_return_pertrade,
                 'dd': result.max_drawdown_pct,
                 'sharpe': result.sharpe_ratio
             })
@@ -136,7 +136,7 @@ def main():
                   f"{row['win_rate']:>6.1%} {row['return']:>8.2f}% "
                   f"{row['avg']:>8.2f}% {row['dd']:>8.2f}% {row['sharpe']:>6.2f}")
         
-        print(f"\n平均:")
+        print("\n平均:")
         print(f"  胜率: {df_results['win_rate'].mean():.1%}")
         print(f"  收益: {df_results['return'].mean():.2f}%")
         print(f"  Sharpe: {df_results['sharpe'].mean():.2f}")

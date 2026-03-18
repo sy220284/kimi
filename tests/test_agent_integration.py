@@ -9,12 +9,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 import unittest
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from agents.wave_analyst import WaveAnalystAgent
 from agents.tech_analyst import TechAnalystAgent
 from agents.rotation_analyst import RotationAnalystAgent
-from data.optimized_data_manager import get_optimized_data_manager
+from data.optimizeddata_manager import get_optimizeddata_manager
 
 
 class TestWaveAgentIntegration(unittest.TestCase):
@@ -23,8 +23,8 @@ class TestWaveAgentIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """准备数据"""
-        cls.data_mgr = get_optimized_data_manager()
-        cls.data_mgr.load_all_data()
+        cls.data_mgr = get_optimizeddata_manager()
+        cls.data_mgr.load_alldata()
         cls.agent = WaveAnalystAgent()
     
     def test_01_agent_initialization(self):
@@ -76,7 +76,7 @@ class TestWaveAgentIntegration(unittest.TestCase):
         self.assertIsNotNone(result)
         print("✅ 结合指标的分析完成")
     
-    def test_05_empty_data_handling(self):
+    def test_05_emptydata_handling(self):
         """测试空数据处理"""
         import pandas as pd
         empty_df = pd.DataFrame()
@@ -86,7 +86,7 @@ class TestWaveAgentIntegration(unittest.TestCase):
         self.assertEqual(result, [])
         print("✅ 空数据处理正常")
     
-    def test_06_invalid_data_handling(self):
+    def test_06_invaliddata_handling(self):
         """测试无效数据处理"""
         result = self.agent.analyze(None)
         
@@ -99,8 +99,8 @@ class TestTechAgentIntegration(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        cls.data_mgr = get_optimized_data_manager()
-        cls.data_mgr.load_all_data()
+        cls.data_mgr = get_optimizeddata_manager()
+        cls.data_mgr.load_alldata()
         cls.agent = TechAnalystAgent()
     
     def test_01_agent_initialization(self):
@@ -115,9 +115,9 @@ class TestTechAgentIntegration(unittest.TestCase):
         result = self.agent.analyze(df)
         
         self.assertIsNotNone(result)
-        print(f"✅ 技术分析完成")
+        print("✅ 技术分析完成")
     
-    def test_03_signal_generation(self):
+    def test_03signal_generation(self):
         """测试信号生成"""
         df = self.data_mgr.get_stock_data('600519')
         
@@ -159,8 +159,8 @@ class TestAgentCollaboration(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        cls.data_mgr = get_optimized_data_manager()
-        cls.data_mgr.load_all_data()
+        cls.data_mgr = get_optimizeddata_manager()
+        cls.data_mgr.load_alldata()
         cls.wave_agent = WaveAnalystAgent()
         cls.tech_agent = TechAnalystAgent()
     
@@ -184,7 +184,7 @@ class TestAgentCollaboration(unittest.TestCase):
         }
         
         self.assertTrue(combined['tech_analysis'])
-        print(f"✅ 多智能体联合分析完成")
+        print("✅ 多智能体联合分析完成")
     
     def test_02_analysis_pipeline(self):
         """测试分析流水线"""
@@ -219,8 +219,8 @@ class TestEndToEndWorkflow(unittest.TestCase):
         print("\n🔄 执行端到端分析工作流...")
         
         # 1. 加载数据
-        data_mgr = get_optimized_data_manager()
-        df_all = data_mgr.load_all_data()
+        data_mgr = get_optimizeddata_manager()
+        df_all = data_mgr.load_alldata()
         self.assertGreater(len(df_all), 0)
         
         # 2. 选择股票
@@ -259,8 +259,8 @@ class TestEndToEndWorkflow(unittest.TestCase):
         start = time.time()
         
         # 快速分析10只股票
-        data_mgr = get_optimized_data_manager()
-        df_all = data_mgr.load_all_data()
+        data_mgr = get_optimizeddata_manager()
+        df_all = data_mgr.load_alldata()
         symbols = df_all['symbol'].unique()[:10]
         
         agent = WaveAnalystAgent()

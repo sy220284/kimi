@@ -2,7 +2,6 @@
 解析产业链图谱，提取所有股票代码
 """
 import re
-import pandas as pd
 
 def extract_stocks_from_markdown(file_path):
     """从markdown文件中提取股票代码"""
@@ -41,7 +40,7 @@ with open('all_industry_stocks.txt', 'w') as f:
     for code in sorted(stocks.keys()):
         f.write(f"{code}\n")
 
-print(f"股票列表已保存到 all_industry_stocks.txt")
+print("股票列表已保存到 all_industry_stocks.txt")
 
 # 按板块分类
 kcb = [c for c in stocks.keys() if c.startswith('688')]  # 科创板
@@ -50,7 +49,7 @@ sh = [c for c in stocks.keys() if c.startswith('60') and not c.startswith('688')
 sz = [c for c in stocks.keys() if c.startswith('00')]  # 深圳主板
 bj = [c for c in stocks.keys() if c.startswith('8') or c.startswith('4')]  # 北交所
 
-print(f"\n板块分布:")
+print("\n板块分布:")
 print(f"  科创板: {len(kcb)} 只")
 print(f"  创业板: {len(cyb)} 只")
 print(f"  上海主板: {len(sh)} 只")
@@ -58,6 +57,6 @@ print(f"  深圳主板: {len(sz)} 只")
 print(f"  北交所: {len(bj)} 只")
 
 # 显示前30只
-print(f"\n前30只股票:")
+print("\n前30只股票:")
 for i, code in enumerate(list(stocks.keys())[:30], 1):
     print(f"  {i}. {code}")

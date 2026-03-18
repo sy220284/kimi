@@ -11,7 +11,7 @@ import unittest
 import pandas as pd
 import numpy as np
 
-from data.optimized_data_manager import get_optimized_data_manager
+from data.optimizeddata_manager import get_optimizeddata_manager
 
 
 class TestMovingAverages(unittest.TestCase):
@@ -19,7 +19,7 @@ class TestMovingAverages(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        cls.data_mgr = get_optimized_data_manager()
+        cls.data_mgr = get_optimizeddata_manager()
     
     def test_01_ma_calculation(self):
         """测试MA计算"""
@@ -49,7 +49,7 @@ class TestMovingAverages(unittest.TestCase):
     
     def test_03_multiple_ma_periods(self):
         """测试多个MA周期"""
-        df = self.data_mgr.load_all_data()
+        df = self.data_mgr.load_alldata()
         symbol_df = df[df['symbol'] == '600519'].copy()
         
         if len(symbol_df) > 0:
@@ -70,7 +70,7 @@ class TestRSI(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        cls.data_mgr = get_optimized_data_manager()
+        cls.data_mgr = get_optimizeddata_manager()
     
     def test_01_rsi_basic(self):
         """测试RSI基础计算"""
@@ -83,9 +83,9 @@ class TestRSI(unittest.TestCase):
         result = self.data_mgr.calculate_rsi(df, 14)
         
         # 连续上涨RSI应该接近100 (取后面几个有效值)
-        rsi_values = result['rsi14'].dropna()
-        if len(rsi_values) > 0:
-            self.assertGreater(rsi_values.iloc[-1], 50)
+        rsivalues = result['rsi14'].dropna()
+        if len(rsivalues) > 0:
+            self.assertGreater(rsivalues.iloc[-1], 50)
         print("✅ RSI上涨场景正确")
     
     def test_02_rsi_falling(self):
@@ -122,24 +122,24 @@ class TestMACD(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        cls.data_mgr = get_optimized_data_manager()
+        cls.data_mgr = get_optimizeddata_manager()
     
     def test_01_macd_calculation(self):
         """测试MACD计算"""
-        df = self.data_mgr.load_all_data()
+        df = self.data_mgr.load_alldata()
         symbol_df = df[df['symbol'] == '600519'].copy()
         
         if len(symbol_df) > 30:
             result = self.data_mgr.calculate_macd(symbol_df)
             
             self.assertIn('macd', result.columns)
-            self.assertIn('macd_signal', result.columns)
+            self.assertIn('macdsignal', result.columns)
             self.assertIn('macd_hist', result.columns)
             print("✅ MACD计算正确")
         else:
             self.skipTest("数据不足")
     
-    def test_02_macd_signal(self):
+    def test_02_macdsignal(self):
         """测试MACD信号"""
         # 快速上涨后下跌
         prices = list(range(100, 150)) + list(range(150, 100, -1))
@@ -163,11 +163,11 @@ class TestBollingerBands(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        cls.data_mgr = get_optimized_data_manager()
+        cls.data_mgr = get_optimizeddata_manager()
     
     def test_01_bollinger_calculation(self):
         """测试布林带计算"""
-        df = self.data_mgr.load_all_data()
+        df = self.data_mgr.load_alldata()
         symbol_df = df[df['symbol'] == '600519'].copy()
         
         if len(symbol_df) > 20:
@@ -191,11 +191,11 @@ class TestATR(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        cls.data_mgr = get_optimized_data_manager()
+        cls.data_mgr = get_optimizeddata_manager()
     
     def test_01_atr_calculation(self):
         """测试ATR计算"""
-        df = self.data_mgr.load_all_data()
+        df = self.data_mgr.load_alldata()
         symbol_df = df[df['symbol'] == '600519'].copy()
         
         if len(symbol_df) > 14:
@@ -241,11 +241,11 @@ class TestVolatility(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        cls.data_mgr = get_optimized_data_manager()
+        cls.data_mgr = get_optimizeddata_manager()
     
     def test_01_volatility_calculation(self):
         """测试波动率计算"""
-        df = self.data_mgr.load_all_data()
+        df = self.data_mgr.load_alldata()
         symbol_df = df[df['symbol'] == '600519'].copy()
         
         if len(symbol_df) > 20:
@@ -267,16 +267,16 @@ class TestReturns(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        cls.data_mgr = get_optimized_data_manager()
+        cls.data_mgr = get_optimizeddata_manager()
     
-    def test_01_returns_calculation(self):
+    def test_01returns_calculation(self):
         """测试收益率计算"""
         df = pd.DataFrame({
             'symbol': ['TEST']*5,
             'close': [100, 110, 105, 115, 120]
         })
         
-        result = self.data_mgr.calculate_returns(df)
+        result = self.data_mgr.calculatereturns(df)
         
         # 列名是 daily_return 而不是 returns
         self.assertIn('daily_return', result.columns)
@@ -286,14 +286,14 @@ class TestReturns(unittest.TestCase):
         self.assertAlmostEqual(result['daily_return'].iloc[2], -0.045, delta=0.01)  # -4.5%
         print("✅ 收益率计算正确")
     
-    def test_02_cumulative_returns(self):
+    def test_02_cumulativereturns(self):
         """测试累计收益率"""
         df = pd.DataFrame({
             'symbol': ['TEST']*5,
             'close': [100, 110, 105, 115, 120]
         })
         
-        result = self.data_mgr.calculate_returns(df)
+        result = self.data_mgr.calculatereturns(df)
         
         # 累计收益率应该是20%
         total_return = (result['close'].iloc[-1] / result['close'].iloc[0]) - 1
@@ -306,11 +306,11 @@ class TestAllIndicators(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        cls.data_mgr = get_optimized_data_manager()
+        cls.data_mgr = get_optimizeddata_manager()
     
     def test_01_calculate_all_indicators(self):
         """测试计算所有指标"""
-        df = self.data_mgr.load_all_data()
+        df = self.data_mgr.load_alldata()
         symbol_df = df[df['symbol'] == '600519'].copy()
         
         if len(symbol_df) > 60:
@@ -320,7 +320,7 @@ class TestAllIndicators(unittest.TestCase):
             expected_cols = [
                 'ma5', 'ma10', 'ma20', 'ma60',
                 'rsi14', 
-                'macd', 'macd_signal', 'macd_hist',
+                'macd', 'macdsignal', 'macd_hist',
                 'bb_upper', 'bb_lower', 'bb_middle',
                 'atr14'
             ]

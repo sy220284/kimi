@@ -12,11 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
-import numpy as np
 import psycopg2
-from datetime import datetime, timedelta
-from collections import defaultdict
-import json
 
 from src.analysis.wave import UnifiedWaveAnalyzer
 
@@ -38,7 +34,7 @@ def get_stock_list(min_records=1000):
     conn = get_db_connection()
     sql = '''
     SELECT symbol, MIN(date) as start_date, MAX(date) as end_date, COUNT(*) as records
-    FROM market_data 
+    FROM marketdata 
     GROUP BY symbol
     HAVING COUNT(*) >= %s
     ORDER BY COUNT(*) DESC
@@ -52,7 +48,7 @@ def get_stock_data(symbol, start_date, end_date):
     conn = get_db_connection()
     sql = '''
     SELECT date, open, high, low, close, volume, amount
-    FROM market_data
+    FROM marketdata
     WHERE symbol = %s AND date >= %s AND date <= %s
     ORDER BY date
     '''
@@ -120,13 +116,13 @@ def analyze_stock(symbol, analyzer):
     return signals
 
 # 统计分析结果
-def analyze_results(all_signals):
+def analyze_results(allsignals):
     """分析所有信号统计结果"""
-    if not all_signals:
+    if not allsignals:
         print("⚠️ 没有检测到信号")
         return
     
-    df = pd.DataFrame(all_signals)
+    df = pd.DataFrame(allsignals)
     
     print("\n" + "=" * 80)
     print("📈 浪型识别统计分析")
@@ -162,28 +158,28 @@ def analyze_results(all_signals):
     print("\n【后续走势验证】")
     for hold_day in HOLD_DAYS:
         col = f'return_{hold_day}d'
-        valid_returns = df[col].dropna()
-        if len(valid_returns) > 0:
-            win_rate = (valid_returns > 0).mean() * 100
-            avg_return = valid_returns.mean()
-            median_return = valid_returns.median()
+        validreturns = df[col].dropna()
+        if len(validreturns) > 0:
+            win_rate = (validreturns > 0).mean() * 100
+            avg_return = validreturns.mean()
+            median_return = validreturns.median()
             
             print(f"\n  {hold_day}天后:")
-            print(f"    样本数: {len(valid_returns)}")
+            print(f"    样本数: {len(validreturns)}")
             print(f"    胜率: {win_rate:.1f}%")
             print(f"    平均收益: {avg_return:+.2f}%")
             print(f"    中位数收益: {median_return:+.2f}%")
-            print(f"    最大收益: {valid_returns.max():+.2f}%")
-            print(f"    最大亏损: {valid_returns.min():+.2f}%")
+            print(f"    最大收益: {validreturns.max():+.2f}%")
+            print(f"    最大亏损: {validreturns.min():+.2f}%")
             
             # 按信号类型分组
-            print(f"    按浪型分组胜率:")
+            print("    按浪型分组胜率:")
             for wave_type in df['entry_type'].unique():
-                wave_data = df[df['entry_type'] == wave_type][col].dropna()
-                if len(wave_data) > 0:
-                    wave_win_rate = (wave_data > 0).mean() * 100
-                    wave_avg = wave_data.mean()
-                    print(f"      {wave_type}浪: 胜率{wave_win_rate:.1f}%, 平均{wave_avg:+.2f}% (n={len(wave_data)})")
+                wavedata = df[df['entry_type'] == wave_type][col].dropna()
+                if len(wavedata) > 0:
+                    wave_win_rate = (wavedata > 0).mean() * 100
+                    wave_avg = wavedata.mean()
+                    print(f"      {wave_type}浪: 胜率{wave_win_rate:.1f}%, 平均{wave_avg:+.2f}% (n={len(wavedata)})")
     
     # 7. 目标价达成率
     print("\n【目标价达成分析】")
@@ -192,11 +188,11 @@ def analyze_results(all_signals):
     
     for hold_day in HOLD_DAYS:
         col = f'return_{hold_day}d'
-        valid_data = df[df[col].notna()].copy()
-        if len(valid_data) > 0:
+        validdata = df[df[col].notna()].copy()
+        if len(validdata) > 0:
             # 目标达成: 收益 > 0 (简化判断)
-            target_hit = (valid_data[col] > 0).sum()
-            print(f"  {hold_day}天目标达成率: {target_hit}/{len(valid_data)} ({target_hit/len(valid_data)*100:.1f}%)")
+            target_hit = (validdata[col] > 0).sum()
+            print(f"  {hold_day}天目标达成率: {target_hit}/{len(validdata)} ({target_hit/len(validdata)*100:.1f}%)")
     
     return df
 
@@ -215,21 +211,21 @@ def main():
         use_resonance=True,
         min_resonance_score=0.3,
         trend_ma_period=200,
-        use_adaptive_params=False,
+        use_adaptiveparams=False,
     )
     
     # 批量分析 (选择前20只股票)
-    all_signals = []
+    allsignals = []
     selected_stocks = stock_list['symbol'].head(20).tolist()
     
-    print(f"\n开始分析前20只股票...")
+    print("\n开始分析前20只股票...")
     for symbol in selected_stocks:
         signals = analyze_stock(symbol, analyzer)
         if signals:
-            all_signals.extend(signals)
+            allsignals.extend(signals)
     
     # 统计分析
-    results_df = analyze_results(all_signals)
+    results_df = analyze_results(allsignals)
     
     # 保存结果
     if results_df is not None and len(results_df) > 0:

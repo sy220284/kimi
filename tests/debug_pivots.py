@@ -7,7 +7,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
-import numpy as np
 from src.analysis.wave.enhanced_detector import enhanced_pivot_detection
 from src.data import get_stock_data
 
@@ -20,16 +19,16 @@ df = df.sort_values('date').reset_index(drop=True)
 print("=" * 80)
 print(f"极值点检测调试 - {symbol}")
 print("=" * 80)
-print(f"\n数据概况:")
+print("\n数据概况:")
 print(f"  总记录数: {len(df)}")
 print(f"  日期范围: {df['date'].iloc[0]} ~ {df['date'].iloc[-1]}")
 print(f"  价格范围: ¥{df['close'].min():.2f} ~ ¥{df['close'].max():.2f}")
 
 # 使用不同参数测试极值点检测
 configs = [
-    {'atr_period': 10, 'atr_mult': 0.5, 'min_pivots': 3},
-    {'atr_period': 5, 'atr_mult': 0.3, 'min_pivots': 3},
-    {'atr_period': 14, 'atr_mult': 1.0, 'min_pivots': 3},
+    {'atr_period': 10, 'atr_mult': 0.5, 'minpivots': 3},
+    {'atr_period': 5, 'atr_mult': 0.3, 'minpivots': 3},
+    {'atr_period': 14, 'atr_mult': 1.0, 'minpivots': 3},
 ]
 
 print("\n" + "=" * 80)
@@ -46,9 +45,9 @@ for i, cfg in enumerate(configs):
     print(f"  检测到极值点: {len(pivots)} 个")
     
     if pivots:
-        print(f"  最近5个极值点:")
+        print("  最近5个极值点:")
         for p in pivots[-5:]:
-            print(f"    idx={p.idx}, price=¥{p.price:.2f}, is_peak={p.is_peak}, strength={p.strength}")
+            print(f"    idx={p.idx}, price=¥{p.price:.2f}, ispeak={p.ispeak}, strength={p.strength}")
 
 print("\n" + "=" * 80)
 print("问题诊断")

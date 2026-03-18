@@ -6,11 +6,10 @@
 import pandas as pd
 import numpy as np
 from typing import List, Dict, Optional, Any
-from datetime import datetime, timedelta
 
-from ..backtest.wave_backtester import WaveBacktester, WaveStrategy, TradeAction
+from ..backtest.wave_backtester import WaveBacktester
 from ..wave import EnhancedWaveAnalyzer
-from .param_optimizer import ParameterOptimizer, ParameterSet, SignalFilter
+from .param_optimizer import ParameterSet
 
 
 class AdaptiveBacktester:
@@ -58,7 +57,7 @@ class AdaptiveBacktester:
         df = df.copy().sort_values('date')
         
         all_trades = []
-        equity_curve = []
+        _equity_curve = []
         current_capital = 100000
         
         # 滑动窗口回测
@@ -166,7 +165,7 @@ class AdaptiveBacktester:
         
         winning_trades = [t for t in closed_trades if t.pnl > 0]
         
-        total_pnl = sum(t.pnl for t in closed_trades)
+        _total_pnl = sum(t.pnl for t in closed_trades)
         win_rate = len(winning_trades) / len(closed_trades)
         
         # 计算收益曲线

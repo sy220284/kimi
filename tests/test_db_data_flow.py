@@ -7,8 +7,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
-import pandas as pd
-from data import DatabaseDataManager, get_stock_data
+from data import DatabaseDataManager
 
 print("="*80)
 print("🗄️ 数据库优先数据流测试")
@@ -60,7 +59,7 @@ if db_manager.enable_cache:
     print("   ✅ Redis缓存已启用")
     # 第三次获取应该命中Redis
     df3 = db_manager.get_stock_data(test_symbol, '2025-01-01', '2025-03-17')
-    print(f"   ✅ 缓存命中测试完成")
+    print("   ✅ 缓存命中测试完成")
 else:
     print("   ⚠️ Redis缓存未启用")
 

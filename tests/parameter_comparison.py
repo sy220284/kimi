@@ -1,7 +1,6 @@
 """
 参数方案对比分析报告
 """
-import pandas as pd
 
 print("="*80)
 print("📊 参数方案对比分析报告")

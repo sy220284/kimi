@@ -14,13 +14,13 @@ print("=" * 90)
 # 读取两个版本的结果
 try:
     df_v1 = pd.read_csv('tests/results/batch_wave_analysis.csv')
-    with open('tests/results/batch_wave_analysis_summary.json', 'r') as f:
+    with open('tests/results/batch_wave_analysissummary.json', 'r') as f:
         summary_v1 = json.load(f)
-except:
+except Exception:
     # 如果v1没有summary文件，手动计算
     df_v1 = pd.read_csv('tests/results/batch_wave_analysis.csv')
     summary_v1 = {
-        'total_signals': len(df_v1),
+        'totalsignals': len(df_v1),
         'by_type': df_v1['entry_type'].value_counts().to_dict(),
         'avg_confidence': df_v1['confidence'].mean(),
         'win_rate_5d': (df_v1['return_5d'] > 0).mean() * 100,
@@ -28,7 +28,7 @@ except:
     }
 
 df_v2 = pd.read_csv('tests/results/batch_enhanced_v2.csv')
-with open('tests/results/batch_enhanced_v2_summary.json', 'r') as f:
+with open('tests/results/batch_enhanced_v2summary.json', 'r') as f:
     summary_v2 = json.load(f)
 
 print("\n【一、整体指标对比】")
@@ -37,8 +37,8 @@ print(f"{'指标':<30} {'上一版本':<20} {'增强版':<20} {'变化':<15}")
 print("-" * 90)
 
 # 信号总数
-v1_total = summary_v1['total_signals']
-v2_total = summary_v2['total_signals']
+v1_total = summary_v1['totalsignals']
+v2_total = summary_v2['totalsignals']
 change_total = v2_total - v1_total
 print(f"{'总信号数':<30} {v1_total:<20} {v2_total:<20} {change_total:+d}")
 
@@ -102,10 +102,10 @@ print("-" * 90)
 
 # 分析增强版中通过验证的信号表现
 if 'wave1_valid' in df_v2.columns:
-    valid_2 = df_v2[df_v2['wave1_valid'] == True]
-    invalid_2 = df_v2[df_v2['wave1_valid'] == False]
+    valid_2 = df_v2[df_v2['wave1_valid']]
+    invalid_2 = df_v2[~df_v2['wave1_valid']]
     
-    print(f"\n2浪验证:")
+    print("\n2浪验证:")
     print(f"  通过验证: {len(valid_2)}个, 平均置信度{valid_2['confidence'].mean():.2f}")
     if len(valid_2) > 0:
         print(f"  5天胜率: {(valid_2['return_5d'] > 0).mean()*100:.1f}%")
@@ -114,10 +114,10 @@ if 'wave1_valid' in df_v2.columns:
         print(f"  5天胜率: {(invalid_2['return_5d'] > 0).mean()*100:.1f}%")
 
 if 'b_wave_valid' in df_v2.columns:
-    valid_c = df_v2[df_v2['b_wave_valid'] == True]
-    invalid_c = df_v2[df_v2['b_wave_valid'] == False]
+    valid_c = df_v2[df_v2['b_wave_valid']]
+    invalid_c = df_v2[~df_v2['b_wave_valid']]
     
-    print(f"\nC浪验证:")
+    print("\nC浪验证:")
     print(f"  通过验证: {len(valid_c)}个, 平均置信度{valid_c['confidence'].mean():.2f}")
     if len(valid_c) > 0:
         print(f"  5天胜率: {(valid_c['return_5d'] > 0).mean()*100:.1f}%")
@@ -142,7 +142,7 @@ else:
 if change_conf < 0:
     print(f"✅ 平均置信度下降{abs(change_conf):.3f}, 低质量信号被过滤")
 else:
-    print(f"ℹ️  平均置信度持平或上升")
+    print("ℹ️  平均置信度持平或上升")
 
 print("\n【六、建议】")
 print("-" * 90)

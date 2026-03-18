@@ -2,10 +2,9 @@
 科技板块买卖点深度分析报告
 """
 import pandas as pd
-import numpy as np
 
 # 读取数据
-df = pd.read_csv('tests/results/tech_trade_details_20260318_1053.csv')
+df = pd.read_csv('tests/results/techtrade_details_20260318_1053.csv')
 df['is_win'] = df['pnl_pct'] > 0
 
 print("="*80)
@@ -16,12 +15,12 @@ print("="*80)
 print("\n🎯 一、买入时机分析（入场点特征）")
 print("-"*80)
 
-wave_stats = df.groupby('entry_wave').agg({
+wavestats = df.groupby('entry_wave').agg({
     'pnl_pct': ['count', 'mean', 'sum'],
     'holding_days': 'mean',
     'is_win': 'mean'
 }).round(2)
-wave_stats.columns = ['交易次数', '平均收益%', '总收益%', '平均持仓天', '胜率']
+wavestats.columns = ['交易次数', '平均收益%', '总收益%', '平均持仓天', '胜率']
 
 print("""
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -29,7 +28,7 @@ print("""
 ├──────────┬──────────┬──────────┬──────────┬──────────┬──────────────────┤
 │ 入场波浪  │ 交易次数  │ 平均收益% │ 总收益%   │ 平均持仓  │ 胜率             │
 ├──────────┼──────────┼──────────┼──────────┼──────────┼──────────────────┤""")
-for wave, row in wave_stats.iterrows():
+for wave, row in wavestats.iterrows():
     print(f"│ Wave {wave:<3} │ {row['交易次数']:>8.0f} │ {row['平均收益%']:>8.2f} │ {row['总收益%']:>8.2f} │ {row['平均持仓天']:>8.1f} │ {row['胜率']:>8.1%} │")
 print("""└──────────┴──────────┴──────────┴──────────┴──────────┴──────────────────┘
 
@@ -45,12 +44,12 @@ print("-"*80)
 # 简化卖出原因分类
 df['exit_simple'] = df['exit_reason'].apply(lambda x: 'trailing_stop' if 'trailing_stop' in str(x) else str(x))
 
-exit_stats = df.groupby('exit_simple').agg({
+exitstats = df.groupby('exit_simple').agg({
     'pnl_pct': ['count', 'mean', 'sum', 'std'],
     'holding_days': 'mean',
     'is_win': 'mean'
 }).round(2)
-exit_stats.columns = ['次数', '平均收益%', '总收益%', '波动率', '平均持仓', '胜率']
+exitstats.columns = ['次数', '平均收益%', '总收益%', '波动率', '平均持仓', '胜率']
 
 print("""
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -58,7 +57,7 @@ print("""
 ├──────────────┬──────────┬──────────┬──────────┬──────────┬──────────────┤
 │ 卖出方式      │ 次数      │ 平均收益% │ 总收益%   │ 平均持仓  │ 胜率         │
 ├──────────────┼──────────┼──────────┼──────────┼──────────┼──────────────┤""")
-for reason, row in exit_stats.sort_values('平均收益%', ascending=False).iterrows():
+for reason, row in exitstats.sort_values('平均收益%', ascending=False).iterrows():
     name = reason[:12]
     print(f"│ {name:<12} │ {row['次数']:>8.0f} │ {row['平均收益%']:>8.2f} │ {row['总收益%']:>9.2f} │ {row['平均持仓']:>8.1f} │ {row['胜率']:>8.1%} │")
 print("""└──────────────┴──────────┴──────────┴──────────┴──────────┴──────────────┘
@@ -116,11 +115,11 @@ df['holding_bucket'] = pd.cut(df['holding_days'],
                                bins=[0, 5, 20, 60, 150, 500], 
                                labels=['超短(1-5天)', '短(6-20天)', '中(21-60天)', '长(61-150天)', '超长(150天+)'])
 
-holding_stats = df.groupby('holding_bucket').agg({
+holdingstats = df.groupby('holding_bucket').agg({
     'pnl_pct': ['count', 'mean', 'sum'],
     'is_win': 'mean'
 }).round(2)
-holding_stats.columns = ['次数', '平均收益%', '总收益%', '胜率']
+holdingstats.columns = ['次数', '平均收益%', '总收益%', '胜率']
 
 print("""
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -128,7 +127,7 @@ print("""
 ├────────────────┬──────────┬──────────┬──────────┬────────────────────────┤
 │ 持仓时间        │ 次数      │ 平均收益% │ 总收益%   │ 胜率                   │
 ├────────────────┼──────────┼──────────┼──────────┼────────────────────────┤""")
-for bucket, row in holding_stats.iterrows():
+for bucket, row in holdingstats.iterrows():
     print(f"│ {bucket:<14} │ {row['次数']:>8.0f} │ {row['平均收益%']:>8.2f} │ {row['总收益%']:>8.2f} │ {row['胜率']:>10.1%}          │")
 print("""└────────────────┴──────────┴──────────┴──────────┴────────────────────────┘
 

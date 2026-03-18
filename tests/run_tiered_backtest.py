@@ -110,7 +110,7 @@ def run_tiered_backtest(mode='tiered'):
     # 统计分层
     high_tier = [s for s in tech_symbols if s.startswith('688')]
     medium_tier = [s for s in tech_symbols if not s.startswith('688')]
-    print(f"\n分层统计:")
+    print("\n分层统计:")
     print(f"  科创板(高波动): {len(high_tier)}只")
     print(f"  主板/创业板(中波动): {len(medium_tier)}只")
     
@@ -118,7 +118,7 @@ def run_tiered_backtest(mode='tiered'):
     analyzer = UnifiedWaveAnalyzer()
     
     results = []
-    all_trade_details = []
+    alltrade_details = []
     
     for i, symbol in enumerate(tech_symbols, 1):
         tier = get_stock_tier(symbol)
@@ -144,16 +144,16 @@ def run_tiered_backtest(mode='tiered'):
             results.append({
                 'symbol': symbol,
                 'tier': tier,
-                'trades': result.total_trades,
+                'trades': result.totaltrades,
                 'win_rate': result.win_rate,
                 'return': result.total_return_pct,
-                'avg_return': result.avg_return_per_trade,
+                'avg_return': result.avg_return_pertrade,
                 'max_dd': result.max_drawdown_pct,
                 'sharpe': result.sharpe_ratio,
             })
-            all_trade_details.extend(trade_details)
+            alltrade_details.extend(trade_details)
             
-            print(f"[{i}/{len(tech_symbols)}] {symbol}({tier_label}): 收益{result.total_return_pct:+.2f}% 交易{result.total_trades}次")
+            print(f"[{i}/{len(tech_symbols)}] {symbol}({tier_label}): 收益{result.total_return_pct:+.2f}% 交易{result.totaltrades}次")
             
         except Exception as e:
             print(f"[{i}/{len(tech_symbols)}] {symbol}: 错误 - {e}")
@@ -192,12 +192,12 @@ def run_tiered_backtest(mode='tiered'):
         df_results.to_csv(output_file, index=False)
         print(f"\n💾 结果保存: {output_file}")
         
-        if all_trade_details:
-            trades_file = f"tests/results/tech_{mode_str}_trades_{timestamp}.csv"
-            pd.DataFrame(all_trade_details).to_csv(trades_file, index=False)
+        if alltrade_details:
+            trades_file = f"tests/results/tech_{mode_str}trades_{timestamp}.csv"
+            pd.DataFrame(alltrade_details).to_csv(trades_file, index=False)
             print(f"💾 交易明细: {trades_file}")
         
-        return df_results, all_trade_details
+        return df_results, alltrade_details
     
     return None, None
 

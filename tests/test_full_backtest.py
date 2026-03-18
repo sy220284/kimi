@@ -8,8 +8,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 import pandas as pd
-import numpy as np
-from datetime import datetime
 from data import DatabaseDataManager, get_stock_data
 from analysis.wave import EnhancedWaveAnalyzer
 from analysis.backtest.wave_backtester import WaveBacktester
@@ -26,13 +24,13 @@ analyzer = EnhancedWaveAnalyzer()
 # 获取所有股票
 all_symbols = manager.get_stored_symbols()
 print(f"\n数据库共有 {len(all_symbols)} 只股票")
-print(f"回测时间范围: 2021-01-01 至 2026-03-16 (约5年)\n")
+print("回测时间范围: 2021-01-01 至 2026-03-16 (约5年)\n")
 
 # 回测结果收集
 backtest_results = []
 
 # 测试多组参数配置
-param_configs = [
+paramconfigs = [
     ('保守', ParameterSet(atr_mult=0.7, confidence_threshold=0.6, min_change_pct=2.5)),
     ('标准', ParameterSet(atr_mult=0.5, confidence_threshold=0.5, min_change_pct=2.0)),
     ('激进', ParameterSet(atr_mult=0.4, confidence_threshold=0.4, min_change_pct=1.5)),
@@ -56,7 +54,7 @@ for idx, symbol in enumerate(all_symbols[:20], 1):  # 先测试前20只
         best_result = None
         best_score = -999
         
-        for param_name, params in param_configs:
+        for param_name, params in paramconfigs:
             try:
                 # 创建带参数的分析器
                 test_analyzer = EnhancedWaveAnalyzer(
@@ -77,7 +75,7 @@ for idx, symbol in enumerate(all_symbols[:20], 1):  # 先测试前20只
                     result.total_return_pct / 100 * 0.3 +
                     (1 - result.max_drawdown_pct / 100) * 0.2 +
                     min(result.sharpe_ratio, 3) / 3 * 0.2
-                ) if result.total_trades > 3 else -1
+                ) if result.totaltrades > 3 else -1
                 
                 if score > best_score:
                     best_score = score
@@ -88,7 +86,7 @@ for idx, symbol in enumerate(all_symbols[:20], 1):  # 先测试前20只
                         'return_pct': result.total_return_pct,
                         'max_dd': result.max_drawdown_pct,
                         'sharpe': result.sharpe_ratio,
-                        'trades': result.total_trades,
+                        'trades': result.totaltrades,
                         'score': score
                     }
                 
@@ -113,7 +111,7 @@ if backtest_results:
     print(f"\n成功回测: {len(df_results)} 只股票")
     
     # 整体统计
-    print(f"\n【整体表现】")
+    print("\n【整体表现】")
     print(f"  平均胜率: {df_results['win_rate'].mean():.1%}")
     print(f"  平均收益: {df_results['return_pct'].mean():.1f}%")
     print(f"  平均回撤: {df_results['max_dd'].mean():.1f}%")
@@ -121,26 +119,26 @@ if backtest_results:
     print(f"  平均交易次数: {df_results['trades'].mean():.1f}")
     
     # 参数偏好统计
-    print(f"\n【最优参数分布】")
+    print("\n【最优参数分布】")
     param_counts = df_results['param'].value_counts()
     for param, count in param_counts.items():
         pct = count / len(df_results)
         print(f"  {param}: {count}只 ({pct:.1%})")
     
     # 高收益股票
-    print(f"\n【收益TOP 5】")
+    print("\n【收益TOP 5】")
     top5 = df_results.nlargest(5, 'return_pct')
     for _, row in top5.iterrows():
         print(f"  {row['symbol']}: {row['return_pct']:.1f}% (胜率{row['win_rate']:.1%}, {row['param']})")
     
     # 高胜率股票
-    print(f"\n【胜率TOP 5】")
+    print("\n【胜率TOP 5】")
     top5_wr = df_results.nlargest(5, 'win_rate')
     for _, row in top5_wr.iterrows():
         print(f"  {row['symbol']}: {row['win_rate']:.1%} (收益{row['return_pct']:.1f}%, {row['param']})")
     
     # 参数优化建议
-    print(f"\n【参数优化建议】")
+    print("\n【参数优化建议】")
     
     # 按参数分组统计
     for param in ['保守', '标准', '激进']:
@@ -150,7 +148,7 @@ if backtest_results:
             print(f"    适用股票: {len(subset)}只")
             print(f"    平均胜率: {subset['win_rate'].mean():.1%}")
             print(f"    平均收益: {subset['return_pct'].mean():.1f}%")
-            print(f"    适用场景: ", end="")
+            print("    适用场景: ", end="")
             if param == '保守':
                 print("高波动股票、风险控制优先")
             elif param == '激进':

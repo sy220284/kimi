@@ -16,14 +16,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import pandas as pd
 import numpy as np
 import psycopg2
-from datetime import datetime
-from collections import defaultdict
 from dataclasses import dataclass
 from typing import List, Dict, Optional
 import json
 
-from src.analysis.wave import UnifiedWaveAnalyzer, WaveEntryType
-from src.analysis.wave.enhanced_detector import enhanced_pivot_detection
+from src.analysis.wave import UnifiedWaveAnalyzer
 
 @dataclass
 class WaveSegment:
@@ -67,7 +64,7 @@ class WavePostValidator:
         )
         sql = '''
         SELECT date, open, high, low, close, volume, amount
-        FROM market_data
+        FROM marketdata
         WHERE symbol = %s AND date >= %s AND date <= %s
         ORDER BY date
         '''
@@ -75,7 +72,7 @@ class WavePostValidator:
         conn.close()
         return df
     
-    def detect_pivots_with_future(self, df: pd.DataFrame, 
+    def detectpivots_with_future(self, df: pd.DataFrame, 
                                    confirmation_bars: int = 5) -> pd.DataFrame:
         """
         用未来数据确认高低点（事后视角）
@@ -93,20 +90,20 @@ class WavePostValidator:
         lows = df['low'].values
         
         # 标记潜在高低点
-        df['is_peak'] = False
+        df['ispeak'] = False
         df['is_trough'] = False
-        df['is_confirmed_peak'] = False
+        df['is_confirmedpeak'] = False
         df['is_confirmed_trough'] = False
         
         for i in range(n, len(df) - n):
             # 潜在高点：比前后n天都高
             if highs[i] == max(highs[i-n:i+n+1]):
-                df.loc[i, 'is_peak'] = True
+                df.loc[i, 'ispeak'] = True
                 # 确认：后续不再创新高
                 if i + n < len(df):
                     future_max = max(highs[i+1:min(i+n+1, len(df))])
                     if highs[i] >= future_max:
-                        df.loc[i, 'is_confirmed_peak'] = True
+                        df.loc[i, 'is_confirmedpeak'] = True
             
             # 潜在低点：比前后n天都低
             if lows[i] == min(lows[i-n:i+n+1]):
@@ -123,10 +120,10 @@ class WavePostValidator:
         """
         识别完整波浪模式（事后视角）
         """
-        df = self.detect_pivots_with_future(df)
+        df = self.detectpivots_with_future(df)
         
         # 提取确认的极值点
-        peaks = df[df['is_confirmed_peak']].copy()
+        peaks = df[df['is_confirmedpeak']].copy()
         troughs = df[df['is_confirmed_trough']].copy()
         
         if len(peaks) < 2 or len(troughs) < 2:
@@ -249,10 +246,10 @@ class WavePostValidator:
         print("\n📚 建立浪型特征库...")
         
         features = {
-            'C浪': {'durations': [], 'price_changes': [], 'volume_profiles': []},
-            '2浪': {'durations': [], 'price_changes': [], 'volume_profiles': []},
-            'A浪': {'durations': [], 'price_changes': [], 'volume_profiles': []},
-            'B浪': {'durations': [], 'price_changes': [], 'volume_profiles': []},
+            'C浪': {'durations': [], 'pricechanges': [], 'volume_profiles': []},
+            '2浪': {'durations': [], 'pricechanges': [], 'volume_profiles': []},
+            'A浪': {'durations': [], 'pricechanges': [], 'volume_profiles': []},
+            'B浪': {'durations': [], 'pricechanges': [], 'volume_profiles': []},
         }
         
         all_cycles = []
@@ -276,35 +273,35 @@ class WavePostValidator:
                         wave_key = seg.wave_type + '浪' if seg.wave_type in ['C', '2', 'A', 'B'] else seg.wave_type
                         if wave_key in features:
                             features[wave_key]['durations'].append(seg.duration_days)
-                            features[wave_key]['price_changes'].append(abs(seg.price_change_pct))
+                            features[wave_key]['pricechanges'].append(abs(seg.price_change_pct))
                             features[wave_key]['volume_profiles'].append(seg.volume_profile)
         
         # 统计特征
-        feature_stats = {}
+        featurestats = {}
         for wave_type, data in features.items():
             if data['durations']:
-                feature_stats[wave_type] = {
+                featurestats[wave_type] = {
                     'sample_count': len(data['durations']),
                     'avg_duration': np.mean(data['durations']),
                     'duration_std': np.std(data['durations']),
-                    'avg_price_change': np.mean(data['price_changes']),
-                    'price_change_std': np.std(data['price_changes']),
+                    'avg_price_change': np.mean(data['pricechanges']),
+                    'price_change_std': np.std(data['pricechanges']),
                     'volume_expansion_pct': data['volume_profiles'].count('扩张') / len(data['volume_profiles']) * 100,
                     'volume_contraction_pct': data['volume_profiles'].count('收缩') / len(data['volume_profiles']) * 100,
                 }
         
         print(f"\n✓ 分析了 {len(all_cycles)} 个完整周期")
-        return feature_stats, all_cycles
+        return featurestats, all_cycles
     
-    def validate_realtime_signals(self, symbol: str, 
-                                   realtime_signals: List[Dict],
+    def validate_realtimesignals(self, symbol: str, 
+                                   realtimesignals: List[Dict],
                                    true_cycle: WaveCycle) -> Dict:
         """
         验证实时识别信号 vs 事后真实浪型
         """
         validations = []
         
-        for signal in realtime_signals:
+        for signal in realtimesignals:
             signal_date = signal['date']
             signal_type = signal['entry_type']
             
@@ -341,8 +338,8 @@ class WavePostValidator:
         
         return {
             'symbol': symbol,
-            'total_signals': len(validations),
-            'correct_signals': sum(v['is_correct'] for v in validations),
+            'totalsignals': len(validations),
+            'correctsignals': sum(v['is_correct'] for v in validations),
             'accuracy': accuracy,
             'details': validations
         }
@@ -361,7 +358,7 @@ def main():
     )
     sql = '''
     SELECT symbol, COUNT(*) as records
-    FROM market_data 
+    FROM marketdata 
     WHERE date >= '2020-01-01'
     GROUP BY symbol
     HAVING COUNT(*) >= 1000
@@ -375,14 +372,14 @@ def main():
     print(f"\n选择 {len(symbols)} 只股票进行分析")
     
     # 建立特征库
-    feature_stats, cycles = validator.build_feature_library(symbols)
+    featurestats, cycles = validator.build_feature_library(symbols)
     
     # 打印特征库
     print("\n" + "=" * 80)
     print("📊 浪型特征库")
     print("=" * 80)
     
-    for wave_type, stats in feature_stats.items():
+    for wave_type, stats in featurestats.items():
         print(f"\n【{wave_type}浪特征】 (样本{stats['sample_count']}个)")
         print(f"  平均持续时间: {stats['avg_duration']:.1f} ± {stats['duration_std']:.1f} 天")
         print(f"  平均价格变动: {stats['avg_price_change']:.2f}% ± {stats['price_change_std']:.2f}%")
@@ -394,9 +391,9 @@ def main():
     output_dir.mkdir(exist_ok=True)
     
     with open(output_dir / 'wave_feature_library.json', 'w', encoding='utf-8') as f:
-        json.dump(feature_stats, f, ensure_ascii=False, indent=2)
+        json.dump(featurestats, f, ensure_ascii=False, indent=2)
     
-    print(f"\n💾 特征库已保存: tests/results/wave_feature_library.json")
+    print("\n💾 特征库已保存: tests/results/wave_feature_library.json")
     
     # 示例：分析一只股票的实时识别 vs 事后真实浪型
     print("\n" + "=" * 80)
@@ -413,7 +410,7 @@ def main():
             print(f"  模式类型: {cycle.pattern_type}")
             print(f"  总收益: {cycle.total_return_pct:.2f}%")
             print(f"  最大回撤: {cycle.max_drawdown_pct:.2f}%")
-            print(f"\n  分段详情:")
+            print("\n  分段详情:")
             for seg in cycle.segments:
                 direction = "上涨" if seg.price_change_pct > 0 else "下跌"
                 print(f"    {seg.wave_type}浪: {seg.start_date} ~ {seg.end_date}")

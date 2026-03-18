@@ -45,7 +45,7 @@ def test_full_history():
             print(f"   ✗ 失败: {e}")
         
         # 2. 测试完整历史数据
-        print(f"\n2. 获取完整历史数据:")
+        print("\n2. 获取完整历史数据:")
         try:
             # 只获取最近5年的数据以加快测试
             from datetime import datetime
@@ -57,13 +57,13 @@ def test_full_history():
             if not full_df.empty:
                 print(f"   ✓ 获取 {len(full_df)} 条数据")
                 print(f"   完整范围: {full_df['date'].min()} ~ {full_df['date'].max()}")
-                print(f"\n   数据预览 (前3条):")
+                print("\n   数据预览 (前3条):")
                 cols = ['date', 'open', 'high', 'low', 'close', 'volume']
                 print(full_df[cols].head(3).to_string(index=False))
-                print(f"\n   数据预览 (后3条):")
+                print("\n   数据预览 (后3条):")
                 print(full_df[cols].tail(3).to_string(index=False))
             else:
-                print(f"   ✗ 未获取到数据")
+                print("   ✗ 未获取到数据")
         except Exception as e:
             print(f"   ✗ 失败: {e}")
             import traceback

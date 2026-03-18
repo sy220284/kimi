@@ -3,11 +3,9 @@
 实现MACD、RSI、KDJ、Bollinger Bands、MA均线
 使用pandas和numpy实现，返回DataFrame格式
 """
-from typing import List, Optional, Dict, Any, Union
+from typing import List, Optional, Dict, Any
 import pandas as pd
-import numpy as np
 from dataclasses import dataclass
-from enum import Enum
 from pathlib import Path
 import sys
 

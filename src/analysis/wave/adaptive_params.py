@@ -3,8 +3,7 @@
 Phase 2: 提高分析准确性
 """
 import pandas as pd
-import numpy as np
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from dataclasses import dataclass
 from enum import Enum
 
@@ -226,7 +225,7 @@ class AdaptiveParameterOptimizer:
             }
         """
         vol_analysis = VolatilityAnalyzer.calculate_volatility_regime(df)
-        market_condition = vol_analysis['market_condition']
+        _ = vol_analysis['market_condition']
         
         # 自适应参数
         adaptive = cls.optimize(df)

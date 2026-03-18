@@ -10,7 +10,7 @@ import pandas as pd
 from analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy
 from analysis.wave.unified_analyzer import UnifiedWaveAnalyzer
 
-def load_test_data():
+def load_testdata():
     """加载测试数据"""
     # 尝试从results目录加载之前的回测数据
     csv_path = Path(__file__).parent / 'results' / 'batch_wave_analysis.csv'
@@ -63,7 +63,7 @@ def main():
     print("="*60)
     
     # 加载数据
-    symbol, df = load_test_data()
+    symbol, df = load_testdata()
     print(f"\n股票: {symbol}")
     print(f"数据范围: {df['date'].min()} ~ {df['date'].max()}")
     print(f"数据量: {len(df)} 条")
@@ -108,12 +108,12 @@ def main():
     print("  ✅ 资金管理: 最大3只持仓,总仓位≤80%")
     print("  ✅ 趋势过滤: 买入时过滤,不清空信号")
     
-    print(f"\n实际交易成本:")
-    if result.total_trades > 0:
+    print("\n实际交易成本:")
+    if result.totaltrades > 0:
         # 估算交易成本
-        avg_cost_per_trade = 0.0003 + 0.001 + 0.001 + 0.0003 + 0.001 + 0.001  # 买入+卖出
-        total_cost_pct = avg_cost_per_trade * result.total_trades * 100
-        print(f"  往返成本: 0.36% × {result.total_trades}笔 = {total_cost_pct:.2f}%")
+        avg_cost_pertrade = 0.0003 + 0.001 + 0.001 + 0.0003 + 0.001 + 0.001  # 买入+卖出
+        total_cost_pct = avg_cost_pertrade * result.totaltrades * 100
+        print(f"  往返成本: 0.36% × {result.totaltrades}笔 = {total_cost_pct:.2f}%")
         print(f"  对收益影响: -{total_cost_pct:.2f}%")
     
     print("\n" + "="*60)

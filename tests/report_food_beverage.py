@@ -5,8 +5,6 @@
 import sys
 sys.path.insert(0, 'src')
 
-import pandas as pd
-import numpy as np
 
 # 回测结果数据
 results = [

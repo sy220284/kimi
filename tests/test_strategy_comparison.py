@@ -7,10 +7,8 @@ import sys
 sys.path.insert(0, 'src')
 
 import pandas as pd
-import numpy as np
-from typing import List, Dict, Optional
-from dataclasses import dataclass
-from datetime import datetime, timedelta
+from typing import List, Dict
+from datetime import datetime
 from data import get_stock_data
 from analysis.wave import EnhancedWaveAnalyzer
 from analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy, TradeAction
@@ -21,7 +19,7 @@ class ImpulseSignalDetector:
     
     def __init__(self, validity_days: int = 3):
         self.validity_days = validity_days
-        self.last_signals = []  # 存储最近检测的信号
+        self.lastsignals = []  # 存储最近检测的信号
         self.last_analysis_date = None
     
     def detect(self, df: pd.DataFrame, current_date: datetime) -> List[Dict]:
@@ -30,7 +28,7 @@ class ImpulseSignalDetector:
         dates = pd.to_datetime(df['date']).values
         
         # 找极值点
-        pivots = self._find_pivots(prices, dates, window=3)
+        pivots = self._findpivots(prices, dates, window=3)
         if len(pivots) < 4:
             return []
         
@@ -48,22 +46,22 @@ class ImpulseSignalDetector:
                             signals.append(signal)
         
         # 存储信号并清理过期信号
-        self.last_signals = [
+        self.lastsignals = [
             s for s in signals 
             if (current_date - s['detect_date']).days <= self.validity_days
         ]
         self.last_analysis_date = current_date
         
-        return self.last_signals
+        return self.lastsignals
     
-    def _find_pivots(self, prices, dates, window=3):
+    def _findpivots(self, prices, dates, window=3):
         pivots = []
         for i in range(window, len(prices) - window):
-            is_peak = all(prices[i] >= prices[i-j] for j in range(1, window+1)) and \
+            ispeak = all(prices[i] >= prices[i-j] for j in range(1, window+1)) and \
                      all(prices[i] >= prices[i+j] for j in range(1, window+1))
             is_trough = all(prices[i] <= prices[i-j] for j in range(1, window+1)) and \
                        all(prices[i] <= prices[i+j] for j in range(1, window+1))
-            if is_peak or is_trough:
+            if ispeak or is_trough:
                 pivots.append((i, prices[i], pd.to_datetime(dates[i])))
         return pivots
     
@@ -156,7 +154,7 @@ def run_original_backtest(symbol: str, df: pd.DataFrame) -> Dict:
     return {
         'symbol': symbol,
         'strategy': 'original',
-        'trades': result.total_trades,
+        'trades': result.totaltrades,
         'win_rate': result.win_rate,
         'return': result.total_return_pct,
         'drawdown': result.max_drawdown_pct,
@@ -185,7 +183,7 @@ def run_optimized_backtest(symbol: str, df: pd.DataFrame) -> Dict:
     
     trades = []
     position = None
-    wave_stats = {'C': 0, '4': 0, '2': 0, 'other': 0}
+    wavestats = {'C': 0, '4': 0, '2': 0, 'other': 0}
     
     reanalyze_every = 30
     
@@ -198,11 +196,11 @@ def run_optimized_backtest(symbol: str, df: pd.DataFrame) -> Dict:
             lookback_start = max(0, i - 60)
             analysis_df = df.iloc[lookback_start:i+1].copy()
             
-            impulse_signals = []
+            impulsesignals = []
             if len(analysis_df) >= 20:
                 try:
-                    impulse_signals = impulse_detector.detect(analysis_df, date)
-                except:
+                    impulsesignals = impulse_detector.detect(analysis_df, date)
+                except Exception:
                     pass
         
         # 生成信号
@@ -212,7 +210,7 @@ def run_optimized_backtest(symbol: str, df: pd.DataFrame) -> Dict:
         stop_loss = None
         
         # 优先使用推动浪信号
-        for sig in impulse_signals:
+        for sig in impulsesignals:
             # 信号在有效期内 (检测后3天内)
             days_diff = (date - sig['detect_date']).days
             if 0 <= days_diff <= 3:
@@ -223,7 +221,7 @@ def run_optimized_backtest(symbol: str, df: pd.DataFrame) -> Dict:
                     entry_wave = '4'
                     target_price = sig['target_price']
                     stop_loss = sig['stop_loss']
-                    wave_stats['4'] += 1
+                    wavestats['4'] += 1
                     break
         
         # 执行交易
@@ -262,20 +260,20 @@ def run_optimized_backtest(symbol: str, df: pd.DataFrame) -> Dict:
                 position = None
     
     # 计算结果
-    closed_trades = [t for t in trades if t.status == 'closed']
-    wins = [t for t in closed_trades if t.pnl_pct > 0]
+    closedtrades = [t for t in trades if t.status == 'closed']
+    wins = [t for t in closedtrades if t.pnl_pct > 0]
     
-    total_return = sum(t.pnl_pct for t in closed_trades) / len(closed_trades) * len(closed_trades) / 10 if closed_trades else 0
-    win_rate = len(wins) / len(closed_trades) if closed_trades else 0
+    total_return = sum(t.pnl_pct for t in closedtrades) / len(closedtrades) * len(closedtrades) / 10 if closedtrades else 0
+    win_rate = len(wins) / len(closedtrades) if closedtrades else 0
     
     return {
         'symbol': symbol,
         'strategy': 'optimized',
-        'trades': len(closed_trades),
+        'trades': len(closedtrades),
         'win_rate': win_rate,
         'return': total_return,
         'drawdown': 15.0,
-        'wave_dist': wave_stats
+        'wave_dist': wavestats
     }
 
 
@@ -314,10 +312,10 @@ for symbol, name in test_stocks:
             'symbol': symbol,
             'name': name,
             'orig_return': orig_result['return'],
-            'orig_trades': orig_result['trades'],
+            'origtrades': orig_result['trades'],
             'orig_winrate': orig_result['win_rate'],
             'opt_return': opt_result['return'],
-            'opt_trades': opt_result['trades'],
+            'opttrades': opt_result['trades'],
             'opt_winrate': opt_result['win_rate'],
             'improvement': opt_result['return'] - orig_result['return']
         })
@@ -338,7 +336,7 @@ print(f"\n{'股票':<10} {'原收益':<10} {'优化收益':<10} {'改进':<10} {
 print("-"*70)
 
 for r in results:
-    print(f"{r['symbol']:<10} {r['orig_return']:<+10.1f}% {r['opt_return']:<+10.1f}% {r['improvement']:<+10.1f}% {r['orig_trades']:<8} {r['opt_trades']:<8}")
+    print(f"{r['symbol']:<10} {r['orig_return']:<+10.1f}% {r['opt_return']:<+10.1f}% {r['improvement']:<+10.1f}% {r['origtrades']:<8} {r['opttrades']:<8}")
 
 avg_orig = sum(r['orig_return'] for r in results) / len(results)
 avg_opt = sum(r['opt_return'] for r in results) / len(results)

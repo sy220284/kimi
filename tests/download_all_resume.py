@@ -6,7 +6,6 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
-import pandas as pd
 import time
 from datetime import datetime
 from data.db_manager import get_db_manager
@@ -22,14 +21,14 @@ def get_downloaded_stocks(db_manager):
     """获取已下载的股票列表"""
     try:
         result = db_manager.pg.execute(
-            "SELECT DISTINCT symbol FROM market_data",
+            "SELECT DISTINCT symbol FROM marketdata",
             fetch=True
         )
         return {r['symbol'] for r in result}
-    except:
+    except Exception:
         return set()
 
-def save_to_database(db_manager, symbol, df):
+def save_todatabase(db_manager, symbol, df):
     """保存到数据库"""
     if df.empty:
         return 0
@@ -37,7 +36,7 @@ def save_to_database(db_manager, symbol, df):
     count = 0
     try:
         for _, row in df.iterrows():
-            db_manager.pg.insert_market_data(
+            db_manager.pg.insert_marketdata(
                 symbol=symbol,
                 date=row['date'],
                 open_price=float(row['open']),
@@ -54,11 +53,11 @@ def save_to_database(db_manager, symbol, df):
         print(f"    保存失败: {e}")
         return 0
 
-def download_stock_data(fetcher, symbol, start_date='2017-01-01', end_date='2024-12-31'):
+def download_stockdata(fetcher, symbol, start_date='2017-01-01', end_date='2024-12-31'):
     """下载单只股票历史数据"""
     try:
         code = f'hs_{symbol}'
-        df = fetcher.get_data_by_date_range(code, start_date, end_date)
+        df = fetcher.getdata_by_date_range(code, start_date, end_date)
         
         if df is None or df.empty:
             return None
@@ -128,10 +127,10 @@ def main():
             print(f"\n[{overall_idx}/{len(stocks)}] {symbol}", end=" ", flush=True)
             
             try:
-                df = download_stock_data(fetcher, symbol, start_date, end_date)
+                df = download_stockdata(fetcher, symbol, start_date, end_date)
                 
                 if df is not None and not df.empty:
-                    records_saved = save_to_database(db_manager, symbol, df)
+                    records_saved = save_todatabase(db_manager, symbol, df)
                     if records_saved > 0:
                         print(f"✅ 保存 {records_saved} 条记录")
                         batch_success += 1
@@ -173,11 +172,11 @@ def main():
     # 查询数据库最终统计
     try:
         result = db_manager.pg.execute(
-            "SELECT COUNT(DISTINCT symbol) as stocks, COUNT(*) as total FROM market_data",
+            "SELECT COUNT(DISTINCT symbol) as stocks, COUNT(*) as total FROM marketdata",
             fetch=True
         )
         if result:
-            print(f"\n📈 数据库最终统计:")
+            print("\n📈 数据库最终统计:")
             print(f"  总股票数: {result[0]['stocks']} 只")
             print(f"  总记录数: {result[0]['total']:,} 条")
     except Exception as e:

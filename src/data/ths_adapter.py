@@ -3,12 +3,12 @@
 基于同花顺网页版内部API，无需token，直接HTTP获取
 支持多次请求拼接获取完整历史数据
 """
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional
 import pandas as pd
 import requests
 import json
 import re
-from datetime import datetime, timedelta
+from datetime import datetime
 from .data_collector import DataSourceAdapter, DataSourceType, DataFetchError
 
 
@@ -313,7 +313,7 @@ class ThsAdapter(DataSourceAdapter):
                 'X-Requested-With': 'XMLHttpRequest'
             }
             
-            response = self.session.get(url, headers=headers, timeout=self.timeout)
+            _response = self.session.get(url, headers=headers, timeout=self.timeout)
             
             # 提取股票代码和名称
             # 这里简化处理，实际可能需要解析HTML或使用其他接口
@@ -396,7 +396,7 @@ class ThsAdapter(DataSourceAdapter):
                 'Referer': 'http://data.10jqka.com.cn/',
             }
             
-            response = self.session.get(url, headers=headers, timeout=self.timeout)
+            _response = self.session.get(url, headers=headers, timeout=self.timeout)
             
             self.logger.warning("同花顺行业列表需要HTML解析，建议使用备用数据源")
             
@@ -490,7 +490,7 @@ class ThsAdapter(DataSourceAdapter):
                 'Referer': 'http://data.10jqka.com.cn/',
             }
             
-            response = self.session.get(url, headers=headers, timeout=self.timeout)
+            _response = self.session.get(url, headers=headers, timeout=self.timeout)
             
             self.logger.warning("同花顺概念列表需要HTML解析，建议使用备用数据源")
             

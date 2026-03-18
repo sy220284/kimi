@@ -71,16 +71,16 @@ for idx in valid_days.index[:20]:
     signal_count = len(signals)
     
     # 检查是否会买入
-    backtester._current_signals = signals
-    best = backtester._get_best_trade_signal(price)
+    backtester.currentsignals = signals
+    best = backtester._get_besttradesignal(price)
     will_buy = '✓' if (best and best.direction == 'up' and SYMBOL not in strategy.positions) else ''
     if will_buy:
         buy_count += 1
         # 模拟买入
-        strategy.execute_trade(SYMBOL, date, price, TradeAction.BUY, 
+        strategy.executetrade(SYMBOL, date, price, TradeAction.BUY, 
                               target_price=best.target_price, 
                               stop_loss=best.stop_loss,
-                              wave_signal=best)
+                              wavesignal=best)
     
     print(f"{date:<12} {price:>10.2f} {ma200:>10.2f} {ratio:>8.3f} {signal_count:>6} {will_buy:>6}")
 

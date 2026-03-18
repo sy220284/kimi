@@ -9,9 +9,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
-import numpy as np
 import psycopg2
-from datetime import datetime, timedelta
+from datetime import datetime
 import json
 import time
 
@@ -60,7 +59,7 @@ def get_stock_list(min_records=1000):
     conn = get_db_connection()
     sql = '''
     SELECT symbol, MIN(date) as start_date, MAX(date) as end_date, COUNT(*) as records
-    FROM market_data 
+    FROM marketdata 
     GROUP BY symbol
     HAVING COUNT(*) >= %s
     ORDER BY COUNT(*) DESC
@@ -73,7 +72,7 @@ def get_stock_data(symbol, start_date, end_date):
     conn = get_db_connection()
     sql = '''
     SELECT date, open, high, low, close, volume, amount
-    FROM market_data
+    FROM marketdata
     WHERE symbol = %s AND date >= %s AND date <= %s
     ORDER BY date
     '''
@@ -156,7 +155,7 @@ def main():
         use_resonance=True,
         min_resonance_score=0.3,
         trend_ma_period=200,
-        use_adaptive_params=False,
+        use_adaptiveparams=False,
     )
     
     # 进度跟踪
@@ -164,27 +163,27 @@ def main():
     tracker = ProgressTracker(len(selected_stocks))
     
     # 批量分析
-    all_signals = []
+    allsignals = []
     print(f"\n开始分析前{len(selected_stocks)}只股票...")
     
     for symbol in selected_stocks:
         signals = analyze_stock(symbol, analyzer, tracker)
         if signals:
-            all_signals.extend(signals)
+            allsignals.extend(signals)
     
     # 保存结果
     output_dir = Path('tests/results')
     output_dir.mkdir(exist_ok=True)
     
-    if all_signals:
-        df = pd.DataFrame(all_signals)
+    if allsignals:
+        df = pd.DataFrame(allsignals)
         df.to_csv(output_dir / 'batch_enhanced_v2.csv', index=False, encoding='utf-8-sig')
         
         # 生成摘要
         summary = {
             'timestamp': datetime.now().isoformat(),
             'total_stocks': len(selected_stocks),
-            'total_signals': len(all_signals),
+            'totalsignals': len(allsignals),
             'by_type': df['entry_type'].value_counts().to_dict(),
             'by_method': df['detection_method'].value_counts().to_dict() if 'detection_method' in df.columns else {},
             'avg_confidence': df['confidence'].mean(),
@@ -192,19 +191,19 @@ def main():
             'win_rate_20d': (df['return_20d'] > 0).mean() * 100 if 'return_20d' in df.columns else 0,
         }
         
-        with open(output_dir / 'batch_enhanced_v2_summary.json', 'w') as f:
+        with open(output_dir / 'batch_enhanced_v2summary.json', 'w') as f:
             json.dump(summary, f, indent=2, default=str)
         
         print("\n" + "=" * 80)
         print("📊 结果摘要")
         print("=" * 80)
-        print(f"总信号数: {summary['total_signals']}")
+        print(f"总信号数: {summary['totalsignals']}")
         print(f"浪型分布: {summary['by_type']}")
         print(f"检测方法: {summary['by_method']}")
         print(f"平均置信度: {summary['avg_confidence']:.2f}")
         print(f"5天胜率: {summary['win_rate_5d']:.1f}%")
         print(f"20天胜率: {summary['win_rate_20d']:.1f}%")
-        print(f"\n💾 结果保存: tests/results/batch_enhanced_v2.csv")
+        print("\n💾 结果保存: tests/results/batch_enhanced_v2.csv")
     
     print("\n" + "=" * 80)
     print("✅ 批量分析完成")

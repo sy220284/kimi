@@ -7,13 +7,11 @@ import sys
 sys.path.insert(0, 'src')
 
 import pandas as pd
-import numpy as np
-from typing import List, Dict, Optional
+from typing import Dict, Optional
 from dataclasses import dataclass
-from datetime import datetime
 
 from data import get_stock_data
-from analysis.wave import UnifiedWaveAnalyzer, WaveEntryType
+from analysis.wave import UnifiedWaveAnalyzer
 
 
 # 食品饮料板块10只股票
@@ -126,49 +124,49 @@ def run_unified_backtest(symbol: str, name: str, market_cap: str,
                     position = None
     
     # 计算结果
-    closed_trades = [t for t in trades if t.status == 'closed']
-    wins = [t for t in closed_trades if t.pnl_pct > 0]
+    closedtrades = [t for t in trades if t.status == 'closed']
+    wins = [t for t in closedtrades if t.pnl_pct > 0]
     
-    if closed_trades:
-        win_rate = len(wins) / len(closed_trades)
-        avg_return = sum(t.pnl_pct for t in closed_trades) / len(closed_trades)
-        total_return = sum(t.pnl_pct for t in closed_trades) / 10
+    if closedtrades:
+        win_rate = len(wins) / len(closedtrades)
+        avg_return = sum(t.pnl_pct for t in closedtrades) / len(closedtrades)
+        total_return = sum(t.pnl_pct for t in closedtrades) / 10
     else:
         win_rate = 0
         avg_return = 0
         total_return = 0
     
     # 按浪型统计
-    wave_stats = {}
+    wavestats = {}
     for wave in ['C', '2', '4']:
-        wave_trades = [t for t in closed_trades if t.entry_type == wave]
-        if wave_trades:
-            wave_wins = [t for t in wave_trades if t.pnl_pct > 0]
-            wave_stats[wave] = {
-                'count': len(wave_trades),
-                'win_rate': len(wave_wins) / len(wave_trades),
-                'avg_return': sum(t.pnl_pct for t in wave_trades) / len(wave_trades)
+        wavetrades = [t for t in closedtrades if t.entry_type == wave]
+        if wavetrades:
+            wave_wins = [t for t in wavetrades if t.pnl_pct > 0]
+            wavestats[wave] = {
+                'count': len(wavetrades),
+                'win_rate': len(wave_wins) / len(wavetrades),
+                'avg_return': sum(t.pnl_pct for t in wavetrades) / len(wavetrades)
             }
     
-    print(f"总交易: {len(closed_trades)} 笔 (C:{signal_counts['C']}, 2:{signal_counts['2']}, 4:{signal_counts['4']})")
+    print(f"总交易: {len(closedtrades)} 笔 (C:{signal_counts['C']}, 2:{signal_counts['2']}, 4:{signal_counts['4']})")
     print(f"胜率: {win_rate:.1%}")
     print(f"总收益: {total_return:+.2f}%")
     
-    if wave_stats:
-        print(f"\n各浪型表现:")
-        for wave, stats in wave_stats.items():
+    if wavestats:
+        print("\n各浪型表现:")
+        for wave, stats in wavestats.items():
             print(f"  浪{wave}: {stats['count']}笔 胜率{stats['win_rate']:.1%} 收益{stats['avg_return']:+.2f}%")
     
     return {
         'symbol': symbol,
         'name': name,
         'market_cap': market_cap,
-        'total_trades': len(closed_trades),
+        'totaltrades': len(closedtrades),
         'win_rate': win_rate,
         'total_return': total_return,
         'signal_counts': signal_counts,
-        'wave_stats': wave_stats,
-        'trades': closed_trades
+        'wavestats': wavestats,
+        'trades': closedtrades
     }
 
 
@@ -183,38 +181,38 @@ def main():
     results = []
     for symbol, name, cap in FOOD_BEVERAGE_STOCKS:
         result = run_unified_backtest(symbol, name, cap)
-        if result['total_trades'] > 0:
+        if result['totaltrades'] > 0:
             results.append(result)
     
     # 汇总
     print(f"\n{'='*60}")
-    print(f"📈 汇总统计")
+    print("📈 汇总统计")
     print(f"{'='*60}")
     
     # 按市值
-    print(f"\n按市值分组:")
+    print("\n按市值分组:")
     for cap_name, cap_code in [('大市值', 'large'), ('中市值', 'medium'), ('小市值', 'small')]:
         cap_results = [r for r in results if r['market_cap'] == cap_code]
         if cap_results:
-            total_trades = sum(r['total_trades'] for r in cap_results)
+            totaltrades = sum(r['totaltrades'] for r in cap_results)
             avg_win = sum(r['win_rate'] for r in cap_results) / len(cap_results)
             avg_ret = sum(r['total_return'] for r in cap_results) / len(cap_results)
-            print(f"  {cap_name}: {len(cap_results)}只 {total_trades}笔 胜率{avg_win:.1%} 收益{avg_ret:+.2f}%")
+            print(f"  {cap_name}: {len(cap_results)}只 {totaltrades}笔 胜率{avg_win:.1%} 收益{avg_ret:+.2f}%")
     
     # 按浪型
-    print(f"\n按浪型汇总:")
-    total_signals = {'C': 0, '2': 0, '4': 0}
+    print("\n按浪型汇总:")
+    totalsignals = {'C': 0, '2': 0, '4': 0}
     for r in results:
         for wave, count in r['signal_counts'].items():
-            total_signals[wave] += count
+            totalsignals[wave] += count
     
-    for wave, count in sorted(total_signals.items(), key=lambda x: -x[1]):
+    for wave, count in sorted(totalsignals.items(), key=lambda x: -x[1]):
         if count > 0:
             print(f"  浪{wave}: {count}次信号")
     
     # 详细结果
     print(f"\n{'='*60}")
-    print(f"📋 个股详细结果")
+    print("📋 个股详细结果")
     print(f"{'='*60}")
     print(f"{'代码':<10} {'名称':<10} {'交易':<6} {'胜率':<8} {'收益':<8} {'C/2/4':<10}")
     print("-" * 60)
@@ -223,9 +221,9 @@ def main():
         win_rate_str = f"{r['win_rate']:.1%}"
         ret_str = f"{r['total_return']:+.1f}%"
         wave_str = f"{c['C']}/{c['2']}/{c['4']}"
-        print(f"{r['symbol']:<10} {r['name']:<10} {r['total_trades']:<6} {win_rate_str:<8} {ret_str:<8} {wave_str:<10}")
+        print(f"{r['symbol']:<10} {r['name']:<10} {r['totaltrades']:<6} {win_rate_str:<8} {ret_str:<8} {wave_str:<10}")
     
-    print(f"\n✅ 回测完成")
+    print("\n✅ 回测完成")
 
 
 if __name__ == "__main__":

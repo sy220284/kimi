@@ -6,7 +6,6 @@
 import sys
 sys.path.insert(0, 'src')
 
-import pandas as pd
 from data import get_stock_data
 from analysis.wave import EnhancedWaveAnalyzer
 from analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy
@@ -84,7 +83,7 @@ for sector, stocks in test_stocks.items():
             main_wave = max(wave_dist, key=wave_dist.get) if wave_dist else 'None'
             
             print(f"  {symbol} {name:8s} ({size:6s}): "
-                  f"{result.total_trades:2d}次 | 胜率{result.win_rate:5.1%} | "
+                  f"{result.totaltrades:2d}次 | 胜率{result.win_rate:5.1%} | "
                   f"收益{result.total_return_pct:+6.1f}% | 回撤{result.max_drawdown_pct:5.1f}% | "
                   f"主要浪{main_wave}")
             
@@ -92,7 +91,7 @@ for sector, stocks in test_stocks.items():
                 'symbol': symbol,
                 'name': name,
                 'size': size,
-                'trades': result.total_trades,
+                'trades': result.totaltrades,
                 'win_rate': result.win_rate,
                 'return': result.total_return_pct,
                 'drawdown': result.max_drawdown_pct,
@@ -117,8 +116,8 @@ for size_key, size_name in size_groups.items():
     if size_results:
         avg_return = sum(r['return'] for r in size_results) / len(size_results)
         avg_winrate = sum(r['win_rate'] for r in size_results) / len(size_results)
-        total_trades = sum(r['trades'] for r in size_results)
-        print(f"{size_name}: 平均收益 {avg_return:+.1f}% | 平均胜率 {avg_winrate:.1%} | 总交易 {total_trades}次")
+        totaltrades = sum(r['trades'] for r in size_results)
+        print(f"{size_name}: 平均收益 {avg_return:+.1f}% | 平均胜率 {avg_winrate:.1%} | 总交易 {totaltrades}次")
 
 # 按收益排序
 print(f"\n{'='*80}")

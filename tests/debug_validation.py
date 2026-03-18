@@ -7,7 +7,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
-import numpy as np
 from src.analysis.wave import UnifiedWaveAnalyzer
 from src.data import get_stock_data
 
@@ -20,7 +19,7 @@ analyzer = UnifiedWaveAnalyzer(
     use_resonance=True,
     min_resonance_score=0.3,
     trend_ma_period=200,
-    use_adaptive_params=False,
+    use_adaptiveparams=False,
 )
 
 print("=" * 80)
@@ -34,7 +33,7 @@ for symbol in test_stocks:
     
     df = get_stock_data(symbol, start_date='2024-01-01', end_date='2026-03-16')
     if df is None or len(df) < 60:
-        print(f"  数据不足")
+        print("  数据不足")
         continue
     
     df['date'] = pd.to_datetime(df['date'])
@@ -43,25 +42,25 @@ for symbol in test_stocks:
     # 检测信号
     signals = analyzer.detect(df, mode='all')
     
-    c_signals = [s for s in signals if s.entry_type.value == 'C']
-    w2_signals = [s for s in signals if s.entry_type.value == '2']
+    csignals = [s for s in signals if s.entry_type.value == 'C']
+    w2signals = [s for s in signals if s.entry_type.value == '2']
     
     print(f"  总信号: {len(signals)}")
-    print(f"  C浪信号: {len(c_signals)}")
-    print(f"  2浪信号: {len(w2_signals)}")
+    print(f"  C浪信号: {len(csignals)}")
+    print(f"  2浪信号: {len(w2signals)}")
     
     # 检查C浪验证状态
-    if c_signals:
-        valid_count = sum(1 for s in c_signals if s.wave_structure.get('b_wave_valid', False))
-        print(f"\n  C浪验证统计:")
-        print(f"    总数: {len(c_signals)}")
+    if csignals:
+        valid_count = sum(1 for s in csignals if s.wave_structure.get('b_wave_valid', False))
+        print("\n  C浪验证统计:")
+        print(f"    总数: {len(csignals)}")
         print(f"    通过验证: {valid_count}")
-        print(f"    通过率: {valid_count/len(c_signals)*100:.1f}%")
+        print(f"    通过率: {valid_count/len(csignals)*100:.1f}%")
         
         # 显示第一个信号的详情
-        s = c_signals[0]
+        s = csignals[0]
         ws = s.wave_structure or {}
-        print(f"\n  首个C浪信号详情:")
+        print("\n  首个C浪信号详情:")
         print(f"    日期: {df.iloc[-1]['date']}")
         print(f"    置信度: {s.confidence:.2f}")
         print(f"    b_wave_valid: {ws.get('b_wave_valid', 'N/A')}")
@@ -69,17 +68,17 @@ for symbol in test_stocks:
         print(f"    detection_method: {s.detection_method}")
     
     # 检查2浪验证状态
-    if w2_signals:
-        valid_count = sum(1 for s in w2_signals if s.wave_structure.get('wave1_valid', False))
-        print(f"\n  2浪验证统计:")
-        print(f"    总数: {len(w2_signals)}")
+    if w2signals:
+        valid_count = sum(1 for s in w2signals if s.wave_structure.get('wave1_valid', False))
+        print("\n  2浪验证统计:")
+        print(f"    总数: {len(w2signals)}")
         print(f"    通过验证: {valid_count}")
-        print(f"    通过率: {valid_count/len(w2_signals)*100:.1f}%")
+        print(f"    通过率: {valid_count/len(w2signals)*100:.1f}%")
         
-        if w2_signals:
-            s = w2_signals[0]
+        if w2signals:
+            s = w2signals[0]
             ws = s.wave_structure or {}
-            print(f"\n  首个2浪信号详情:")
+            print("\n  首个2浪信号详情:")
             print(f"    日期: {df.iloc[-1]['date']}")
             print(f"    置信度: {s.confidence:.2f}")
             print(f"    wave1_valid: {ws.get('wave1_valid', 'N/A')}")
