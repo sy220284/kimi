@@ -4,22 +4,22 @@
 创建智能体量化分析系统所需的数据库表结构
 """
 
-import psycopg2
-from psycopg2 import sql
-import yaml
-import os
 from pathlib import Path
+
+import psycopg2
+import yaml
+
 
 def load_config():
     """加载配置文件"""
     config_path = Path(__file__).parent.parent / "config" / "config.yaml"
-    with open(config_path, 'r', encoding='utf-8') as f:
+    with open(config_path, encoding='utf-8') as f:
         return yaml.safe_load(f)
 
 def get_db_connection(config):
     """获取数据库连接"""
     db_config = config['database']['postgres']
-    
+
     conn = psycopg2.connect(
         host=db_config['host'],
         port=db_config['port'],
@@ -32,7 +32,7 @@ def get_db_connection(config):
 def create_tables(conn):
     """创建所有表"""
     cursor = conn.cursor()
-    
+
     # 1. 行情数据表
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS market_data (
@@ -50,7 +50,7 @@ def create_tables(conn):
         UNIQUE(symbol, date)
     )
     """)
-    
+
     # 2. 申万行业指数表
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS sw_industry_index (
@@ -68,7 +68,7 @@ def create_tables(conn):
         UNIQUE(industry_code, date)
     )
     """)
-    
+
     # 3. 分析结果表
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS analysis_results (
@@ -82,7 +82,7 @@ def create_tables(conn):
         UNIQUE(analyst_type, symbol, analysis_date)
     )
     """)
-    
+
     # 4. 技术指标表
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS technical_indicators (
@@ -95,7 +95,7 @@ def create_tables(conn):
         UNIQUE(symbol, date, indicator_name)
     )
     """)
-    
+
     # 5. 波浪分析表
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS wave_analysis (
@@ -111,7 +111,7 @@ def create_tables(conn):
         UNIQUE(symbol, analysis_date)
     )
     """)
-    
+
     # 6. 轮动分析表
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS rotation_analysis (
@@ -125,39 +125,39 @@ def create_tables(conn):
         UNIQUE(analysis_date)
     )
     """)
-    
+
     # 创建索引
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_market_data_symbol_date ON market_data(symbol, date)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_sw_industry_date ON sw_industry_index(industry_code, date)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_analysis_type_date ON analysis_results(analyst_type, analysis_date)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_technical_symbol_date ON technical_indicators(symbol, date)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_wave_symbol_date ON wave_analysis(symbol, analysis_date)")
-    
+
     conn.commit()
     print("✅ 数据库表创建完成")
 
 def create_hypertables(conn):
     """创建TimescaleDB超表（如果可用）"""
     cursor = conn.cursor()
-    
+
     try:
         # 检查TimescaleDB扩展
         cursor.execute("CREATE EXTENSION IF NOT EXISTS timescaledb")
-        
+
         # 将market_data转换为超表
         cursor.execute("""
-        SELECT create_hypertable('market_data', 'date', 
+        SELECT create_hypertable('market_data', 'date',
                                  if_not_exists => TRUE,
                                  chunk_time_interval => INTERVAL '1 month')
         """)
-        
+
         # 将sw_industry_index转换为超表
         cursor.execute("""
-        SELECT create_hypertable('sw_industry_index', 'date', 
+        SELECT create_hypertable('sw_industry_index', 'date',
                                  if_not_exists => TRUE,
                                  chunk_time_interval => INTERVAL '1 month')
         """)
-        
+
         conn.commit()
         print("✅ TimescaleDB超表创建完成")
     except Exception as e:
@@ -167,26 +167,26 @@ def create_hypertables(conn):
 def main():
     """主函数"""
     print("🚀 开始初始化数据库...")
-    
+
     try:
         # 加载配置
         config = load_config()
         print("✅ 配置文件加载成功")
-        
+
         # 连接数据库
         conn = get_db_connection(config)
         print("✅ 数据库连接成功")
-        
+
         # 创建表
         create_tables(conn)
-        
+
         # 创建超表
         create_hypertables(conn)
-        
+
         # 关闭连接
         conn.close()
         print("✅ 数据库初始化完成")
-        
+
     except Exception as e:
         print(f"❌ 数据库初始化失败: {e}")
         raise

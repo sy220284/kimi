@@ -4,9 +4,11 @@
 """
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
+
 from src.analysis.wave.enhanced_detector import enhanced_pivot_detection
 from src.data import get_stock_data
 
@@ -40,10 +42,10 @@ for i, cfg in enumerate(configs):
         df,  # 传入DataFrame
         **cfg
     )
-    
+
     print(f"\n配置 {i+1}: atr_period={cfg['atr_period']}, atr_mult={cfg['atr_mult']}")
     print(f"  检测到极值点: {len(pivots)} 个")
-    
+
     if pivots:
         print("  最近5个极值点:")
         for p in pivots[-5:]:
@@ -56,7 +58,7 @@ print("""
 如果极值点数量 < 4:
   - 无法验证B浪结构 (需要至少4个点: p_before_a, p_a, p_b, p_c)
   - b_wave_valid 被强制设为 False
-  
+
 解决方案:
   1. 降低极值点检测门槛 (减小 atr_mult)
   2. 在只有3个点时也尝试验证 (使用推断模式)

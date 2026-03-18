@@ -1,9 +1,11 @@
 """
 科技板块亏损股票特征分析报告
 """
-import pandas as pd
 import sys
 from pathlib import Path
+
+import pandas as pd
+
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 # 读取数据
@@ -31,7 +33,7 @@ for symbol in df['symbol'].unique():
     avg_holding = symbol_df['holding_days'].mean()
     avg_win = symbol_df[symbol_df['pnl_pct'] > 0]['pnl_pct'].mean() if len(symbol_df[symbol_df['pnl_pct'] > 0]) > 0 else 0
     avg_loss = symbol_df[symbol_df['pnl_pct'] <= 0]['pnl_pct'].mean() if len(symbol_df[symbol_df['pnl_pct'] <= 0]) > 0 else 0
-    
+
     symbolstats.append({
         'symbol': symbol,
         'total_pnl': total_pnl,
@@ -69,22 +71,22 @@ for symbol in loss_symbols:
     symboltrades = df[df['symbol'] == symbol].copy()
     if len(symboltrades) == 0:
         continue
-    
+
     total_pnl = symboltrades['pnl_pct'].sum()
     win_rate = (symboltrades['pnl_pct'] > 0).mean()
-    
+
     trailing = symboltrades[symboltrades['exit_reason'].str.contains('trailing_stop', na=False)]
     stop_loss = symboltrades[symboltrades['exit_reason'] == 'stop_loss']
-    
+
     wins = symboltrades[symboltrades['pnl_pct'] > 0]
     losses = symboltrades[symboltrades['pnl_pct'] <= 0]
-    
+
     print(f"\n🔹 {symbol} | 总收益: {total_pnl:>7.2f}% | 交易{len(symboltrades):>2}次")
     print("-"*60)
-    
+
     # 基本指标
     print(f"  胜率: {win_rate:>6.1%} | 平均单笔: {symboltrades['pnl_pct'].mean():>6.2f}%")
-    
+
     # 卖出方式分布
     parts = []
     if len(trailing) > 0:
@@ -92,18 +94,18 @@ for symbol in loss_symbols:
     if len(stop_loss) > 0:
         parts.append(f"止损{len(stop_loss)}笔(均{stop_loss['pnl_pct'].mean():+.1f}%)")
     print(f"  卖出: {' | '.join(parts)}")
-    
+
     # 盈亏详情
     if len(wins) > 0:
         print(f"  盈利: {len(wins)}笔 均+{wins['pnl_pct'].mean():.1f}% 最大+{wins['pnl_pct'].max():.1f}%")
     if len(losses) > 0:
         print(f"  亏损: {len(losses)}笔 均{losses['pnl_pct'].mean():.1f}% 最大{losses['pnl_pct'].min():.1f}%")
-    
+
     # 盈亏比
     if len(wins) > 0 and len(losses) > 0 and losses['pnl_pct'].sum() != 0:
         pf = abs(wins['pnl_pct'].sum() / losses['pnl_pct'].sum())
         print(f"  盈亏比: {pf:.2f} (需要>1才能盈利)")
-    
+
     # 持仓时间
     print(f"  持仓: 平均{symboltrades['holding_days'].mean():.0f}天 最长{symboltrades['holding_days'].max()}天")
 

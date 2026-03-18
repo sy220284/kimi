@@ -3,12 +3,14 @@
 信号vs交易对比分析 - 理解为什么30个信号只产生14笔交易
 """
 import sys
+
 sys.path.insert(0, 'src')
 
 import pandas as pd
-from data import get_stock_data
-from analysis.wave import UnifiedWaveAnalyzer
+
 from analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy
+from analysis.wave import UnifiedWaveAnalyzer
+from data import get_stock_data
 
 print("🔍 信号vs交易对比分析\n")
 
@@ -54,11 +56,11 @@ for i, trade in enumerate(result.trades, 1):
     print(f"    买入: {trade.entry_date} ¥{trade.entry_price:.2f}")
     print(f"    止损: ¥{trade.stop_loss:.2f} ({(trade.stop_loss/trade.entry_price-1)*100:.1f}%)")
     print(f"    止盈: ¥{trade.target_price:.2f} ({(trade.target_price/trade.entry_price-1)*100:.1f}%)")
-    
+
     if trade.status == 'closed':
         print(f"    卖出: {trade.exit_date} ¥{trade.exit_price:.2f}")
         print(f"    盈亏: {trade.pnl_pct:.1f}%")
-        
+
         # 判断是止损还是止盈还是其他
         if trade.exit_price <= trade.stop_loss * 1.001:  # 允许微小误差
             exit_reason = "🔴 止损"

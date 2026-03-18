@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """补充同步食品饮料板块剩余股票"""
 import sys
+from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
-from pathlib import Path
 from data import DatabaseDataManager
 
 print("🍺 补充同步食品饮料板块...")

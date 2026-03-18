@@ -9,17 +9,17 @@
 - 斐波那契目标价计算
 - 子波浪嵌套结构
 """
-from typing import List, Dict, Optional, Tuple, Any
+import sys
 from dataclasses import dataclass, field
 from enum import Enum
-import pandas as pd
-import numpy as np
 from pathlib import Path
-import sys
+from typing import Any
+
+import numpy as np
+import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from utils.logger import get_logger
-
 
 # ============================================================================
 # SECTION 1 — Domain Models
@@ -53,12 +53,12 @@ class WavePoint:
     date: str
     price: float
     volume: float = 0
-    wave_num: Optional[str] = None
+    wave_num: str | None = None
     is_peak: bool = False
     is_trough: bool = False
     volume_ratio: float = 0.0
     strength: int = 1  # 1=minor, 2=intermediate, 3=major
-    
+
     def __repr__(self) -> str:
         return f"WavePoint({self.wave_num or '?'} {self.date} ¥{self.price:.2f})"
 
@@ -77,18 +77,18 @@ class WavePattern:
     """波浪形态"""
     wave_type: WaveType
     direction: WaveDirection
-    points: List[WavePoint]
+    points: list[WavePoint]
     confidence: float
     start_date: str
     end_date: str
-    target_price: Optional[float] = None
-    stop_loss: Optional[float] = None
-    validations: List[WaveValidation] = field(default_factory=list)
-    volume_profile: Dict[str, Any] = field(default_factory=dict)
-    fib_ratios: Dict[str, float] = field(default_factory=dict)
-    guideline_scores: Dict[str, float] = field(default_factory=dict)
-    rule_violations: List[str] = field(default_factory=list)
-    
+    target_price: float | None = None
+    stop_loss: float | None = None
+    validations: list[WaveValidation] = field(default_factory=list)
+    volume_profile: dict[str, Any] = field(default_factory=dict)
+    fib_ratios: dict[str, float] = field(default_factory=dict)
+    guideline_scores: dict[str, float] = field(default_factory=dict)
+    rule_violations: list[str] = field(default_factory=list)
+
     @property
     def is_impulse(self) -> bool:
         return self.wave_type in {
@@ -96,8 +96,8 @@ class WavePattern:
             WaveType.LEADING_DIAGONAL, WaveType.ENDING_DIAGONAL,
             WaveType.FAILED_FIFTH
         }
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         return {
             'wave_type': self.wave_type.value,
             'direction': self.direction.value,
@@ -121,12 +121,12 @@ def calculate_atr(high: np.ndarray, low: np.ndarray, close: np.ndarray, period: 
     n = len(close)
     if n < 2:
         return np.full(n, high[0] - low[0] + 1e-8)
-    
+
     tr = np.empty(n)
     tr[0] = high[0] - low[0]
     for i in range(1, n):
         tr[i] = max(high[i] - low[i], abs(high[i] - close[i-1]), abs(low[i] - close[i-1]))
-    
+
     atr = np.empty(n)
     seed = min(period, n)
     atr[seed-1] = float(np.mean(tr[:seed]))
@@ -141,20 +141,20 @@ def zigzag_atr(high, low, close, atr, atr_mult=0.5, min_dist=3):
     """ATR自适应ZigZag - 根据波动率动态调整阈值"""
     n = len(close)
     idxs, prices, types = [], [], []
-    
+
     if n < 5:
         return idxs, prices, types
-    
+
     direction = 1  # +1找高点
     extreme_idx, extreme_price = 0, high[0]
-    
+
     idxs.append(0)
     prices.append(low[0])
     types.append("L")
-    
+
     for i in range(1, n):
         threshold = atr_mult * atr[i]
-        
+
         if direction == 1:  # 找高点
             if high[i] >= extreme_price:
                 extreme_idx, extreme_price = i, high[i]
@@ -175,12 +175,12 @@ def zigzag_atr(high, low, close, atr, atr_mult=0.5, min_dist=3):
                     types.append("L")
                 direction = 1
                 extreme_idx, extreme_price = i, high[i]
-    
+
     if extreme_idx != idxs[-1]:
         idxs.append(extreme_idx)
         prices.append(extreme_price)
         types.append("H" if direction == 1 else "L")
-    
+
     return idxs, prices, types
 
 
@@ -191,7 +191,7 @@ def zigzag_atr(high, low, close, atr, atr_mult=0.5, min_dist=3):
 @dataclass
 class ImpulseMetrics:
     """推动浪指标"""
-    prices: Tuple[float, ...]
+    prices: tuple[float, ...]
     is_bullish: bool
     w1: float
     w2: float
@@ -200,18 +200,18 @@ class ImpulseMetrics:
     w5: float
     w2_retrace: float
     w4_retrace: float
-    
+
     @classmethod
     def build(cls, points):
         p = tuple(p.price for p in points)
         p0, p1, p2, p3, p4, p5 = p
         bull = p1 > p0
-        
+
         if bull:
             w1, w2, w3, w4, w5 = p1-p0, p1-p2, p3-p2, p3-p4, p5-p4
         else:
             w1, w2, w3, w4, w5 = p0-p1, p2-p1, p2-p3, p4-p3, p4-p5
-        
+
         return cls(
             prices=p, is_bullish=bull,
             w1=w1, w2=w2, w3=w3, w4=w4, w5=w5,
@@ -223,14 +223,14 @@ def validate_impulse_rules(points):
     """推动浪硬规则验证 + 指导原则评分"""
     if len(points) != 6:
         return False, ["点位数量错误"], 0.0, {}
-    
+
     try:
         m = ImpulseMetrics.build(points)
     except Exception:
         return False, ["构建失败"], 0.0, {}
-    
+
     violations = []
-    
+
     # 硬规则
     if not (m.w1>0 and m.w2>0 and m.w3>0 and m.w4>0 and m.w5>0):
         violations.append("方向不一致")
@@ -238,16 +238,14 @@ def validate_impulse_rules(points):
         violations.append("浪2完全回撤")
     if m.w3 < m.w1 and m.w3 < m.w5:
         violations.append("浪3最短")
-    
+
     p0, p1, _, _, p4, _ = m.prices
-    if m.is_bullish and p4 <= p1:
+    if m.is_bullish and p4 <= p1 or not m.is_bullish and p4 >= p1:
         violations.append("浪4与浪1重叠")
-    elif not m.is_bullish and p4 >= p1:
-        violations.append("浪4与浪1重叠")
-    
+
     if violations:
         return False, violations, 0.0, {}
-    
+
     # 指导原则评分
     checks = [
         ("浪2黄金分割", 0.15, 0.382 <= m.w2_retrace <= 0.618),
@@ -258,11 +256,11 @@ def validate_impulse_rules(points):
         ("浪5新极点", 0.10, (m.prices[5]>m.prices[3]) if m.is_bullish else (m.prices[5]<m.prices[3])),
         ("浪2浪4交替", 0.15, (m.w2_retrace>=0.50) != (m.w4_retrace>=0.50)),
     ]
-    
+
     total = sum(w for _, w, _ in checks)
     earned = sum(w for _, w, ok in checks if ok)
     scores = {n: w if ok else 0.0 for n, w, ok in checks}
-    
+
     return True, [], earned/(total+1e-12), scores
 
 
@@ -270,15 +268,15 @@ def validate_zigzag(points):
     """ZigZag验证"""
     if len(points) != 4:
         return False, [], 0.0
-    
+
     p0, pA, pB, pC = (p.price for p in points)
     a_len = abs(pA - p0)
     b_len = abs(pB - pA)
     b_ret = b_len / (a_len + 1e-12)
-    
+
     if b_ret >= 1.0 or a_len < 1e-8:
         return False, ["B浪过深"], 0.0
-    
+
     c_a = abs(pC - pB) / (a_len + 1e-12)
     score = sum([
         0.30 if 0.382 <= b_ret <= 0.618 else 0.0,
@@ -286,7 +284,7 @@ def validate_zigzag(points):
         0.25 if c_a >= 1.0 else 0.0,
         0.20 if 0.50 <= b_ret <= 0.786 else 0.0,
     ])
-    
+
     return True, [], score
 
 
@@ -297,14 +295,14 @@ def validate_zigzag(points):
 class ElliottWaveAnalyzer:
     """
     专业版Elliott Wave分析器
-    
+
     核心改进:
     1. ATR自适应ZigZag极值点检测
     2. 严格推动浪规则验证
     3. ZigZag/Flat调整浪识别
     4. 斐波那契目标价计算
     """
-    
+
     def __init__(
         self,
         min_wave_length: int = 5,
@@ -325,41 +323,41 @@ class ElliottWaveAnalyzer:
         self.use_volume = use_volume
         self.use_fibonacci = use_fibonacci
         self.logger = get_logger('analysis.wave.elliott')
-    
+
     def find_peaks_and_troughs(self, df: pd.DataFrame, window: int = 5, min_change_pct: float = 2.0):
         """使用ATR自适应ZigZag检测极值点"""
         points = self._detect_pivots(df)
         peaks = [p.index for p in points if p.is_peak]
         troughs = [p.index for p in points if p.is_trough]
         return peaks, troughs
-    
-    def _detect_pivots(self, df: pd.DataFrame) -> List[WavePoint]:
+
+    def _detect_pivots(self, df: pd.DataFrame) -> list[WavePoint]:
         """检测极值点"""
         if len(df) < self.atr_period + 4:
             return []
-        
+
         highs = df['high'].values
         lows = df['low'].values
         closes = df['close'].values
         volumes = df['volume'].values if 'volume' in df.columns else np.ones(len(df))
         dates = df['date'].values if 'date' in df.columns else [str(i) for i in range(len(df))]
-        
+
         atr = calculate_atr(highs, lows, closes, self.atr_period)
         idxs, prices, types = zigzag_atr(highs, lows, closes, atr, self.atr_mult, self.min_dist)
-        
+
         if len(idxs) < 2:
             return []
-        
+
         # 强度分级
         amplitudes = [float(abs(float(prices[i+1]) - float(prices[i]))) for i in range(len(prices)-1)]
         median_amp = float(np.median(amplitudes)) if amplitudes else 1.0
-        
+
         points = []
-        for i, (idx, price, ptype) in enumerate(zip(idxs, prices, types)):
+        for i, (idx, price, ptype) in enumerate(zip(idxs, prices, types, strict=False)):
             amp = float(amplitudes[max(0, i-1)]) if i > 0 else (float(amplitudes[0]) if amplitudes else 0)
             ratio = amp / (median_amp + 1e-12)
             strength = 3 if ratio >= 2.0 else (2 if ratio >= 1.0 else 1)
-            
+
             points.append(WavePoint(
                 index=idx,
                 date=str(dates[idx]) if isinstance(dates[idx], str) else str(dates[idx]),
@@ -369,10 +367,10 @@ class ElliottWaveAnalyzer:
                 is_trough=(ptype == "L"),
                 strength=strength
             ))
-        
+
         return points
-    
-    def detect_wave_pattern(self, df: pd.DataFrame, window: int = 5, min_change_pct: float = 2.0) -> Optional[WavePattern]:
+
+    def detect_wave_pattern(self, df: pd.DataFrame, window: int = 5, min_change_pct: float = 2.0) -> WavePattern | None:
         """检测波浪形态 - 优先使用原始检测，增强版作为fallback"""
         # 先用原始检测方法
         points = self._detect_pivots(df)
@@ -380,14 +378,14 @@ class ElliottWaveAnalyzer:
             best_pattern = self._detect_with_points(points)
             if best_pattern and best_pattern.confidence >= self.confidence_threshold:
                 return best_pattern
-        
+
         # 如果原始方法未找到，尝试增强版检测
         from .enhanced_detector import (
             enhanced_pivot_detection,
             label_wave_numbers,
             validate_wave_structure,
         )
-        
+
         pivots = enhanced_pivot_detection(
             df,
             atr_period=self.atr_period,
@@ -395,25 +393,25 @@ class ElliottWaveAnalyzer:
             min_pivots=4,
             trend_confirmation=True
         )
-        
+
         if len(pivots) >= 4:
             labeled_pivots = label_wave_numbers(pivots, "auto")
             is_valid, reason, conf = validate_wave_structure(labeled_pivots)
-            
+
             if is_valid and conf >= self.confidence_threshold * 0.7:
                 return self._create_generic_pattern(labeled_pivots, df, conf)
-        
+
         # 如果都没找到，返回原始方法的结果（即使置信度低）
         if len(points) >= 4:
             return self._detect_with_points(points)
-        
+
         return None
-    
-    def _detect_with_points(self, points: List[WavePoint]) -> Optional[WavePattern]:
+
+    def _detect_with_points(self, points: list[WavePoint]) -> WavePattern | None:
         """使用现有极值点检测波浪 - 智能浪号标注"""
         best_pattern = None
         best_confidence = 0.0
-        
+
         # 尝试6点模式 (推动浪)
         for i in range(len(points) - 5):
             window_points = points[i:i+6]
@@ -421,7 +419,7 @@ class ElliottWaveAnalyzer:
             if pattern and pattern.confidence > best_confidence:
                 best_confidence = pattern.confidence
                 best_pattern = pattern
-        
+
         # 尝试4点模式 (ZigZag)
         for i in range(len(points) - 3):
             window_points = points[i:i+4]
@@ -429,17 +427,17 @@ class ElliottWaveAnalyzer:
             if pattern and pattern.confidence > best_confidence:
                 best_confidence = pattern.confidence
                 best_pattern = pattern
-        
+
         # 如果没有找到标准浪型，使用智能通用标注
         if best_pattern is None and len(points) >= 4:
             best_pattern = self._create_smart_generic_pattern(points)
-        
+
         return best_pattern
-    
-    def _create_smart_generic_pattern(self, points: List[WavePoint]) -> Optional[WavePattern]:
+
+    def _create_smart_generic_pattern(self, points: list[WavePoint]) -> WavePattern | None:
         """
         创建智能通用波浪模式
-        
+
         基于价格极值点关系推断浪号:
         1. 如果点已经有浪号，保留原标注
         2. 根据趋势方向标注未标注的点
@@ -447,7 +445,7 @@ class ElliottWaveAnalyzer:
         """
         if len(points) < 4:
             return None
-        
+
         # 复制点列表避免修改原始数据
         labeled_points = []
         for p in points:
@@ -464,11 +462,11 @@ class ElliottWaveAnalyzer:
             if hasattr(p, 'wave_num') and p.wave_num:
                 new_p.wave_num = p.wave_num
             labeled_points.append(new_p)
-        
+
         # 分析整体趋势
         prices = [p.price for p in labeled_points]
         direction_up = prices[-1] > prices[0]
-        
+
         # 如果已经有足够的浪号标注，直接创建模式
         existing_waves = [p.wave_num for p in labeled_points if p.wave_num]
         if len(existing_waves) >= len(labeled_points) - 1:
@@ -477,24 +475,24 @@ class ElliottWaveAnalyzer:
             if not last_point.wave_num:
                 # 最后一点未标注，根据趋势推断
                 last_point.wave_num = 'C' if not direction_up else '4'
-            
+
             return self._build_generic_pattern(labeled_points, direction_up)
-        
+
         # 智能标注未标注的点
         n = len(labeled_points)
-        
+
         # 找出最高点和最低点的位置
         max_price = max(prices)
         min_price = min(prices)
         max_idx = prices.index(max_price)
         _min_idx = prices.index(min_price)
-        
+
         if direction_up:
             # 上升趋势: 1-2-3-4-5
             for i, p in enumerate(labeled_points):
                 if p.wave_num:  # 保留已有标注
                     continue
-                    
+
                 # 基于位置的智能标注
                 if i == 0:
                     p.wave_num = '1'
@@ -516,7 +514,7 @@ class ElliottWaveAnalyzer:
             for i, p in enumerate(labeled_points):
                 if p.wave_num:  # 保留已有标注
                     continue
-                    
+
                 if i == 0:
                     p.wave_num = 'A'
                 elif i == n - 1:
@@ -525,16 +523,16 @@ class ElliottWaveAnalyzer:
                     p.wave_num = 'B'
                 else:
                     p.wave_num = 'C'
-        
+
         return self._build_generic_pattern(labeled_points, direction_up)
-    
-    def _build_generic_pattern(self, labeled_points: List[WavePoint], direction_up: bool) -> WavePattern:
+
+    def _build_generic_pattern(self, labeled_points: list[WavePoint], direction_up: bool) -> WavePattern:
         """构建通用波浪模式"""
         prices = [p.price for p in labeled_points]
         last_wave = labeled_points[-1].wave_num or ('4' if direction_up else 'C')
-        
+
         direction = WaveDirection.UP if direction_up else WaveDirection.DOWN
-        
+
         # 确定浪型
         if last_wave in ['2', '4']:
             wave_type = WaveType.CORRECTIVE
@@ -542,23 +540,23 @@ class ElliottWaveAnalyzer:
             wave_type = WaveType.ZIGZAG
         else:
             wave_type = WaveType.UNKNOWN
-        
+
         # 计算目标价 - 基于个股波动率的动态目标
         recent_amp = abs(prices[-1] - prices[-2]) if len(prices) >= 2 else prices[-1] * 0.05
-        
+
         # 根据浪号设置目标倍数
         target_multipliers = {
             '2': 1.618,  # 2浪末 -> 3浪目标
-            '4': 1.0,    # 4浪末 -> 5浪目标  
+            '4': 1.0,    # 4浪末 -> 5浪目标
             'C': 1.0,    # C浪末 -> 1浪目标
             'A': 0.8,    # A浪末 -> B浪反弹
             'B': 1.2     # B浪末 -> C浪下跌
         }
         multiplier = target_multipliers.get(last_wave, 1.0)
-        
+
         target = prices[-1] + recent_amp * multiplier if direction_up else prices[-1] - recent_amp * multiplier
         stop_loss = prices[-2] if len(prices) >= 2 else (prices[-1] * 0.95 if direction_up else prices[-1] * 1.05)
-        
+
         return WavePattern(
             wave_type=wave_type,
             direction=direction,
@@ -569,16 +567,16 @@ class ElliottWaveAnalyzer:
             target_price=round(target, 4),
             stop_loss=round(stop_loss, 4)
         )
-    
-    def _try_impulse(self, points: List[WavePoint]) -> Optional[WavePattern]:
+
+    def _try_impulse(self, points: list[WavePoint]) -> WavePattern | None:
         """尝试识别推动浪"""
         if len(points) != 6:
             return None
-        
+
         valid, violations, conf, scores = validate_impulse_rules(points)
         if not valid or conf < self.confidence_threshold:
             return None
-        
+
         # 标注浪号 (创建新列表避免修改原始数据)
         labeled_points = []
         for i, p in enumerate(points):
@@ -594,16 +592,16 @@ class ElliottWaveAnalyzer:
             )
             new_p.wave_num = str(i)
             labeled_points.append(new_p)
-        
+
         p0, p1, p2, p3, p4, p5 = labeled_points
         bull = p1.price > p0.price
-        
+
         # 目标价 = 浪4 + 浪1长度
         target = p4.price + (p1.price - p0.price) if bull else p4.price - (p0.price - p1.price)
         stop_loss = min(p4.price, p2.price) * 0.98 if bull else max(p4.price, p2.price) * 1.02
-        
+
         m = ImpulseMetrics.build(labeled_points)
-        
+
         return WavePattern(
             wave_type=WaveType.IMPULSE,
             direction=WaveDirection.UP if bull else WaveDirection.DOWN,
@@ -620,16 +618,16 @@ class ElliottWaveAnalyzer:
                 'w4_retracement': round(m.w4_retrace, 4),
             }
         )
-    
-    def _try_zigzag(self, points: List[WavePoint]) -> Optional[WavePattern]:
+
+    def _try_zigzag(self, points: list[WavePoint]) -> WavePattern | None:
         """尝试识别ZigZag"""
         if len(points) != 4:
             return None
-        
+
         valid, violations, conf = validate_zigzag(points)
         if not valid or conf < self.confidence_threshold:
             return None
-        
+
         # 标注浪号 (创建新列表)
         labels = ['A', 'B', 'C']
         labeled_points = []
@@ -650,14 +648,14 @@ class ElliottWaveAnalyzer:
             else:
                 new_p.wave_num = 'C'  # 额外点也标为C
             labeled_points.append(new_p)
-        
+
         p0, pA, pB, pC = labeled_points
         bear = pA.price < p0.price
-        
+
         # C浪目标 = B + 1.0×A浪长度
         a_len = abs(pA.price - p0.price)
         target = pB.price - a_len if bear else pB.price + a_len
-        
+
         return WavePattern(
             wave_type=WaveType.ZIGZAG,
             direction=WaveDirection.DOWN if bear else WaveDirection.UP,
@@ -668,36 +666,36 @@ class ElliottWaveAnalyzer:
             target_price=round(target, 4),
             stop_loss=round(pB.price, 4)
         )
-    
-    def _try_impulse_enhanced(self, pivots, df: pd.DataFrame) -> Optional[WavePattern]:
+
+    def _try_impulse_enhanced(self, pivots, df: pd.DataFrame) -> WavePattern | None:
         """增强版推动浪识别"""
         if len(pivots) != 6:
             return None
-        
+
         # 转换为WavePoint
         points = self._convert_pivots_to_wavepoints(pivots, df)
-        
+
         valid, violations, conf, scores = validate_impulse_rules(points)
         if not valid:
             return None
-        
+
         # 即使置信度略低于阈值，如果结构合理也接受
         if conf < self.confidence_threshold * 0.7:
             return None
-        
+
         # 标注浪号
         for i, p in enumerate(points):
             p.wave_num = str(i)
-        
+
         p0, p1, p2, p3, p4, p5 = points
         bull = p1.price > p0.price
-        
+
         # 目标价 = 浪4 + 浪1长度
         target = p4.price + (p1.price - p0.price) if bull else p4.price - (p0.price - p1.price)
         stop_loss = min(p4.price, p2.price) * 0.98 if bull else max(p4.price, p2.price) * 1.02
-        
+
         m = ImpulseMetrics.build(points)
-        
+
         return WavePattern(
             wave_type=WaveType.IMPULSE,
             direction=WaveDirection.UP if bull else WaveDirection.DOWN,
@@ -714,30 +712,30 @@ class ElliottWaveAnalyzer:
                 'w4_retracement': round(m.w4_retrace, 4),
             }
         )
-    
-    def _try_zigzag_enhanced(self, pivots, df: pd.DataFrame) -> Optional[WavePattern]:
+
+    def _try_zigzag_enhanced(self, pivots, df: pd.DataFrame) -> WavePattern | None:
         """增强版ZigZag识别"""
         if len(pivots) != 4:
             return None
-        
+
         points = self._convert_pivots_to_wavepoints(pivots, df)
-        
+
         valid, violations, conf = validate_zigzag(points)
         if not valid:
             return None
-        
+
         if conf < self.confidence_threshold * 0.7:
             return None
-        
-        for p, label in zip(points, ['A', 'B', 'C']):
+
+        for p, label in zip(points, ['A', 'B', 'C'], strict=False):
             p.wave_num = label
-        
+
         p0, pA, pB, pC = points
         bear = pA.price < p0.price
-        
+
         a_len = abs(pA.price - p0.price)
         target = pB.price - a_len if bear else pB.price + a_len
-        
+
         return WavePattern(
             wave_type=WaveType.ZIGZAG,
             direction=WaveDirection.DOWN if bear else WaveDirection.UP,
@@ -748,18 +746,18 @@ class ElliottWaveAnalyzer:
             target_price=round(target, 4),
             stop_loss=round(pB.price, 4)
         )
-    
+
     def _create_generic_pattern(self, pivots, df: pd.DataFrame, conf: float) -> WavePattern:
         """创建通用波浪模式"""
-        
+
         points = self._convert_pivots_to_wavepoints(pivots, df)
-        
+
         # 确定方向
         if len(points) >= 2:
             direction = WaveDirection.UP if points[-1].price > points[0].price else WaveDirection.DOWN
         else:
             direction = WaveDirection.UNKNOWN
-        
+
         # 确定浪型
         last_wave = points[-1].wave_num if points[-1].wave_num else 'C'
         if last_wave in ['2', '4', 'B']:
@@ -768,7 +766,7 @@ class ElliottWaveAnalyzer:
             wave_type = WaveType.ZIGZAG
         else:
             wave_type = WaveType.UNKNOWN
-        
+
         # 计算目标价 - 基于最近一波的幅度
         if len(points) >= 2:
             recent_wave_amp = abs(points[-1].price - points[-2].price)
@@ -777,7 +775,7 @@ class ElliottWaveAnalyzer:
         else:
             target = points[-1].price * 1.05 if direction == WaveDirection.UP else points[-1].price * 0.95
             stop_loss = points[-1].price * 0.95 if direction == WaveDirection.UP else points[-1].price * 1.05
-        
+
         return WavePattern(
             wave_type=wave_type,
             direction=direction,
@@ -788,13 +786,13 @@ class ElliottWaveAnalyzer:
             target_price=round(target, 4),
             stop_loss=round(stop_loss, 4)
         )
-    
-    def _convert_pivots_to_wavepoints(self, pivots, df: pd.DataFrame) -> List[WavePoint]:
+
+    def _convert_pivots_to_wavepoints(self, pivots, df: pd.DataFrame) -> list[WavePoint]:
         """将PivotPoint转换为WavePoint"""
-        
+
         dates = df['date'].values if 'date' in df.columns else [str(i) for i in range(len(df))]
         volumes = df['volume'].values if 'volume' in df.columns else np.ones(len(df))
-        
+
         points = []
         for p in pivots:
             wp = WavePoint(
@@ -809,14 +807,14 @@ class ElliottWaveAnalyzer:
             if hasattr(p, 'wave_num') and p.wave_num:
                 wp.wave_num = p.wave_num
             points.append(wp)
-        
+
         return points
-    
-    def analyze_trend(self, df: pd.DataFrame, pattern: WavePattern) -> Dict[str, Any]:
+
+    def analyze_trend(self, df: pd.DataFrame, pattern: WavePattern) -> dict[str, Any]:
         """分析趋势"""
         current_price = df['close'].iloc[-1]
         last_point = pattern.points[-1]
-        
+
         result = {
             'current_price': round(current_price, 4),
             'last_wave_price': round(last_point.price, 4),
@@ -826,7 +824,7 @@ class ElliottWaveAnalyzer:
             'fib_ratios': pattern.fib_ratios,
             'guideline_scores': pattern.guideline_scores,
         }
-        
+
         # 位置判断
         if pattern.is_impulse:
             if last_point.wave_num == '5':
@@ -841,12 +839,12 @@ class ElliottWaveAnalyzer:
                 result['signal'] = 'new_trend'
             else:
                 result['position'] = f"correction_{last_point.wave_num}"
-        
+
         if pattern.target_price:
             result['target_price'] = pattern.target_price
         if pattern.stop_loss:
             result['stop_loss'] = pattern.stop_loss
-        
+
         return result
 
 

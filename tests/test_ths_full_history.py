@@ -16,24 +16,24 @@ def test_full_history():
     print("=" * 70)
     print("同花顺(THS)适配器 - 完整历史数据测试")
     print("=" * 70)
-    
+
     config = {
         'enabled': True,
         'timeout': 30,
     }
-    
+
     adapter = ThsAdapter(config)
-    
+
     # 测试股票
     test_stocks = [
         ("600519", "贵州茅台"),
         ("000001", "平安银行"),
     ]
-    
+
     for symbol, name in test_stocks:
         print(f"\n📊 {name}({symbol})")
         print("-" * 70)
-        
+
         # 1. 测试最近数据
         print("\n1. 获取最近140天数据:")
         try:
@@ -43,7 +43,7 @@ def test_full_history():
                 print(f"   范围: {recent_df['date'].min()} ~ {recent_df['date'].max()}")
         except Exception as e:
             print(f"   ✗ 失败: {e}")
-        
+
         # 2. 测试完整历史数据
         print("\n2. 获取完整历史数据:")
         try:
@@ -51,9 +51,9 @@ def test_full_history():
             from datetime import datetime
             end_year = datetime.now().year
             start_year = end_year - 4  # 最近5年
-            
+
             full_df = adapter.get_full_history(symbol, start_year=start_year, end_year=end_year)
-            
+
             if not full_df.empty:
                 print(f"   ✓ 获取 {len(full_df)} 条数据")
                 print(f"   完整范围: {full_df['date'].min()} ~ {full_df['date'].max()}")
@@ -68,7 +68,7 @@ def test_full_history():
             print(f"   ✗ 失败: {e}")
             import traceback
             traceback.print_exc()
-    
+
     print("\n" + "=" * 70)
     print("测试完成")
     print("=" * 70)

@@ -3,13 +3,14 @@
 食品饮料板块波浪分析参数优化 - 轻量级快速版
 """
 import sys
+
 sys.path.insert(0, 'src')
 
-import pandas as pd
 import numpy as np
-from data import get_stock_data
-from analysis.wave import EnhancedWaveAnalyzer
+
 from analysis.backtest.wave_backtester import WaveBacktester
+from analysis.wave import EnhancedWaveAnalyzer
+from data import get_stock_data
 
 print("="*70)
 print("🍺 食品饮料板块参数优化 (轻量版)")
@@ -68,13 +69,13 @@ for params in param_candidates:
     print(f"\n{'='*70}")
     print(f"📊 测试参数: {params['name']}")
     print(f"{'='*70}")
-    
+
     stock_results = []
-    
+
     for symbol in test_stocks:
         try:
             df = get_stock_data(symbol, '2023-01-01', '2026-03-16')
-            
+
             analyzer = EnhancedWaveAnalyzer(
                 use_adaptive=False,
                 atr_mult=params['atr_mult'],
@@ -82,15 +83,15 @@ for params in param_candidates:
                 min_change_pct=params['min_change_pct'],
                 peak_window=params['peak_window']
             )
-            
+
             backtester = WaveBacktester(analyzer)
             backtester.strategy.min_confidence = params['confidence_threshold']
             backtester.strategy.stop_loss_pct = params['stop_loss_pct']
             backtester.strategy.take_profit_pct = params['take_profit_pct']
             backtester.strategy.use_resonance = False  # 关闭共振验证
-            
+
             result = backtester.run(symbol, df, reanalyze_every=30)
-            
+
             stock_results.append({
                 'symbol': symbol,
                 'trades': result.total_trades,
@@ -99,17 +100,17 @@ for params in param_candidates:
                 'max_dd': result.max_drawdown_pct,
                 'sharpe': result.sharpe_ratio
             })
-            
+
         except Exception as e:
             print(f"  {symbol}: 失败 - {e}")
-    
+
     # 计算平均表现
     if stock_results:
         avg_trades = np.mean([r['trades'] for r in stock_results])
         avg_win_rate = np.mean([r['win_rate'] for r in stock_results])
         avg_return = np.mean([r['return'] for r in stock_results])
         avg_sharpe = np.mean([r['sharpe'] for r in stock_results])
-        
+
         results.append({
             'name': params['name'],
             'params': params,
@@ -119,7 +120,7 @@ for params in param_candidates:
             'avg_sharpe': avg_sharpe,
             'details': stock_results
         })
-        
+
         print(f"\n  平均交易次数: {avg_trades:.1f}")
         print(f"  平均胜率: {avg_win_rate:.1%}")
         print(f"  平均收益: {avg_return:.1f}%")
@@ -157,7 +158,7 @@ if results:
 交易参数:
   - 止损比例: {best['params']['stop_loss_pct']:.1%}
   - 止盈比例: {best['params']['take_profit_pct']:.1%}
-  
+
 预期表现:
   - 平均每只股票交易{best['avg_trades']:.0f}次
   - 胜率约{best['avg_win_rate']:.1%}

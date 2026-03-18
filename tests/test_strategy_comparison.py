@@ -4,36 +4,39 @@
 信号有效期: 检测后3天内有效
 """
 import sys
+
 sys.path.insert(0, 'src')
 
-import pandas as pd
-from typing import List, Dict
+import contextlib
 from datetime import datetime
-from data import get_stock_data
+
+import pandas as pd
+
+from analysis.backtest.wave_backtester import TradeAction, WaveBacktester, WaveStrategy
 from analysis.wave import UnifiedWaveAnalyzer
-from analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy, TradeAction
+from data import get_stock_data
 
 
 class ImpulseSignalDetector:
     """推动浪信号检测器 - 带有效期"""
-    
+
     def __init__(self, validity_days: int = 3):
         self.validity_days = validity_days
         self.lastsignals = []  # 存储最近检测的信号
         self.last_analysis_date = None
-    
-    def detect(self, df: pd.DataFrame, current_date: datetime) -> List[Dict]:
+
+    def detect(self, df: pd.DataFrame, current_date: datetime) -> list[dict]:
         """检测推动浪信号"""
         prices = df['close'].values
         dates = pd.to_datetime(df['date']).values
-        
+
         # 找极值点
         pivots = self._findpivots(prices, dates, window=3)
         if len(pivots) < 4:
             return []
-        
+
         signals = []
-        
+
         for i in range(len(pivots) - 3):
             for j in range(i+1, min(i+4, len(pivots)-2)):
                 for k in range(j+1, min(j+4, len(pivots)-1)):
@@ -44,16 +47,16 @@ class ImpulseSignalDetector:
                         )
                         if signal:
                             signals.append(signal)
-        
+
         # 存储信号并清理过期信号
         self.lastsignals = [
-            s for s in signals 
+            s for s in signals
             if (current_date - s['detect_date']).days <= self.validity_days
         ]
         self.last_analysis_date = current_date
-        
+
         return self.lastsignals
-    
+
     def _findpivots(self, prices, dates, window=3):
         pivots = []
         for i in range(window, len(prices) - window):
@@ -64,18 +67,18 @@ class ImpulseSignalDetector:
             if ispeak or is_trough:
                 pivots.append((i, prices[i], pd.to_datetime(dates[i])))
         return pivots
-    
+
     def _check_impulse_pattern(self, p1, p2, p3, p4, prices, dates, current_date):
         """检查推动浪模式"""
         wave1 = abs(p2[1] - p1[1])
         wave2 = abs(p3[1] - p2[1])
         wave3 = abs(p4[1] - p3[1])
-        
+
         if wave1 < p1[1] * 0.015:  # 最小波动1.5%
             return None
-        
+
         direction_up = p2[1] > p1[1]
-        
+
         # 方向检查
         if direction_up:
             if not (p3[1] > p2[1] and p4[1] < p3[1]):
@@ -83,24 +86,24 @@ class ImpulseSignalDetector:
         else:
             if not (p3[1] < p2[1] and p4[1] > p3[1]):
                 return None
-        
+
         # 回撤检查
         w2_ret = wave2 / wave1
         if w2_ret > 0.618:
             return None
-        
+
         if wave3 < wave1 * 0.8:
             return None
-        
+
         w4_ret = wave3 / wave2 if wave2 > 0 else 1
         if w4_ret > 0.5:
             return None
-        
+
         # 检查是否有第5点（当前在4浪）
         p4_idx = p4[0]
         if p4_idx + 1 < len(prices):
             return None  # 有第5点，不是4浪买入时机
-        
+
         # 计算目标价
         if direction_up:
             target = p4[1] + wave1
@@ -108,7 +111,7 @@ class ImpulseSignalDetector:
         else:
             target = p4[1] - wave1
             stop_loss = max(p4[1] * 1.02, p2[1] * 1.01)
-        
+
         # 置信度
         confidence = 0.5
         if 0.3 <= w2_ret <= 0.5:
@@ -117,7 +120,7 @@ class ImpulseSignalDetector:
             confidence += 0.15
         if wave3 > wave1 * 1.5:
             confidence += 0.1
-        
+
         return {
             'entry_wave': '4',
             'entry_price': p4[1],
@@ -132,7 +135,7 @@ class ImpulseSignalDetector:
         }
 
 
-def run_original_backtest(symbol: str, df: pd.DataFrame) -> Dict:
+def run_original_backtest(symbol: str, df: pd.DataFrame) -> dict:
     """运行原策略回测"""
     analyzer = UnifiedWaveAnalyzer(use_adaptive_params=False)
     strategy = WaveStrategy(
@@ -145,12 +148,12 @@ def run_original_backtest(symbol: str, df: pd.DataFrame) -> Dict:
         use_trend_filter=False,
         use_dynamic_target=True
     )
-    
+
     backtester = WaveBacktester(analyzer)
     backtester.strategy = strategy
-    
+
     result = backtester.run(symbol, df, reanalyze_every=30)
-    
+
     return {
         'symbol': symbol,
         'strategy': 'original',
@@ -162,7 +165,7 @@ def run_original_backtest(symbol: str, df: pd.DataFrame) -> Dict:
     }
 
 
-def run_optimized_backtest(symbol: str, df: pd.DataFrame) -> Dict:
+def run_optimized_backtest(symbol: str, df: pd.DataFrame) -> dict:
     """运行优化策略回测（2/4浪增强）"""
     analyzer = UnifiedWaveAnalyzer(use_adaptive_params=False)
     impulse_detector = ImpulseSignalDetector(validity_days=3)
@@ -176,39 +179,37 @@ def run_optimized_backtest(symbol: str, df: pd.DataFrame) -> Dict:
         use_trend_filter=False,
         use_dynamic_target=True
     )
-    
+
     df = df.copy()
     df['date'] = pd.to_datetime(df['date'])
     df = df.sort_values('date').reset_index(drop=True)
-    
+
     trades = []
     position = None
     wavestats = {'C': 0, '4': 0, '2': 0, 'other': 0}
-    
+
     reanalyze_every = 30
-    
+
     for i, row in df.iterrows():
         date = row['date']
         price = row['close']
-        
+
         # 定期分析
         if i % reanalyze_every == 0 or i == 0:
             lookback_start = max(0, i - 60)
             analysis_df = df.iloc[lookback_start:i+1].copy()
-            
+
             impulsesignals = []
             if len(analysis_df) >= 20:
-                try:
+                with contextlib.suppress(Exception):
                     impulsesignals = impulse_detector.detect(analysis_df, date)
-                except Exception:
-                    pass
-        
+
         # 生成信号
         signal = None
         entry_wave = None
         target_price = None
         stop_loss = None
-        
+
         # 优先使用推动浪信号
         for sig in impulsesignals:
             # 信号在有效期内 (检测后3天内)
@@ -223,7 +224,7 @@ def run_optimized_backtest(symbol: str, df: pd.DataFrame) -> Dict:
                     stop_loss = sig['stop_loss']
                     wavestats['4'] += 1
                     break
-        
+
         # 执行交易
         if signal == TradeAction.BUY and not position:
             from analysis.backtest.wave_backtester import Trade
@@ -237,12 +238,12 @@ def run_optimized_backtest(symbol: str, df: pd.DataFrame) -> Dict:
                 entry_idx=i,
                 entry_wave=entry_wave or 'C'
             )
-            
+
         elif position:
             # 检查止损
             pnl_pct = (price / position.entry_price - 1) * 100
-            
-            if pnl_pct <= -5:
+
+            if pnl_pct <= -5 or pnl_pct >= 10:
                 position.exit_date = date.strftime('%Y-%m-%d')
                 position.exit_price = price
                 position.pnl_pct = pnl_pct
@@ -250,22 +251,14 @@ def run_optimized_backtest(symbol: str, df: pd.DataFrame) -> Dict:
                 position.holding_days = i - position.entry_idx
                 trades.append(position)
                 position = None
-            elif pnl_pct >= 10:
-                position.exit_date = date.strftime('%Y-%m-%d')
-                position.exit_price = price
-                position.pnl_pct = pnl_pct
-                position.status = 'closed'
-                position.holding_days = i - position.entry_idx
-                trades.append(position)
-                position = None
-    
+
     # 计算结果
     closedtrades = [t for t in trades if t.status == 'closed']
     wins = [t for t in closedtrades if t.pnl_pct > 0]
-    
+
     total_return = sum(t.pnl_pct for t in closedtrades) / len(closedtrades) * len(closedtrades) / 10 if closedtrades else 0
     win_rate = len(wins) / len(closedtrades) if closedtrades else 0
-    
+
     return {
         'symbol': symbol,
         'strategy': 'optimized',
@@ -301,13 +294,13 @@ for symbol, name in test_stocks:
     try:
         print(f"\n📊 测试 {symbol} {name}...")
         df = get_stock_data(symbol, '2023-01-01', '2026-03-16')
-        
+
         # 原策略
         orig_result = run_original_backtest(symbol, df)
-        
+
         # 优化策略
         opt_result = run_optimized_backtest(symbol, df)
-        
+
         results.append({
             'symbol': symbol,
             'name': name,
@@ -319,11 +312,11 @@ for symbol, name in test_stocks:
             'opt_winrate': opt_result['win_rate'],
             'improvement': opt_result['return'] - orig_result['return']
         })
-        
+
         print(f"  原策略: {orig_result['return']:+.1f}% ({orig_result['trades']}次)")
         print(f"  优化后: {opt_result['return']:+.1f}% ({opt_result['trades']}次)")
         print(f"  改进: {opt_result['return'] - orig_result['return']:+.1f}%")
-        
+
     except Exception as e:
         print(f"  错误: {str(e)[:40]}")
 

@@ -5,11 +5,10 @@
 """
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
-import pandas as pd
 from data import DatabaseDataManager, ThsAdapter
-from datetime import datetime
 
 print("="*80)
 print("📥 全量历史数据同步 - 从上市日起")
@@ -39,21 +38,21 @@ total_records = 0
 for symbol, name, ipo_year in STOCKS:
     print(f"📊 {name} ({symbol}) - {ipo_year}年上市")
     print("-" * 70)
-    
+
     try:
         # 从上市年份获取全量数据
         df = ths.get_full_history(symbol, ipo_year, 2026)
-        
+
         if df.empty:
-            print(f"   ❌ 无数据")
+            print("   ❌ 无数据")
             results.append({'symbol': symbol, 'name': name, 'error': '无数据'})
             continue
-        
+
         # 保存到数据库
         count = len(df)
         manager._save_to_database(symbol, df)
         total_records += count
-        
+
         result = {
             'symbol': symbol,
             'name': name,
@@ -63,15 +62,15 @@ for symbol, name, ipo_year in STOCKS:
             'years': 2026 - ipo_year + 1
         }
         results.append(result)
-        
+
         print(f"   ✅ 同步完成: {count:,} 条记录")
         print(f"   📅 数据范围: {df['date'].min()} ~ {df['date'].max()}")
         print(f"   📊 约 {result['years']} 年数据")
-        
+
     except Exception as e:
         print(f"   ❌ 失败: {e}")
         results.append({'symbol': symbol, 'name': name, 'error': str(e)})
-    
+
     print()
 
 # 最终统计
@@ -108,7 +107,7 @@ for symbol in sorted(stored):
             end = df['date'].max()
             count = len(df)
             print(f"   {symbol}: {count:,} 条 ({start} ~ {end})")
-    except:
+    except Exception:
         pass
 
 manager.close()

@@ -5,10 +5,11 @@
 """
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
+
 from data import DatabaseDataManager
-from datetime import datetime
 
 print("="*80)
 print("📥 全量历史数据同步")
@@ -36,14 +37,14 @@ results = []
 for symbol, name in STOCKS:
     print(f"📊 {name} ({symbol})")
     print("-" * 60)
-    
+
     try:
         # 同步5年历史数据
         count = manager.sync_symbol(symbol, years=5)
-        
+
         # 验证
         df = manager.get_stock_data(symbol, '2020-01-01', '2026-03-17')
-        
+
         result = {
             'symbol': symbol,
             'name': name,
@@ -53,16 +54,16 @@ for symbol, name in STOCKS:
             'end': df['date'].max() if not df.empty else None
         }
         results.append(result)
-        
+
         print(f"   ✅ 同步完成: {count} 条")
         if not df.empty:
             print(f"   📅 数据范围: {df['date'].min()} ~ {df['date'].max()}")
             print(f"   📊 数据库验证: {len(df)} 条")
-        
+
     except Exception as e:
         print(f"   ❌ 失败: {e}")
         results.append({'symbol': symbol, 'name': name, 'error': str(e)})
-    
+
     print()
 
 # 最终统计

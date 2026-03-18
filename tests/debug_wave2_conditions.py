@@ -4,11 +4,13 @@
 """
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
-from src.data import get_stock_data
+
 from src.analysis.wave.enhanced_detector import enhanced_pivot_detection
+from src.data import get_stock_data
 
 # 测试股票
 symbol = '600519.SH'
@@ -50,20 +52,20 @@ if len(pivots) >= 4:
     p1_start = pivots[-3]
     p1_end = pivots[-2]
     p2_end = pivots[-1]
-    
+
     wave1 = abs(p1_end.price - p1_start.price)
     direction_up = p1_end.price > p1_start.price
-    
+
     print("\n关键点:")
     print(f"  p0 (前序): price=¥{p0.price:.2f}")
     print(f"  p1_start (1浪起点): price=¥{p1_start.price:.2f}")
     print(f"  p1_end (1浪终点/2浪起点): price=¥{p1_end.price:.2f}")
     print(f"  p2_end (2浪终点): price=¥{p2_end.price:.2f}")
-    
+
     print("\n计算:")
     print(f"  方向: {'上涨' if direction_up else '下跌'}")
     print(f"  1浪幅度: ¥{wave1:.2f} ({wave1/p1_start.price*100:.2f}%)")
-    
+
     # 条件1: 启动点验证
     if direction_up:
         wave1_valid_start = p0.price < p1_start.price
@@ -73,16 +75,16 @@ if len(pivots) >= 4:
         wave1_valid_start = p0.price > p1_start.price
         print("\n  条件1 (启动点验证):")
         print(f"    p0.price ({p0.price:.2f}) > p1_start.price ({p1_start.price:.2f}): {wave1_valid_start}")
-    
+
     # 条件2: 幅度验证
     wave1_strong = wave1 >= p1_start.price * 0.02
     print("\n  条件2 (幅度验证):")
     print(f"    wave1 ({wave1:.2f}) >= p1_start.price * 0.02 ({p1_start.price * 0.02:.2f}): {wave1_strong}")
-    
+
     # 综合
     wave1_valid = wave1_valid_start and wave1_strong
     print(f"\n  综合验证结果: {wave1_valid}")
-    
+
     if not wave1_valid:
         print("\n  ❌ 验证失败原因:")
         if not wave1_valid_start:
@@ -94,10 +96,10 @@ elif len(pivots) == 3:
     print("\n只有3个极值点 - 使用推断模式")
     p1_start = pivots[-3]
     p1_end = pivots[-2]
-    
+
     wave1 = abs(p1_end.price - p1_start.price)
     wave1_strong = wave1 >= p1_start.price * 0.02
-    
+
     print(f"  1浪幅度: ¥{wave1:.2f} ({wave1/p1_start.price*100:.2f}%)")
     print(f"  幅度验证 (>=2%): {wave1_strong}")
     print(f"  推断模式结果: {wave1_strong}")

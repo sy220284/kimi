@@ -3,6 +3,7 @@
 2/4浪优化总结报告
 """
 import sys
+
 sys.path.insert(0, 'src')
 
 print("="*80)
@@ -33,7 +34,7 @@ print("""
 wave2_retracement = wave2 / wave1
 assert 0.1 <= wave2_retracement <= 0.618  # 不超过61.8%
 
-# 浪3规则  
+# 浪3规则
 wave3 = abs(p3 - p2)
 assert wave3 >= wave1 * 0.8  # 浪3不能比浪1短太多
 

@@ -5,6 +5,7 @@
 
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
@@ -63,7 +64,7 @@ for days in [5, 10, 20]:
         median_ret = valid.median()
         std_ret = valid.std()
         sharpe = avg_ret / std_ret if std_ret > 0 else 0
-        
+
         print(f"\n  {days}天后走势:")
         print(f"    样本数: {len(valid)}")
         print(f"    胜率: {win_rate:.1f}%")

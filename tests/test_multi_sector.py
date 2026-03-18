@@ -4,12 +4,14 @@
 覆盖: 白酒、乳制品、调味品、啤酒、新能源、银行、科技
 """
 import sys
+
 sys.path.insert(0, 'src')
 
-from data import get_stock_data
-from analysis.wave import UnifiedWaveAnalyzer
-from analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy
 from collections import Counter
+
+from analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy
+from analysis.wave import UnifiedWaveAnalyzer
+from data import get_stock_data
 
 print("="*80)
 print("🎯 多行业多市值股票波浪策略测试")
@@ -53,13 +55,13 @@ results = []
 for sector, stocks in test_stocks.items():
     print(f"\n{sector}")
     print("-"*80)
-    
+
     sector_results = []
-    
+
     for symbol, name, size in stocks:
         try:
             df = get_stock_data(symbol, '2023-01-01', '2026-03-16')
-            
+
             analyzer = UnifiedWaveAnalyzer(use_adaptive_params=False)
             strategy = WaveStrategy(
                 initial_capital=1000000,
@@ -72,21 +74,21 @@ for sector, stocks in test_stocks.items():
                 use_dynamic_target=True,
                 target_proximity_pct=0.05,
             )
-            
+
             backtester = WaveBacktester(analyzer)
             backtester.strategy = strategy
-            
+
             result = backtester.run(symbol, df, reanalyze_every=30)
-            
+
             # 统计浪号分布
             wave_dist = Counter([t.entry_wave for t in result.trades if t.entry_wave])
             main_wave = max(wave_dist, key=wave_dist.get) if wave_dist else 'None'
-            
+
             print(f"  {symbol} {name:8s} ({size:6s}): "
                   f"{result.total_trades:2d}次 | 胜率{result.win_rate:5.1%} | "
                   f"收益{result.total_return_pct:+6.1f}% | 回撤{result.max_drawdown_pct:5.1f}% | "
                   f"主要浪{main_wave}")
-            
+
             sector_results.append({
                 'symbol': symbol,
                 'name': name,
@@ -98,10 +100,10 @@ for sector, stocks in test_stocks.items():
                 'sharpe': result.sharpe_ratio,
                 'main_wave': main_wave
             })
-            
+
         except Exception as e:
             print(f"  {symbol} {name:8s}: 错误 - {str(e)[:30]}")
-    
+
     results.extend(sector_results)
 
 # 汇总统计

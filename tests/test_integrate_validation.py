@@ -10,14 +10,16 @@
 
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import pandas as pd
 import json
 
-from src.data import get_stock_data
-from src.analysis.wave import UnifiedWaveAnalyzer
+import pandas as pd
+
 from src.analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy
+from src.analysis.wave import UnifiedWaveAnalyzer
+from src.data import get_stock_data
 
 # 测试股票 (代表性样本)
 TEST_STOCKS = [
@@ -130,25 +132,25 @@ CONFIGS = [
 def run_single_test(symbol, name, config):
     """运行单股票单配置测试"""
     print(f"  测试 {symbol} {name}...", end=' ')
-    
+
     try:
         # 获取数据
         df = get_stock_data(symbol, START_DATE, END_DATE)
         if df is None or len(df) < 100:
             print("数据不足")
             return None
-        
+
         # 创建分析器和策略
         analyzer = UnifiedWaveAnalyzer(**config['analyzerparams'])
         strategy = WaveStrategy(**config['strategyparams'])
-        
+
         # 创建回测器
         backtester = WaveBacktester(analyzer)
         backtester.strategy = strategy
-        
+
         # 运行回测
         result = backtester.run(symbol, df, reanalyze_every=5)
-        
+
         # 统计信号类型分布
         signals_by_type = {'C': 0, '2': 0, '4': 0}
         for trade in result.trades:
@@ -156,9 +158,9 @@ def run_single_test(symbol, name, config):
                 wave = trade.entry_wave
                 if wave in signals_by_type:
                     signals_by_type[wave] += 1
-        
+
         print(f"✓ 交易{result.total_trades}次 胜率{result.win_rate:.1%} 收益{result.total_return_pct:+.2f}%")
-        
+
         return {
             'symbol': symbol,
             'name': name,
@@ -172,7 +174,7 @@ def run_single_test(symbol, name, config):
             'signals_2': signals_by_type['2'],
             'signals_4': signals_by_type['4'],
         }
-        
+
     except Exception as e:
         print(f"✗ 错误: {str(e)[:50]}")
         return None
@@ -186,25 +188,25 @@ def main():
     print(f"测试周期: {START_DATE} ~ {END_DATE}")
     print(f"配置方案: {len(CONFIGS)}种")
     print("=" * 80)
-    
+
     all_results = []
-    
+
     for symbol, name in TEST_STOCKS:
         print(f"\n📊 {symbol} {name}")
         print("-" * 60)
-        
+
         for config in CONFIGS:
             result = run_single_test(symbol, name, config)
             if result:
                 all_results.append(result)
-    
+
     # 汇总分析
     print("\n" + "=" * 80)
     print("汇总分析")
     print("=" * 80)
-    
+
     results_df = pd.DataFrame(all_results)
-    
+
     # 按配置分组统计
     summary = results_df.groupby('config_name').agg({
         'trades': 'mean',
@@ -216,23 +218,23 @@ def main():
         'signals_2': 'sum',
         'signals_4': 'sum',
     }).round(2)
-    
+
     print("\n📈 各配置平均表现:")
     print(summary.to_string())
-    
+
     # 按股票分组统计
     print("\n📈 各股票最佳配置:")
     for symbol in results_df['symbol'].unique():
         stock_results = results_df[results_df['symbol'] == symbol]
         best = stock_results.loc[stock_results['return_pct'].idxmax()]
         print(f"  {symbol}: {best['config_name']} (收益{best['return_pct']:+.2f}%, 胜率{best['win_rate']:.1%})")
-    
+
     # 保存结果
     output_file = 'tests/results/integrate_validation.json'
     Path(output_file).parent.mkdir(exist_ok=True)
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(all_results, f, ensure_ascii=False, indent=2)
-    
+
     print(f"\n💾 详细结果已保存: {output_file}")
     print("=" * 80)
 

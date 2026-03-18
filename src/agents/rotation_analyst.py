@@ -2,24 +2,25 @@
 智能体框架 - 轮动分析师智能体 (简化版，无外部依赖)
 分析行业轮动和板块轮动机会
 """
-from typing import Any, Dict, Optional
-from pathlib import Path
 import sys
-import pandas as pd
+from pathlib import Path
+from typing import Any
+
 import numpy as np
+import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from .base_agent import BaseAgent, AnalysisType
+from .base_agent import AnalysisType, BaseAgent
 
 
 class RotationAnalystAgent(BaseAgent):
     """轮动分析师智能体 - 简化版"""
-    
-    def __init__(self, config_path: Optional[Path] = None):
+
+    def __init__(self, config_path: Path | None = None):
         """
         初始化轮动分析师
-        
+
         Args:
             config_path: 配置文件路径
         """
@@ -28,29 +29,29 @@ class RotationAnalystAgent(BaseAgent):
             analysis_type=AnalysisType.ROTATION,
             config_path=config_path
         )
-        
+
         self.lookback_period = 60
         self.momentum_period = 20
-    
-    def analyze(self, data: Dict[str, Any] = None) -> Dict[str, Any]:
+
+    def analyze(self, data: dict[str, Any] = None) -> dict[str, Any]:
         """
         执行轮动分析
-        
+
         Args:
             data: 可选的分析数据
-            
+
         Returns:
             分析结果字典
         """
         try:
             from data.optimized_data_manager import get_optimized_data_manager
-            
+
             data_mgr = get_optimized_data_manager()
             df_all = data_mgr.load_all_data()
-            
+
             if df_all.empty:
                 return {'status': 'no_data', 'sectors': {}}
-            
+
             # 按板块分类统计
             sectors = {
                 '科创板': df_all[df_all['symbol'].str.startswith('688', na=False)]['symbol'].nunique(),
@@ -58,7 +59,7 @@ class RotationAnalystAgent(BaseAgent):
                 '上海主板': df_all[df_all['symbol'].str.startswith('60', na=False)]['symbol'].nunique(),
                 '深圳主板': df_all[df_all['symbol'].str.startswith('00', na=False)]['symbol'].nunique(),
             }
-            
+
             # 计算各板块近期表现
             sector_performance = {}
             for sector_name, symbols in [
@@ -76,10 +77,10 @@ class RotationAnalystAgent(BaseAgent):
                             recent_return = df['daily_return'].tail(20).mean() * 100
                             if not pd.isna(recent_return):
                                 returns.append(recent_return)
-                    
+
                     if returns:
                         sector_performance[sector_name] = np.mean(returns)
-            
+
             return {
                 'status': 'success',
                 'sectors': sectors,
@@ -87,12 +88,12 @@ class RotationAnalystAgent(BaseAgent):
                 'strong_sectors': sorted(sector_performance.items(), key=lambda x: x[1], reverse=True)[:2],
                 'weak_sectors': sorted(sector_performance.items(), key=lambda x: x[1])[:2],
             }
-            
+
         except Exception as e:
             self.logger.error(f"轮动分析失败: {e}")
             return {'status': 'error', 'message': str(e)}
-    
-    def analyze_market_rotation(self) -> Dict[str, Any]:
+
+    def analyze_market_rotation(self) -> dict[str, Any]:
         """市场轮动分析"""
         return self.analyze()
 

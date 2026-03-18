@@ -4,10 +4,11 @@
 """
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 # 读取数据
 df = pd.read_csv('tests/results/fulldatabase_v2.csv')
@@ -75,10 +76,10 @@ for conf_range, group in w2_df.groupby('conf_bin'):
     valid_count = group['wave1_valid'].sum()
     total_count = len(group)
     valid_rate = valid_count / total_count * 100 if total_count > 0 else 0
-    
+
     validreturns = group[group['wave1_valid']]['return_5d'].dropna()
     invalidreturns = group[~group['wave1_valid']]['return_5d'].dropna()
-    
+
     print(f"\n置信度 {conf_range} ({total_count} 个):")
     print(f"  验证通过率: {valid_rate:.1f}%")
     if len(validreturns) > 0:

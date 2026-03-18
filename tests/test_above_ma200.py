@@ -5,12 +5,14 @@
 
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
-from src.data import get_stock_data
+
+from src.analysis.backtest.wave_backtester import TradeAction, WaveBacktester, WaveStrategy
 from src.analysis.wave import UnifiedWaveAnalyzer
-from src.analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy, TradeAction
+from src.data import get_stock_data
 
 SYMBOL = '600519'
 START = '2023-01-01'  # 使用更早的数据
@@ -60,16 +62,16 @@ for idx in valid_days.index[:20]:
     price = row['close']
     ma200 = row['ma200']
     ratio = price / ma200
-    
+
     # 准备数据
     pos = df.index.get_loc(idx)
     lookback = max(0, pos - 60)
     window_df = df.iloc[lookback:pos+1].copy()
-    
+
     # 检测信号
     signals = analyzer.detect(window_df, mode='all')
     signal_count = len(signals)
-    
+
     # 检查是否会买入
     backtester.currentsignals = signals
     best = backtester._get_best_trade_signal(price)
@@ -77,11 +79,11 @@ for idx in valid_days.index[:20]:
     if will_buy:
         buy_count += 1
         # 模拟买入
-        strategy.executetrade(SYMBOL, date, price, TradeAction.BUY, 
-                              target_price=best.target_price, 
+        strategy.executetrade(SYMBOL, date, price, TradeAction.BUY,
+                              target_price=best.target_price,
                               stop_loss=best.stop_loss,
                               wavesignal=best)
-    
+
     print(f"{date:<12} {price:>10.2f} {ma200:>10.2f} {ratio:>8.3f} {signal_count:>6} {will_buy:>6}")
 
 print("-" * 70)

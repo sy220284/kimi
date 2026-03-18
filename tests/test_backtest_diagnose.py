@@ -5,11 +5,13 @@
 
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
-from src.data import get_stock_data
+
 from src.analysis.wave import UnifiedWaveAnalyzer
+from src.data import get_stock_data
 
 SYMBOL = '600519'
 START = '2024-01-01'
@@ -39,7 +41,7 @@ for i in range(len(df)-20, len(df)):
     date = row['date'].strftime('%m-%d')
     price = row['close']
     ma200 = row['ma200']
-    
+
     # 趋势判断
     if pd.notna(ma200):
         if price > ma200 * 1.05:
@@ -50,17 +52,17 @@ for i in range(len(df)-20, len(df)):
             trend = 'SIDE'
     else:
         trend = 'N/A'
-    
+
     # 检测信号 (使用最近60天数据)
     lookback = max(0, i - 60)
     window_df = df.iloc[lookback:i+1].copy()
     signals = analyzer.detect(window_df, mode='all') if len(window_df) >= 30 else []
-    
+
     # 统计有效信号
     validsignals = [s for s in signals if s.is_valid and s.confidence >= 0.5]
-    
+
     print(f"{date:<12} {price:>10.2f} {ma200:>10.2f} {trend:>6} {len(validsignals):>6}")
-    
+
     if validsignals:
         for sig in validsignals:
             aligned = "✓" if sig.trend_aligned else "✗"

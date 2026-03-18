@@ -3,8 +3,9 @@
 对比分析报告: 增强版 vs 上一版本
 """
 
-import pandas as pd
 import json
+
+import pandas as pd
 
 print("=" * 90)
 print("📊 波浪检测对比分析报告")
@@ -14,7 +15,7 @@ print("=" * 90)
 # 读取两个版本的结果
 try:
     df_v1 = pd.read_csv('tests/results/batch_wave_analysis.csv')
-    with open('tests/results/batch_wave_analysissummary.json', 'r') as f:
+    with open('tests/results/batch_wave_analysissummary.json') as f:
         summary_v1 = json.load(f)
 except Exception:
     # 如果v1没有summary文件，手动计算
@@ -28,7 +29,7 @@ except Exception:
     }
 
 df_v2 = pd.read_csv('tests/results/batch_enhanced_v2.csv')
-with open('tests/results/batch_enhanced_v2summary.json', 'r') as f:
+with open('tests/results/batch_enhanced_v2summary.json') as f:
     summary_v2 = json.load(f)
 
 print("\n【一、整体指标对比】")
@@ -104,7 +105,7 @@ print("-" * 90)
 if 'wave1_valid' in df_v2.columns:
     valid_2 = df_v2[df_v2['wave1_valid']]
     invalid_2 = df_v2[~df_v2['wave1_valid']]
-    
+
     print("\n2浪验证:")
     print(f"  通过验证: {len(valid_2)}个, 平均置信度{valid_2['confidence'].mean():.2f}")
     if len(valid_2) > 0:
@@ -116,7 +117,7 @@ if 'wave1_valid' in df_v2.columns:
 if 'b_wave_valid' in df_v2.columns:
     valid_c = df_v2[df_v2['b_wave_valid']]
     invalid_c = df_v2[~df_v2['b_wave_valid']]
-    
+
     print("\nC浪验证:")
     print(f"  通过验证: {len(valid_c)}个, 平均置信度{valid_c['confidence'].mean():.2f}")
     if len(valid_c) > 0:

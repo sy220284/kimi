@@ -4,16 +4,25 @@ ATR(14) * 2 作为止损，移动止盈同样基于ATR
 """
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
-import pandas as pd
-import numpy as np
 from datetime import datetime
 
+import numpy as np
+import pandas as pd
+
 # 导入回测相关模块
-from analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy, Trade, TradeAction, BacktestResult
+from analysis.backtest.wave_backtester import (
+    BacktestResult,
+    Trade,
+    TradeAction,
+    WaveBacktester,
+    WaveStrategy,
+)
 from analysis.wave.unified_analyzer import UnifiedWaveAnalyzer
 from data.db_manager import get_db_manager
+
 
 def calculate_atr(df, period=14):
     """计算ATR指标"""
@@ -99,12 +108,12 @@ class ATRWaveBacktester(WaveBacktester):
                     analysis_cache[i] = analysis
                     last_analysis_idx = i
                 except Exception:
-                    analysis = analysis_cache.get(last_analysis_idx, None)
+                    analysis = analysis_cache.get(last_analysis_idx)
             else:
-                analysis = analysis_cache.get(last_analysis_idx, None)
+                analysis = analysis_cache.get(last_analysis_idx)
             
             # 检查持仓
-            for pos_symbol, trade in list(self.strategy.positions.items()):
+            for _pos_symbol, trade in list(self.strategy.positions.items()):
                 holding_days = i - trade.entry_idx
                 
                 if holding_days < self.strategy.min_holding_days:
@@ -236,7 +245,7 @@ class ATRWaveBacktester(WaveBacktester):
     def _closetrade(self, trade, date, price, reason):
         """平仓交易"""
         trade.close(date, price, reason)
-        self.strategy.capital += trade.quantity * price * (1 - self.strategy.commission_rate - 
+        self.strategy.capital += trade.quantity * price * (1 - self.strategy.commission_rate -
                                                             self.strategy.stamp_tax_rate - self.strategy.slippage_rate)
         if trade.symbol in self.strategy.positions:
             del self.strategy.positions[trade.symbol]
@@ -276,7 +285,7 @@ class ATRWaveBacktester(WaveBacktester):
         losingtrades = len(closedtrades) - winningtrades
         win_rate = winningtrades / len(closedtrades) if closedtrades else 0
         
-_        total_pnl = sum(t.pnl for t in closedtrades)
+        total_pnl = sum(t.pnl for t in closedtrades)
         initial_value = self.strategy.initial_capital
         final_value = self.strategy.capital
         
@@ -329,7 +338,7 @@ def run_atr_backtest():
     print(f"开始时间: {datetime.now()}")
     
     tech_symbols = [
-        '000063', '002230', '300750', '600584', '603501', 
+        '000063', '002230', '300750', '600584', '603501',
         '688981', '688012', '688008', '000938', '600570',
         '002371', '300014', '300124', '300433', '300408',
         '603019', '603893', '688111', '688126', '688599',

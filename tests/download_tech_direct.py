@@ -4,14 +4,17 @@
 """
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+
+import json
+import re
+import time
+from datetime import datetime
 
 import pandas as pd
 import requests
-import json
-import re
-from datetime import datetime
-import time
+
 from data import get_db_manager
 
 # 科技股列表 - 大中小市值兼顾
@@ -71,34 +74,34 @@ def get_daily_kline_ths(symbol, start_date='20170101', end_date='20241231'):
     """从同花顺获取日线数据"""
     try:
         url = f'http://d.10jqka.com.cn/v4/line/hs_{symbol}/01/{start_date}/{end_date}/last.js'
-        
+
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Referer': f'http://stockpage.10jqka.com.cn/{symbol}/'
         }
-        
+
         response = requests.get(url, headers=headers, timeout=10)
-        
+
         if response.status_code != 200:
             return None
-        
+
         # 解析JS数据
         text = response.text
         pattern = r'quotebridge_v4_line_[^(]+\((.*)\)'
         match = re.search(pattern, text)
-        
+
         if not match:
             return None
-        
+
         data = json.loads(match.group(1))
-        
+
         if 'data' not in data:
             return None
-        
+
         # 解析数据
         lines = data['data'].split(';')
         records = []
-        
+
         for line in lines:
             if not line.strip():
                 continue
@@ -120,13 +123,13 @@ def get_daily_kline_ths(symbol, start_date='20170101', end_date='20241231'):
                     records.append(record)
                 except Exception:
                     continue
-        
+
         if not records:
             return None
-        
+
         df = pd.DataFrame(records)
         df['symbol'] = symbol
-        
+
         return df[['symbol', 'date', 'open', 'high', 'low', 'close', 'volume', 'amount']]
     except Exception:
         return None
@@ -136,50 +139,50 @@ def main():
     print("📱 科技板块数据下载 - 指定股票")
     print("="*70)
     print(f"开始时间: {datetime.now()}")
-    
+
     # 合并所有股票
     all_stocks = []
     all_stocks.extend(TECH_STOCKS['large_cap'])
     all_stocks.extend(TECH_STOCKS['mid_cap'])
     all_stocks.extend(TECH_STOCKS['small_cap'])
-    
+
     # 去重
     all_stocks = list(set(all_stocks))
-    
+
     print("\n股票列表:")
     print(f"  大盘股: {len(TECH_STOCKS['large_cap'])} 只")
     print(f"  中盘股: {len(TECH_STOCKS['mid_cap'])} 只")
     print(f"  小盘股: {len(TECH_STOCKS['small_cap'])} 只")
     print(f"  总计: {len(all_stocks)} 只")
-    
+
     # 下载数据
     db_manager = get_db_manager()
     start_date = '20170101'
     end_date = '20241231'
-    
+
     success_count = 0
     fail_count = 0
     total_records = 0
-    
+
     large_success = 0
     mid_success = 0
     small_success = 0
-    
+
     print(f"\n开始下载历史数据 ({start_date} ~ {end_date})...")
     print("="*70)
-    
+
     for i, symbol in enumerate(all_stocks, 1):
         print(f"[{i}/{len(all_stocks)}] {symbol} ...", end=" ", flush=True)
-        
+
         df = get_daily_kline_ths(symbol, start_date, end_date)
-        
+
         if df is not None and not df.empty:
             try:
                 db_manager.pg.save_marketdata(df)
                 print(f"✅ {len(df)} 条")
                 success_count += 1
                 total_records += len(df)
-                
+
                 # 统计分类
                 if symbol in TECH_STOCKS['large_cap']:
                     large_success += 1
@@ -193,9 +196,9 @@ def main():
         else:
             print("❌ 无数据")
             fail_count += 1
-        
+
         time.sleep(0.15)  # 控制请求频率
-    
+
     # 汇总
     print("\n" + "="*70)
     print("📊 下载汇总")
@@ -207,24 +210,24 @@ def main():
     print(f"  大盘股: {large_success}/{len(TECH_STOCKS['large_cap'])} 只")
     print(f"  中盘股: {mid_success}/{len(TECH_STOCKS['mid_cap'])} 只")
     print(f"  小盘股: {small_success}/{len(TECH_STOCKS['small_cap'])} 只")
-    
+
     # 查询数据库中的科技股
     try:
         result = db_manager.pg.execute("""
             SELECT symbol, MIN(date) as start_date, MAX(date) as end_date, COUNT(*) as records
-            FROM marketdata 
+            FROM marketdata
             WHERE symbol IN %s
             GROUP BY symbol
             ORDER BY records DESC
         """, (tuple(all_stocks),), fetch=True)
-        
+
         if result:
             df_db = pd.DataFrame(result)
             print(f"\n数据库中科技板块股票: {len(df_db)} 只")
             print(f"总记录数: {df_db['records'].sum():,} 条")
     except Exception as e:
         print(f"查询数据库失败: {e}")
-    
+
     print(f"\n结束时间: {datetime.now()}")
     print("="*70)
 

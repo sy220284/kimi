@@ -4,11 +4,14 @@
 """
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
-import pandas as pd
-from datetime import datetime
 import time
+from datetime import datetime
+
+import pandas as pd
+
 from data import get_db_manager
 from data.ths_history_fetcher import ThsHistoryFetcher
 
@@ -69,7 +72,7 @@ def save_todatabase(db_manager, symbol, df):
     """保存到数据库"""
     if df.empty:
         return 0
-    
+
     count = 0
     try:
         for _, row in df.iterrows():
@@ -95,57 +98,57 @@ def main():
     print("📱 科技板块数据下载 - 完整历史数据")
     print("="*70)
     print(f"开始时间: {datetime.now()}")
-    
+
     # 合并所有股票
     all_stocks = []
     all_stocks.extend(TECH_STOCKS['large_cap'])
     all_stocks.extend(TECH_STOCKS['mid_cap'])
     all_stocks.extend(TECH_STOCKS['small_cap'])
-    
+
     # 去重
     all_stocks = list(set(all_stocks))
-    
+
     print("\n股票列表:")
     print(f"  大盘股: {len(TECH_STOCKS['large_cap'])} 只")
     print(f"  中盘股: {len(TECH_STOCKS['mid_cap'])} 只")
     print(f"  小盘股: {len(TECH_STOCKS['small_cap'])} 只")
     print(f"  总计: {len(all_stocks)} 只")
-    
+
     # 下载数据
     fetcher = ThsHistoryFetcher()
     db_manager = get_db_manager()
     start_date = '2017-01-01'
     end_date = '2024-12-31'
-    
+
     success_count = 0
     fail_count = 0
     total_records = 0
-    
+
     large_success = 0
     mid_success = 0
     small_success = 0
-    
+
     print(f"\n开始下载历史数据 ({start_date} ~ {end_date})...")
     print("="*70)
-    
+
     for i, symbol in enumerate(all_stocks, 1):
         print(f"\n[{i}/{len(all_stocks)}] {symbol}")
-        
+
         try:
             code = f'hs_{symbol}'
             df = fetcher.getdata_by_date_range(code, start_date, end_date)
-            
+
             if df is not None and not df.empty:
                 # 添加symbol列
                 df['symbol'] = symbol
                 df = df[['symbol', 'date', 'open', 'high', 'low', 'close', 'volume', 'amount']]
-                
+
                 records_saved = save_todatabase(db_manager, symbol, df)
                 if records_saved > 0:
                     print(f"  ✅ 保存 {records_saved} 条记录")
                     success_count += 1
                     total_records += records_saved
-                    
+
                     # 统计分类
                     if symbol in TECH_STOCKS['large_cap']:
                         large_success += 1
@@ -162,9 +165,9 @@ def main():
         except Exception as e:
             print(f"  ❌ 错误: {e}")
             fail_count += 1
-        
+
         time.sleep(0.3)  # 控制请求频率，避免被封
-    
+
     # 汇总
     print("\n" + "="*70)
     print("📊 下载汇总")
@@ -176,24 +179,24 @@ def main():
     print(f"  大盘股: {large_success}/{len(TECH_STOCKS['large_cap'])} 只")
     print(f"  中盘股: {mid_success}/{len(TECH_STOCKS['mid_cap'])} 只")
     print(f"  小盘股: {small_success}/{len(TECH_STOCKS['small_cap'])} 只")
-    
+
     # 查询数据库中的科技股
     try:
         result = db_manager.pg.execute("""
             SELECT symbol, MIN(date) as start_date, MAX(date) as end_date, COUNT(*) as records
-            FROM marketdata 
+            FROM marketdata
             WHERE symbol IN %s
             GROUP BY symbol
             ORDER BY records DESC
         """, (tuple(all_stocks),), fetch=True)
-        
+
         if result:
             df_db = pd.DataFrame(result)
             print(f"\n数据库中科技板块股票: {len(df_db)} 只")
             print(f"总记录数: {df_db['records'].sum():,} 条")
     except Exception as e:
         print(f"查询数据库失败: {e}")
-    
+
     print(f"\n结束时间: {datetime.now()}")
     print("="*70)
 

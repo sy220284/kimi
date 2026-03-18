@@ -5,11 +5,12 @@ Phase 5 测试 - 回测验证
 """
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
-from data import get_stock_data
-from analysis.wave import UnifiedWaveAnalyzer
 from analysis.backtest.wave_backtester import WaveBacktester
+from analysis.wave import UnifiedWaveAnalyzer
+from data import get_stock_data
 
 print("="*80)
 print("📈 Phase 5 测试 - 回测验证")
@@ -33,24 +34,24 @@ for symbol, name in symbols:
     print(f"\n{'='*80}")
     print(f"📊 {name} ({symbol})")
     print('='*80)
-    
+
     try:
         # 获取2年历史数据
         df = get_stock_data(symbol, '2023-01-01', '2025-12-31')
-        
+
         # 运行回测
         result = backtester.run(symbol, df, reanalyze_every=5)
-        
+
         # 生成报告
         report = backtester.generate_report(result)
         print(report)
-        
+
         all_results.append({
             'symbol': symbol,
             'name': name,
             'result': result
         })
-        
+
     except Exception as e:
         print(f"❌ 回测失败: {e}")
         import traceback
@@ -74,7 +75,7 @@ if all_results:
     total_trades = sum(r['result'].total_trades for r in all_results)
     avg_win_rate = sum(r['result'].win_rate for r in all_results) / len(all_results)
     avg_return = sum(r['result'].total_return_pct for r in all_results) / len(all_results)
-    
+
     print(f"\n{'组合平均':<8} {total_trades:>8} {avg_win_rate:>7.1%} "
           f"{avg_return:>9.1f}%")
 

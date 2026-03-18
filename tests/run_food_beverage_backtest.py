@@ -4,13 +4,17 @@
 """
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
-import pandas as pd
 from datetime import datetime
+
+import pandas as pd
+
 from analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy
 from analysis.wave.unified_analyzer import UnifiedWaveAnalyzer
 from data import get_db_manager
+
 
 def get_all_food_beverage_stocks():
     """从数据库获取所有食品饮料股票"""
@@ -112,7 +116,7 @@ def main():
         symbol = row['symbol']
         print(f"\n[{i+1}/{len(stocks_df)}] {symbol} ...", end=" ", flush=True)
 
-        result, trade_details = run_backtest_for_stock(symbol, analyzer, 
+        result, trade_details = run_backtest_for_stock(symbol, analyzer,
                                                         start_date='2017-01-01', end_date='2024-12-31')
         if result:
             print(f"✅ 交易{result['trades']}次 收益{result['return']:.2f}%")

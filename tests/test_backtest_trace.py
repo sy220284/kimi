@@ -5,12 +5,14 @@
 
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
-from src.data import get_stock_data
-from src.analysis.wave import UnifiedWaveAnalyzer
+
 from src.analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy
+from src.analysis.wave import UnifiedWaveAnalyzer
+from src.data import get_stock_data
 
 SYMBOL = '600519'
 START = '2024-06-01'  # 使用较近期数据，MA200已可用
@@ -53,7 +55,7 @@ for i in range(200, min(200+50, len(df))):  # 从200开始确保MA200有效
     date = row['date'].strftime('%m-%d')
     price = row['close']
     ma200 = row['ma200']
-    
+
     # 趋势判断
     trend = 'N/A'
     if pd.notna(ma200):
@@ -63,12 +65,12 @@ for i in range(200, min(200+50, len(df))):  # 从200开始确保MA200有效
             trend = 'DOWN'
         else:
             trend = 'SIDE'
-    
+
     # 模拟回测器逻辑
     analyzed = False
     signal_count = 0
     buy_triggered = False
-    
+
     # 定期重新分析
     if i % 10 == 0:
         lookback = max(0, i - 60)
@@ -77,7 +79,7 @@ for i in range(200, min(200+50, len(df))):  # 从200开始确保MA200有效
             signals = analyzer.detect(window_df, mode='all')
             analyzed = True
             signal_count = len(signals)
-            
+
             # 检查是否有买入信号
             if signals and SYMBOL not in strategy.positions:
                 best = signals[0]
@@ -86,7 +88,7 @@ for i in range(200, min(200+50, len(df))):  # 从200开始确保MA200有效
                     if best.trend_aligned:
                         buy_triggered = True
                         count += 1
-    
+
     if analyzed:
         print(f"{date:<12} {price:>10.2f} {ma200:>10.2f} {trend:>6} {'✓':>10} {signal_count:>6} {'✓' if buy_triggered else '':>6}")
         if signals:

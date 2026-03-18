@@ -3,10 +3,11 @@
 同花顺(THS)API 数据深度测试
 检查可获取的数据类型和历史数据深度
 """
-import requests
 import json
 import re
+
 import pandas as pd
+import requests
 
 BASE_URL = "http://d.10jqka.com.cn/v4/line"
 
@@ -21,18 +22,18 @@ def parse_jsdata(js_text: str) -> pd.DataFrame:
     """解析同花顺JS数据"""
     pattern = r'quotebridge_v4_line_[^(]+\((.*)\)'
     match = re.search(pattern, js_text)
-    
+
     if not match:
         return pd.DataFrame()
-    
+
     data = json.loads(match.group(1))
-    
+
     if 'data' not in data:
         return pd.DataFrame()
-    
+
     lines = data['data'].split(';')
     records = []
-    
+
     for line in lines:
         if not line.strip():
             continue
@@ -57,9 +58,9 @@ def parse_jsdata(js_text: str) -> pd.DataFrame:
                 record['change'] = float(parts[9])  # 涨跌额
             if len(parts) > 10:
                 record['turnover'] = float(parts[10])  # 换手率
-                
+
             records.append(record)
-    
+
     df = pd.DataFrame(records)
     df['date'] = pd.to_datetime(df['date'], format='%Y%m%d').dt.strftime('%Y-%m-%d')
     return df.sort_values('date').reset_index(drop=True)
@@ -82,11 +83,11 @@ def main():
     print("=" * 70)
     print("同花顺(THS)API - 数据深度检查")
     print("=" * 70)
-    
+
     # ========== 1. 个股历史数据深度 ==========
     print("\n📊 1. 个股历史数据深度")
     print("-" * 70)
-    
+
     stocks = [
         ("hs_600519", "贵州茅台"),
         ("hs_000001", "平安银行"),
@@ -94,7 +95,7 @@ def main():
         ("hs_000333", "美的集团"),
         ("hs_600036", "招商银行"),
     ]
-    
+
     stock_results = []
     for code, name in stocks:
         df = fetchdata(code)
@@ -110,10 +111,10 @@ def main():
                 '结束日期': end_date,
                 '数据跨度': f"{(pd.to_datetime(end_date) - pd.to_datetime(start_date)).days}天"
             })
-    
+
     stock_df = pd.DataFrame(stock_results)
     print(stock_df.to_string(index=False))
-    
+
     # 检查详细字段
     print("\n📋 数据字段详情（以茅台为例）:")
     df_sample = fetchdata("hs_600519")
@@ -124,11 +125,11 @@ def main():
         row = df_sample.iloc[0]
         for col in df_sample.columns:
             print(f"     {col}: {row[col]}")
-    
+
     # ========== 2. 指数数据 ==========
     print("\n\n📈 2. 指数数据可用性")
     print("-" * 70)
-    
+
     indices = [
         ("hs_000001", "上证指数"),
         ("hs_000016", "上证50"),
@@ -138,7 +139,7 @@ def main():
         ("hs_399006", "创业板指"),
         ("hs_000688", "科创50"),
     ]
-    
+
     index_results = []
     for code, name in indices:
         df = fetchdata(code)
@@ -150,14 +151,14 @@ def main():
             '状态': status,
             '数据条数': days
         })
-    
+
     index_df = pd.DataFrame(index_results)
     print(index_df.to_string(index=False))
-    
+
     # ========== 3. 行业板块数据 ==========
     print("\n\n🏭 3. 行业板块数据测试")
     print("-" * 70)
-    
+
     # 申万行业指数代码（部分）
     industries = [
         ("hs_881001", "计算机"),
@@ -171,7 +172,7 @@ def main():
         ("hs_881009", "电力设备"),
         ("hs_881010", "新能源"),
     ]
-    
+
     industry_results = []
     for code, name in industries:
         df = fetchdata(code)
@@ -183,20 +184,20 @@ def main():
             '状态': status,
             '数据条数': days
         })
-    
+
     industry_df = pd.DataFrame(industry_results)
     print(industry_df.to_string(index=False))
-    
+
     # ========== 4. 不同K线周期 ==========
     print("\n\n📅 4. K线周期支持")
     print("-" * 70)
-    
+
     ktypes = [
         ("01", "日线"),
         ("11", "周线"),
         ("12", "月线"),
     ]
-    
+
     for ktype, name in ktypes:
         url = f"{BASE_URL}/hs_600519/{ktype}/last.js"
         try:
@@ -208,11 +209,11 @@ def main():
                 print(f"   {name}({ktype}): ✗ HTTP {resp.status_code}")
         except Exception:
             print(f"   {name}({ktype}): ✗ 错误")
-    
+
     # ========== 5. 数据质量检查 ==========
     print("\n\n🔍 5. 数据质量检查（茅台）")
     print("-" * 70)
-    
+
     df = fetchdata("hs_600519")
     if not df.empty:
         # 检查是否有缺失值
@@ -223,21 +224,21 @@ def main():
                 print(f"     {col}: {missing[col]} 个缺失")
         if missing.sum() == 0:
             print("     ✓ 无缺失值")
-        
+
         # 检查价格有效性
         print("\n   价格有效性:")
         invalid_high = (df['high'] < df[['open', 'close']].max(axis=1)).sum()
         invalid_low = (df['low'] > df[['open', 'close']].min(axis=1)).sum()
         print(f"     高价 < max(开收): {invalid_high} 条")
         print(f"     低价 > min(开收): {invalid_low} 条")
-        
+
         # 统计信息
         print("\n   价格统计:")
         print(f"     最高: {df['high'].max():.2f}")
         print(f"     最低: {df['low'].min():.2f}")
         print(f"     平均成交量: {df['volume'].mean():,.0f}")
         print(f"     平均成交额: {df.get('amount', pd.Series([0])).mean():,.0f}")
-    
+
     # ========== 6. 总结 ==========
     print("\n\n📋 6. 总结")
     print("=" * 70)
@@ -246,17 +247,17 @@ def main():
     print("   - 指数数据: 上证指数、创业板指等主流指数可用")
     print("   - 行业板块: 申万行业指数部分可用")
     print("   - K线周期: 日线/周线/月线")
-    
+
     print("\n✓ 数据字段 (11个):")
     print("   date, open, high, low, close, volume, amount,")
     print("   amplitude, change_pct, change, turnover")
-    
+
     print("\n⚠ 限制:")
     print("   - 单次请求约140条数据 (约6个月历史)")
     print("   - 无法获取更长期历史数据")
     print("   - 部分指数/行业代码可能返回404")
     print("   - 需要处理Referer和User-Agent")
-    
+
     print("\n✅ 适用场景:")
     print("   - 短期技术分析 (6个月内)")
     print("   - 实时行情监控")

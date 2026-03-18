@@ -1,16 +1,13 @@
 """
 优化模块 - 回测驱动的参数调优
 """
+from .adaptive_backtest import AdaptiveBacktester, BacktestAnalyzer
 from .param_optimizer import (
-    ParameterSet,
     OptimizationResult,
     ParameterOptimizer,
+    ParameterSet,
     SignalFilter,
-    run_optimization
-)
-from .adaptive_backtest import (
-    AdaptiveBacktester,
-    BacktestAnalyzer
+    run_optimization,
 )
 
 __all__ = [

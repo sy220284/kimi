@@ -6,11 +6,13 @@
 
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
-from src.data import get_stock_data
+
 from src.analysis.wave import UnifiedWaveAnalyzer
+from src.data import get_stock_data
 
 SYMBOLS = ['600519', '000858', '600809', '000568', '600600']
 START = '2024-01-01'
@@ -31,26 +33,26 @@ results = []
 for symbol in SYMBOLS:
     print(f"\n📊 {symbol} 分析...")
     df = get_stock_data(symbol, START, END)
-    
+
     signals = analyzer.detect(df, mode='all')
-    
+
     csignals = [s for s in signals if s.entry_type.value == 'C']
     wave2signals = [s for s in signals if s.entry_type.value == '2']
     wave4signals = [s for s in signals if s.entry_type.value == '4']
-    
+
     print(f"  C浪: {len(csignals)}个, 平均置信度{pd.Series([s.confidence for s in csignals]).mean():.2f}" if csignals else "  C浪: 0个")
     print(f"  2浪: {len(wave2signals)}个, 平均置信度{pd.Series([s.confidence for s in wave2signals]).mean():.2f}" if wave2signals else "  2浪: 0个")
     print(f"  4浪: {len(wave4signals)}个" if wave4signals else "  4浪: 0个")
-    
+
     # 统计检测方法
     methods = {}
     for s in signals:
         m = getattr(s, 'detection_method', 'unknown')
         methods[m] = methods.get(m, 0) + 1
-    
+
     if methods:
         print(f"  检测方法分布: {methods}")
-    
+
     results.append({
         'symbol': symbol,
         'c_count': len(csignals),

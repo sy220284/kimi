@@ -1,9 +1,11 @@
 """
 综合评估报告 - 波浪策略回测（2017-2024）
 """
-import pandas as pd
 import sys
 from pathlib import Path
+
+import pandas as pd
+
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 print("="*80)
@@ -57,7 +59,7 @@ if has_fb:
     fb_max_dd = fbsummary['max_dd'].mean()
     fb_profitable = (fbsummary['return'] > 0).sum()
     fb_total = len(fbsummary)
-    
+
     print(f"""
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                      食品饮料板块业绩 (39只股票)                         │
@@ -70,7 +72,7 @@ if has_fb:
 │  总交易次数:    {len(fb_df)} 笔                                           │
 └─────────────────────────────────────────────────────────────────────────┘
     """)
-    
+
     print(f"""
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                          跨板块对比                                      │
@@ -205,7 +207,7 @@ if has_fb:
     print(f"│     • 科技板块平均收益 +{tech_total_return:.2f}%，食品饮料 +{fb_total_return:.2f}%                        │")
 else:
     print("│     • 在科技板块表现优异，策略逻辑具有普适性                            │")
-    
+
 print("""│     • 两个板块盈利比例均超过60%                                         │
 │                                                                         │
 │  3. 风险可控                                                            │

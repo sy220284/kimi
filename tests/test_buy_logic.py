@@ -5,12 +5,14 @@
 
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
-from src.data import get_stock_data
-from src.analysis.wave import UnifiedWaveAnalyzer
+
 from src.analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy
+from src.analysis.wave import UnifiedWaveAnalyzer
+from src.data import get_stock_data
 
 SYMBOL = '600519'
 START = '2024-06-01'
@@ -68,7 +70,7 @@ for i, sig in enumerate(signals):
     print(f"  共振分数: {sig.resonance_score:.2f}")
     print(f"  趋势对齐: {sig.trend_aligned}")
     print(f"  有效: {sig.is_valid}")
-    
+
     # 检查是否满足买入条件
     can_buy = sig.is_valid and sig.confidence >= 0.5 and sig.direction == 'up'
     print(f"  可买入: {can_buy}")
@@ -86,7 +88,7 @@ if best:
     print(f"  价格: ¥{best.entry_price:.2f}")
     print(f"  置信度: {best.confidence:.2f}")
     print(f"  趋势对齐: {best.trend_aligned}")
-    
+
     # 检查是否会触发买入
     if best.direction == 'up':
         print("  → 会触发买入")

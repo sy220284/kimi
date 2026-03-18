@@ -5,10 +5,11 @@
 """
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
-import unittest
 import time
+import unittest
 
 
 def run_all_tests():
@@ -16,18 +17,18 @@ def run_all_tests():
     print("="*80)
     print("🧪 完整测试套件")
     print("="*80)
-    
+
     # 发现所有测试
     loader = unittest.TestLoader()
     start_dir = Path(__file__).parent
     suite = loader.discover(start_dir, pattern='test_*.py')
-    
+
     # 运行测试
     start_time = time.time()
     runner = unittest.TextTestRunner(verbosity=1)
     result = runner.run(suite)
     elapsed = time.time() - start_time
-    
+
     # 生成报告
     print("\n" + "="*80)
     print("📊 测试报告")
@@ -37,14 +38,14 @@ def run_all_tests():
     print(f"失败: {len(result.failures)}")
     print(f"错误: {len(result.errors)}")
     print(f"跳过: {len(result.skipped)}")
-    
+
     if result.wasSuccessful():
         print("\n✅ 所有测试通过!")
     else:
         print("\n❌ 有测试失败")
-    
+
     print("="*80)
-    
+
     return result.wasSuccessful()
 
 

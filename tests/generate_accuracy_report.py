@@ -6,13 +6,15 @@
 
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import pandas as pd
 import json
 
+import pandas as pd
+
 # 读取特征库
-with open('tests/results/wave_feature_library.json', 'r') as f:
+with open('tests/results/wave_feature_library.json') as f:
     featurestats = json.load(f)
 
 # 读取批量分析结果
@@ -41,18 +43,18 @@ for wave_type in ['C', '2', '4']:
     wave_df = batch_df[batch_df['entry_type'] == wave_type]
     if len(wave_df) == 0:
         continue
-    
+
     print(f"【{wave_type}浪信号】 {len(wave_df)}个")
-    
+
     # 计算信号的"持续时间"（到下一个信号或结束）
     # 这里简化处理，用目标价差作为代理
     target_spread = wave_df['target_price'] - wave_df['price']
     target_pct = target_spread / wave_df['price'] * 100
-    
+
     print(f"  目标价差: {target_pct.mean():.2f}% ± {target_pct.std():.2f}%")
     print(f"  平均置信度: {wave_df['confidence'].mean():.2f} ± {wave_df['confidence'].std():.2f}")
     print(f"  平均共振分: {wave_df['resonance_score'].mean():.2f} ± {wave_df['resonance_score'].std():.2f}")
-    
+
     # 后续表现
     for days in [5, 10, 20]:
         col = f'return_{days}d'
@@ -79,13 +81,13 @@ for wave_type in ['C', '2']:
     wave_df = batch_df[batch_df['entry_type'] == wave_type]
     if len(wave_df) == 0:
         continue
-    
+
     valid_5d = wave_df['return_5d'].dropna()
     valid_20d = wave_df['return_20d'].dropna()
-    
+
     acc_5d = (valid_5d > 0).mean() * 100 if len(valid_5d) > 0 else 0
     acc_20d = (valid_20d > 0).mean() * 100 if len(valid_20d) > 0 else 0
-    
+
     print(f"  {wave_type}浪: 5天准确率{acc_5d:.1f}%, 20天准确率{acc_20d:.1f}%")
 
 print("\n【四、特征对比与差异分析】")
@@ -98,14 +100,14 @@ print("-" * 80)
 if 'C浪' in featurestats:
     real_c = featurestats['C浪']
     detected_c = batch_df[batch_df['entry_type'] == 'C']
-    
+
     # 价格变动对比
     real_change = real_c['avg_price_change']
     # 检测信号的价格变动用后续5天收益近似
     det_change = abs(detected_c['return_5d']).mean() if len(detected_c) > 0 else 0
     diff_change = det_change - real_change
     print(f"{'价格变动幅度':<20} {real_change:>14.2f}% {det_change:>14.2f}% {diff_change:>+14.2f}%")
-    
+
     # 持续时间对比（用目标达成时间代理）
     real_duration = real_c['avg_duration']
     # 检测信号没有直接的持续时间，用5天代理
@@ -123,7 +125,7 @@ print("   改进: 增加信号有效期窗口(已实现3天窗口)")
 
 print("\n2. 浪型混淆问题:")
 print("   现象: C浪和2浪特征相似，容易混淆")
-print("   真实C浪: 持续时间", featurestats.get('C浪', {}).get('avg_duration', 'N/A'), 
+print("   真实C浪: 持续时间", featurestats.get('C浪', {}).get('avg_duration', 'N/A'),
       "天, 幅度", featurestats.get('C浪', {}).get('avg_price_change', 'N/A'), "%")
 print("   真实2浪: 持续时间", featurestats.get('2浪', {}).get('avg_duration', 'N/A'),
       "天, 幅度", featurestats.get('2浪', {}).get('avg_price_change', 'N/A'), "%")

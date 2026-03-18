@@ -3,22 +3,26 @@
 """
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
-import pandas as pd
 from datetime import datetime
+
+import pandas as pd
+
 from analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy
 from analysis.wave.unified_analyzer import UnifiedWaveAnalyzer
 from data import get_db_manager
 
+
 def get_tech_stocks():
     """从数据库获取科技板块股票"""
     db_manager = get_db_manager()
-    
+
     # 科技板块股票列表（与下载脚本一致）
     tech_symbols = [
         # 大盘股
-        '000063', '002230', '300750', '600584', '603501', 
+        '000063', '002230', '300750', '600584', '603501',
         '688981', '688012', '688008', '000938', '600570',
         # 中盘股
         '002371', '300014', '300124', '300433', '300408',
@@ -29,7 +33,7 @@ def get_tech_stocks():
         '688002', '688009', '688188', '688256', '688390',
         '688396', '688521', '688561', '688728', '300604',
     ]
-    
+
     # 查询数据库中实际存在的股票
     query = """
     SELECT DISTINCT symbol,
@@ -41,7 +45,7 @@ def get_tech_stocks():
     GROUP BY symbol
     ORDER BY records DESC
     """
-    
+
     results = db_manager.pg.execute(query, (tuple(tech_symbols),), fetch=True)
     df = pd.DataFrame(results)
     return df
@@ -179,13 +183,13 @@ def main():
             target_proximity = dftrades[dftrades['exit_reason'] == 'target_proximity'].shape[0]
             stop_loss_count = dftrades[dftrades['exit_reason'] == 'stop_loss'].shape[0]
             total_count = len(dftrades)
-            
+
             print("\n卖出原因分布:")
             print(f"  移动止盈: {trailing_count} 笔 ({trailing_count/total_count*100:.1f}%)")
             print(f"  目标价: {target_reached} 笔 ({target_reached/total_count*100:.1f}%)")
             print(f"  接近目标: {target_proximity} 笔 ({target_proximity/total_count*100:.1f}%)")
             print(f"  止损: {stop_loss_count} 笔 ({stop_loss_count/total_count*100:.1f}%)")
-            
+
             # 移动止盈收益分析
             if trailing_count > 0:
                 trailingtrades = dftrades[dftrades['exit_reason'].str.contains('trailing_stop', na=False)]

@@ -3,11 +3,12 @@
 测试增强版浪型检测器
 """
 import sys
+
 sys.path.insert(0, 'src')
 
-from data import get_stock_data
-from analysis.wave import UnifiedWaveAnalyzer
 from analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy
+from analysis.wave import UnifiedWaveAnalyzer
+from data import get_stock_data
 
 print("🔧 增强版浪型检测器测试\n")
 print("="*80)
@@ -21,13 +22,13 @@ test_stocks = [
 for symbol, name in test_stocks:
     print(f"\n📈 {symbol} {name}")
     print("-"*60)
-    
+
     df = get_stock_data(symbol, '2023-01-01', '2026-03-16')
     print(f"数据: {len(df)}条")
-    
+
     # 测试增强版检测
     analyzer = UnifiedWaveAnalyzer(use_adaptive_params=True)
-    
+
     # 分段测试浪型识别
     test_segments = [
         (0, 60, '2023年初'),
@@ -36,18 +37,18 @@ for symbol, name in test_stocks:
         (600, 660, '2024年底'),
         (712, 772, '最近60天')
     ]
-    
+
     print("\n分段浪型识别:")
     for start, end, label in test_segments:
         segment_df = df.iloc[start:end].copy()
         signals = analyzer.detect(segment_df)
-        
+
         if signals:
             best_signal = max(signals, key=lambda x: x.confidence)
             print(f"  {label}: {best_signal.entry_type.value:10s} 置信度{best_signal.confidence:.2f} 方向{best_signal.direction}")
         else:
             print(f"  {label}: 未识别")
-    
+
     # 运行完整回测
     print("\n回测结果:")
     strategy = WaveStrategy(
@@ -61,14 +62,14 @@ for symbol, name in test_stocks:
         use_dynamic_target=True,
         target_proximity_pct=0.05,
     )
-    
+
     backtester = WaveBacktester(analyzer)
     backtester.strategy = strategy
-    
+
     result = backtester.run(symbol, df, reanalyze_every=30)
-    
+
     print(f"  交易: {result.total_trades}次 | 胜率: {result.win_rate:.1%} | 收益: {result.total_return_pct:+.1f}%")
-    
+
     if result.trades:
         from collections import Counter
         wave_dist = Counter([t.entry_wave for t in result.trades if t.entry_wave])

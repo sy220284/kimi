@@ -3,15 +3,16 @@
 """
 import re
 
+
 def extract_stocks_from_markdown(file_path):
     """从markdown文件中提取股票代码"""
-    with open(file_path, 'r', encoding='utf-8') as f:
+    with open(file_path, encoding='utf-8') as f:
         content = f.read()
-    
+
     # 匹配股票代码模式 (6位数字.SH/.SZ/.BJ 或 纯6位数字)
     pattern = r'(\d{6})\.(SH|SZ|BJ)'
     matches = re.findall(pattern, content)
-    
+
     stocks = {}
     for code, suffix in matches:
         # 转换为统一格式
@@ -26,7 +27,7 @@ def extract_stocks_from_markdown(file_path):
         elif suffix == 'BJ':
             # 北交所
             stocks[code] = f'hs_{code}'
-    
+
     return stocks
 
 # 提取股票
@@ -43,11 +44,11 @@ with open('all_industry_stocks.txt', 'w') as f:
 print("股票列表已保存到 all_industry_stocks.txt")
 
 # 按板块分类
-kcb = [c for c in stocks.keys() if c.startswith('688')]  # 科创板
-cyb = [c for c in stocks.keys() if c.startswith('300') or c.startswith('301')]  # 创业板
-sh = [c for c in stocks.keys() if c.startswith('60') and not c.startswith('688')]  # 上海主板
-sz = [c for c in stocks.keys() if c.startswith('00')]  # 深圳主板
-bj = [c for c in stocks.keys() if c.startswith('8') or c.startswith('4')]  # 北交所
+kcb = [c for c in stocks if c.startswith('688')]  # 科创板
+cyb = [c for c in stocks if c.startswith('300') or c.startswith('301')]  # 创业板
+sh = [c for c in stocks if c.startswith('60') and not c.startswith('688')]  # 上海主板
+sz = [c for c in stocks if c.startswith('00')]  # 深圳主板
+bj = [c for c in stocks if c.startswith('8') or c.startswith('4')]  # 北交所
 
 print("\n板块分布:")
 print(f"  科创板: {len(kcb)} 只")

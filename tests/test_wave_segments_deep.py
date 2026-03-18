@@ -6,13 +6,16 @@
 
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from datetime import datetime
 
 import pandas as pd
 import psycopg2
-from datetime import datetime
 
 from src.analysis.wave.enhanced_detector import enhanced_pivot_detection
+
 
 def get_db_connection():
     return psycopg2.connect(
@@ -39,37 +42,37 @@ def analyze_wave_segments(df):
     """
     # 检测极值点
     pivots = enhanced_pivot_detection(df, atr_period=10, atr_mult=0.5, minpivots=4)
-    
+
     if len(pivots) < 4:
         return []
-    
+
     segments = []
-    
+
     for i in range(len(pivots) - 2):
         p1 = pivots[i]
         p2 = pivots[i+1]
         p3 = pivots[i+2]
-        
+
         price_change = abs(p2.price - p1.price)
         price_change_pct = price_change / p1.price * 100
-        
+
         try:
             d1 = datetime.strptime(str(p1.date)[:10], '%Y-%m-%d')
             d2 = datetime.strptime(str(p2.date)[:10], '%Y-%m-%d')
             duration = (d2 - d1).days
         except Exception:
             duration = 0
-        
+
         # 判断方向
         direction_up = p2.price > p1.price
-        
+
         # 判断可能的浪型
         possible_waves = []
-        
+
         # A浪特征: 调整开始，幅度较大
         if price_change_pct > 5:
             possible_waves.append('A')
-        
+
         # B浪特征: 反弹，幅度为前一段的30%-80%
         if i > 0:
             prev_change = abs(p1.price - pivots[i-1].price)
@@ -77,12 +80,12 @@ def analyze_wave_segments(df):
                 bounce_ratio = price_change / prev_change
                 if 0.2 <= bounce_ratio <= 1.0:
                     possible_waves.append('B')
-        
+
         # 1浪特征: 推动开始，从低位启动
         if price_change_pct > 3 and duration >= 2:
             if i == 0 or (direction_up and p1.price > pivots[i-1].price) or (not direction_up and p1.price < pivots[i-1].price):
                 possible_waves.append('1')
-        
+
         # 2浪特征: 回撤，幅度为前一段的30%-70%
         if i > 0 and price_change_pct < 10:
             prev_change = abs(p1.price - pivots[i-1].price)
@@ -90,7 +93,7 @@ def analyze_wave_segments(df):
                 retrace_ratio = price_change / prev_change
                 if 0.3 <= retrace_ratio <= 0.7:
                     possible_waves.append('2')
-        
+
         segment = {
             'start_date': p1.date,
             'end_date': p2.date,
@@ -102,7 +105,7 @@ def analyze_wave_segments(df):
             'direction': 'up' if direction_up else 'down',
             'possible_waves': possible_waves,
         }
-        
+
         # 计算后续走势
         p2_idx = df[df['date'] == p2.date].index[0] if len(df[df['date'] == p2.date]) > 0 else -1
         if p2_idx >= 0 and p2_idx + 20 < len(df):
@@ -112,21 +115,21 @@ def analyze_wave_segments(df):
             segment['future_5d'] = future_5d
             segment['future_10d'] = future_10d
             segment['future_20d'] = future_20d
-        
+
         segments.append(segment)
-    
+
     return segments
 
 def main():
     print("=" * 90)
     print("B浪和1浪深度分析")
     print("=" * 90)
-    
+
     # 扩大样本 - 分析更多股票和更长时间
     conn = get_db_connection()
     sql = '''
     SELECT symbol, COUNT(*) as records
-    FROM marketdata 
+    FROM marketdata
     WHERE date >= '2018-01-01'
     GROUP BY symbol
     HAVING COUNT(*) >= 500
@@ -135,40 +138,40 @@ def main():
     '''
     stock_df = pd.read_sql(sql, conn)
     conn.close()
-    
+
     symbols = stock_df['symbol'].tolist()
     print(f"分析股票: {len(symbols)} 只")
     print(f"股票列表: {', '.join(symbols[:10])}...")
-    
+
     all_b_waves = []
     all_wave1 = []
     all_segments = []
-    
+
     for idx, symbol in enumerate(symbols, 1):
         print(f"\n[{idx}/{len(symbols)}] 分析 {symbol}...")
-        
+
         df = get_stock_data(symbol, '2018-01-01', '2026-03-16')
         if len(df) < 100:
             continue
-        
+
         # 分段分析
         for i in range(0, len(df) - 120, 60):
             window_df = df.iloc[i:i+120].copy()
             segments = analyze_wave_segments(window_df)
-            
+
             for seg in segments:
                 seg['symbol'] = symbol
                 all_segments.append(seg)
-                
+
                 if 'B' in seg['possible_waves']:
                     all_b_waves.append(seg)
                 if '1' in seg['possible_waves']:
                     all_wave1.append(seg)
-    
+
     print("\n" + "=" * 90)
     print("分析结果")
     print("=" * 90)
-    
+
     # B浪分析
     print(f"\n【B浪分析】样本数: {len(all_b_waves)}")
     if all_b_waves:
@@ -180,7 +183,7 @@ def main():
         print(f"    5-10天: {((b_df['duration'] >= 5) & (b_df['duration'] < 10)).sum()}")
         print(f"    10-20天: {((b_df['duration'] >= 10) & (b_df['duration'] < 20)).sum()}")
         print(f"    >20天: {(b_df['duration'] >= 20).sum()}")
-        
+
         # B浪后续表现
         if 'future_5d' in b_df.columns:
             valid = b_df['future_5d'].dropna()
@@ -188,7 +191,7 @@ def main():
                 print("\n  B浪结束后5天:")
                 print(f"    胜率: {(valid > 0).mean()*100:.1f}%")
                 print(f"    平均收益: {valid.mean():.2f}%")
-    
+
     # 1浪分析
     print(f"\n【1浪分析】样本数: {len(all_wave1)}")
     if all_wave1:
@@ -200,7 +203,7 @@ def main():
         print(f"    3-5天: {((w1_df['duration'] >= 3) & (w1_df['duration'] < 5)).sum()}")
         print(f"    5-10天: {((w1_df['duration'] >= 5) & (w1_df['duration'] < 10)).sum()}")
         print(f"    >10天: {(w1_df['duration'] >= 10).sum()}")
-        
+
         # 1浪后续表现
         if 'future_5d' in w1_df.columns:
             valid = w1_df['future_5d'].dropna()
@@ -208,14 +211,14 @@ def main():
                 print("\n  1浪结束后5天:")
                 print(f"    胜率: {(valid > 0).mean()*100:.1f}%")
                 print(f"    平均收益: {valid.mean():.2f}%")
-    
+
     # 保存详细数据
     if all_segments:
         segments_df = pd.DataFrame(all_segments)
         output_file = 'tests/results/wave_segments_deep_analysis.csv'
         segments_df.to_csv(output_file, index=False, encoding='utf-8-sig')
         print(f"\n💾 详细数据已保存: {output_file}")
-    
+
     print("\n" + "=" * 90)
     print("分析完成")
     print("=" * 90)

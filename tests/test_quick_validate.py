@@ -5,11 +5,12 @@
 
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.data import get_stock_data
-from src.analysis.wave import UnifiedWaveAnalyzer
 from src.analysis.backtest.wave_backtester import WaveBacktester
+from src.analysis.wave import UnifiedWaveAnalyzer
+from src.data import get_stock_data
 
 # 单股票测试
 SYMBOL = '600519'

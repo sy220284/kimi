@@ -2,14 +2,14 @@
 """
 检查CodeFlow可用模型
 """
+from pathlib import Path
+
 import requests
 import yaml
-import sys
-from pathlib import Path
 
 # 读取配置
 config_path = Path(__file__).parent.parent / 'config' / 'config.yaml'
-with open(config_path, 'r', encoding='utf-8') as f:
+with open(config_path, encoding='utf-8') as f:
     config = yaml.safe_load(f)
 
 codeflow_config = config.get('models', {}).get('codeflow', {})
@@ -33,19 +33,19 @@ try:
         'Authorization': f'Bearer {api_key}',
         'Content-Type': 'application/json'
     }
-    
+
     response = requests.get(
         f'{base_url}/v1/models',
         headers=headers,
         timeout=30
     )
-    
+
     if response.status_code == 200:
         data = response.json()
         models = data.get('data', [])
-        
+
         print(f"\n✅ 连接成功！发现 {len(models)} 个模型:\n")
-        
+
         for i, model in enumerate(models, 1):
             model_id = model.get('id', 'unknown')
             model_name = model.get('name', model_id)
@@ -55,28 +55,28 @@ try:
             print(f"     描述: {description}")
             print()
     else:
-        print(f"\n❌ 获取模型列表失败")
+        print("\n❌ 获取模型列表失败")
         print(f"   状态码: {response.status_code}")
         print(f"   响应: {response.text[:200]}")
-        
+
         # 尝试测试简单请求
         print("\n" + "=" * 80)
         print("尝试测试对话接口...")
         print("=" * 80)
-        
+
         test_payload = {
             'model': 'default',
             'messages': [{'role': 'user', 'content': 'Hello'}],
             'max_tokens': 10
         }
-        
+
         test_response = requests.post(
             f'{base_url}/v1/chat/completions',
             headers=headers,
             json=test_payload,
             timeout=30
         )
-        
+
         print(f"\n测试请求状态码: {test_response.status_code}")
         if test_response.status_code == 200:
             print("✅ 对话接口可用")

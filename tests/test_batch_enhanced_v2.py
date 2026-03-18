@@ -6,13 +6,15 @@
 
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+import json
+import time
+from datetime import datetime
 
 import pandas as pd
 import psycopg2
-from datetime import datetime
-import json
-import time
 
 from src.analysis.wave import UnifiedWaveAnalyzer
 
@@ -29,17 +31,17 @@ class ProgressTracker:
         self.current = 0
         self.start_time = time.time()
         self.signals_found = 0
-        
+
     def update(self, signals_count):
         self.current += 1
         self.signals_found += signals_count
         elapsed = time.time() - self.start_time
         progress = self.current / self.total * 100
         eta = (elapsed / self.current) * (self.total - self.current) if self.current > 0 else 0
-        
+
         print(f"\n[PROGRESS] {self.current}/{self.total} ({progress:.1f}%) | "
               f"信号:{self.signals_found} | 已用:{elapsed/60:.1f}分 | 预计剩余:{eta/60:.1f}分")
-        
+
         return {
             'current': self.current,
             'total': self.total,
@@ -59,7 +61,7 @@ def get_stock_list(min_records=1000):
     conn = get_db_connection()
     sql = '''
     SELECT symbol, MIN(date) as start_date, MAX(date) as end_date, COUNT(*) as records
-    FROM marketdata 
+    FROM marketdata
     GROUP BY symbol
     HAVING COUNT(*) >= %s
     ORDER BY COUNT(*) DESC
@@ -85,19 +87,19 @@ def analyze_stock(symbol, analyzer, tracker):
     df = get_stock_data(symbol, '2020-01-01', '2026-03-16')
     if len(df) < LOOKBACK_DAYS + max(HOLD_DAYS):
         return []
-    
+
     df['date'] = pd.to_datetime(df['date'])
     df = df.sort_values('date').reset_index(drop=True)
-    
+
     signals = []
-    
+
     for i in range(LOOKBACK_DAYS, len(df) - max(HOLD_DAYS), STEP_DAYS):
         window_df = df.iloc[i-LOOKBACK_DAYS:i+1].copy()
         current_price = window_df['close'].iloc[-1]
         current_date = window_df['date'].iloc[-1]
-        
+
         detected = analyzer.detect(window_df, mode='all')
-        
+
         for sig in detected:
             if sig.is_valid and sig.confidence >= MIN_SIGNAL_CONFIDENCE:
                 signal_record = {
@@ -113,14 +115,14 @@ def analyze_stock(symbol, analyzer, tracker):
                     'stop_loss': sig.stop_loss,
                     'detection_method': getattr(sig, 'detection_method', 'unknown'),
                 }
-                
+
                 # 获取验证信息
                 wave_struct = getattr(sig, 'wave_structure', {})
                 if wave_struct:
                     signal_record['wave1_valid'] = wave_struct.get('wave1_valid', False)
                     signal_record['wave123_valid'] = wave_struct.get('wave123_valid', False)
                     signal_record['b_wave_valid'] = wave_struct.get('b_wave_valid', False)
-                
+
                 # 后续走势
                 future_idx = i + 1
                 for hold_day in HOLD_DAYS:
@@ -130,13 +132,13 @@ def analyze_stock(symbol, analyzer, tracker):
                         signal_record[f'return_{hold_day}d'] = future_return
                     else:
                         signal_record[f'return_{hold_day}d'] = None
-                
+
                 signals.append(signal_record)
-    
+
     # 更新进度
     progress = tracker.update(len(signals))
     print(f"  {symbol}: {len(signals)}个信号")
-    
+
     return signals
 
 def main():
@@ -144,12 +146,12 @@ def main():
     print("批量波浪分析回测 - 增强版")
     print("=" * 80)
     print(f"开始时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    
+
     # 获取股票列表
     stock_list = get_stock_list(min_records=2000)
     print(f"\n待分析股票: {len(stock_list)} 只")
     print("前10只:", ', '.join(stock_list['symbol'].head(10).tolist()))
-    
+
     # 创建分析器
     analyzer = UnifiedWaveAnalyzer(
         use_resonance=True,
@@ -157,28 +159,28 @@ def main():
         trend_ma_period=200,
         use_adaptive_params=False,
     )
-    
+
     # 进度跟踪
     selected_stocks = stock_list['symbol'].head(20).tolist()
     tracker = ProgressTracker(len(selected_stocks))
-    
+
     # 批量分析
     allsignals = []
     print(f"\n开始分析前{len(selected_stocks)}只股票...")
-    
+
     for symbol in selected_stocks:
         signals = analyze_stock(symbol, analyzer, tracker)
         if signals:
             allsignals.extend(signals)
-    
+
     # 保存结果
     output_dir = Path('tests/results')
     output_dir.mkdir(exist_ok=True)
-    
+
     if allsignals:
         df = pd.DataFrame(allsignals)
         df.to_csv(output_dir / 'batch_enhanced_v2.csv', index=False, encoding='utf-8-sig')
-        
+
         # 生成摘要
         summary = {
             'timestamp': datetime.now().isoformat(),
@@ -190,10 +192,10 @@ def main():
             'win_rate_5d': (df['return_5d'] > 0).mean() * 100 if 'return_5d' in df.columns else 0,
             'win_rate_20d': (df['return_20d'] > 0).mean() * 100 if 'return_20d' in df.columns else 0,
         }
-        
+
         with open(output_dir / 'batch_enhanced_v2summary.json', 'w') as f:
             json.dump(summary, f, indent=2, default=str)
-        
+
         print("\n" + "=" * 80)
         print("📊 结果摘要")
         print("=" * 80)
@@ -204,7 +206,7 @@ def main():
         print(f"5天胜率: {summary['win_rate_5d']:.1f}%")
         print(f"20天胜率: {summary['win_rate_20d']:.1f}%")
         print("\n💾 结果保存: tests/results/batch_enhanced_v2.csv")
-    
+
     print("\n" + "=" * 80)
     print("✅ 批量分析完成")
     print(f"结束时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")

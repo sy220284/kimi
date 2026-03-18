@@ -3,7 +3,9 @@
 数据层优化测试 - Phase 1 验证
 """
 import sys
+import time
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from data import DataAPI, get_stock_data
@@ -26,12 +28,12 @@ if 'error' in result:
 else:
     df = result['data']
     report = result['quality_report']
-    
+
     print(f"✅ 数据来源: {result['source']}")
     print(f"📦 缓存状态: {'命中' if result['cached'] else '未命中'}")
     print(f"📊 数据条数: {len(df)}")
     print(f"📅 日期范围: {df['date'].min()} ~ {df['date'].max()}")
-    
+
     if report:
         print("\n🔍 质量报告:")
         print(f"  质量评分: {report.score}/100")
@@ -55,7 +57,6 @@ for symbol, res in batch_result.items():
         print(f"  {symbol}: ✅ {len(df)} 条 ({res['source']})")
 
 # 测试3: 缓存系统
-import time
 
 print("\n【测试3】缓存系统")
 print("-"*60)

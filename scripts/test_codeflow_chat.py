@@ -2,13 +2,14 @@
 """
 测试CodeFlow模型对话
 """
+from pathlib import Path
+
 import requests
 import yaml
-from pathlib import Path
 
 # 读取配置
 config_path = Path(__file__).parent.parent / 'config' / 'config.yaml'
-with open(config_path, 'r', encoding='utf-8') as f:
+with open(config_path, encoding='utf-8') as f:
     config = yaml.safe_load(f)
 
 codeflow_config = config.get('models', {}).get('codeflow', {})
@@ -46,22 +47,22 @@ try:
         json=payload,
         timeout=60
     )
-    
+
     if response.status_code == 200:
         data = response.json()
         content = data['choices'][0]['message']['content']
         usage = data.get('usage', {})
-        
-        print(f"\n✅ 请求成功！")
+
+        print("\n✅ 请求成功！")
         print(f"\n响应内容:\n{'-'*40}")
         print(content)
         print(f"{'-'*40}")
-        print(f"\nToken使用:")
+        print("\nToken使用:")
         print(f"  Prompt: {usage.get('prompt_tokens', 'N/A')}")
         print(f"  Completion: {usage.get('completion_tokens', 'N/A')}")
         print(f"  Total: {usage.get('total_tokens', 'N/A')}")
     else:
-        print(f"\n❌ 请求失败")
+        print("\n❌ 请求失败")
         print(f"   状态码: {response.status_code}")
         print(f"   响应: {response.text[:500]}")
 

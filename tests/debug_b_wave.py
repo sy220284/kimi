@@ -4,9 +4,11 @@
 """
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
+
 from src.analysis.wave.enhanced_detector import enhanced_pivot_detection
 from src.data import get_stock_data
 
@@ -50,36 +52,36 @@ print(f"{'='*80}")
 
 if len(pivots) >= 4:
     print(f"✓ 极值点数量充足 ({len(pivots)} >= 4)")
-    
+
     p_before_a = pivots[-4]
     p_a = pivots[-3]
     p_b = pivots[-2]
     p_c = pivots[-1]
-    
+
     print("\n  关键点:")
     print(f"    p_before_a (A浪前): idx={p_before_a.idx}, price=¥{p_before_a.price:.2f}, ispeak={p_before_a.ispeak}")
     print(f"    p_a (A浪终点): idx={p_a.idx}, price=¥{p_a.price:.2f}, ispeak={p_a.ispeak}")
     print(f"    p_b (B浪终点): idx={p_b.idx}, price=¥{p_b.price:.2f}, ispeak={p_b.ispeak}")
     print(f"    p_c (C浪终点): idx={p_c.idx}, price=¥{p_c.price:.2f}, ispeak={p_c.ispeak}")
-    
+
     # 验证逻辑
     bounce_size = abs(p_b.price - p_a.price)
     a_size = abs(p_before_a.price - p_a.price)
-    
+
     print("\n  幅度计算:")
     print(f"    A浪幅度 (|p_before_a - p_a|): ¥{a_size:.2f}")
     print(f"    B浪幅度 (|p_b - p_a|): ¥{bounce_size:.2f}")
-    
+
     if a_size > 0:
         bounce_ratio = bounce_size / a_size
         print(f"    反弹比例: {bounce_ratio:.2%}")
-        
+
         is_bounce_from_a = 0.2 <= bounce_ratio <= 1.0
         print(f"    20% <= {bounce_ratio:.2%} <= 100%: {is_bounce_from_a}")
     else:
         print("    A浪幅度为0，无法计算反弹比例")
         is_bounce_from_a = False
-    
+
     # B浪范围验证
     if p_a.ispeak:
         b_within_range = p_b.price < p_before_a.price
@@ -89,12 +91,12 @@ if len(pivots) >= 4:
         b_within_range = p_b.price > p_before_a.price
         print("\n  范围验证 (p_a.ispeak=False):")
         print(f"    p_b.price ({p_b.price:.2f}) > p_before_a.price ({p_before_a.price:.2f}): {b_within_range}")
-    
+
     b_wave_valid = is_bounce_from_a and b_within_range
     print(f"\n  B浪验证结果: {b_wave_valid}")
     print(f"    is_bounce_from_a: {is_bounce_from_a}")
     print(f"    b_within_range: {b_within_range}")
-    
+
 else:
     print(f"✗ 极值点数量不足 ({len(pivots)} < 4)")
     print("  → b_wave_valid 被强制设为 False")
