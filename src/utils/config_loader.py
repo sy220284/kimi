@@ -85,6 +85,10 @@ class ConfigLoader:
             return self._config
         
         try:
+            # 确保config_path是Path对象
+            if isinstance(self.config_path, str):
+                self.config_path = Path(self.config_path)
+            
             if not self.config_path.exists():
                 raise ConfigLoaderError(f"配置文件不存在: {self.config_path}")
             
