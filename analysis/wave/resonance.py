@@ -413,6 +413,7 @@ class ResonanceAnalyzer:
         weights = {
             'MACD': 1.0,
             'RSI': 0.8,
+            'KDJ': 1.0,      # A3: A股散户最常用，与MACD并列最高
             'Volume': 0.6,
             'ElliottWave': 1.2  # 波浪权重最高
         }

@@ -568,6 +568,8 @@ class WaveBacktester:
                 max_drawdown=0.0,
                 max_drawdown_pct=0.0,
                 sharpe_ratio=0.0,
+                sortino_ratio=0.0,
+                calmar_ratio=0.0,
                 profit_factor=0.0,
                 trades=[],
                 equity_curve=[]
@@ -703,6 +705,8 @@ class WaveBacktester:
                 max_drawdown=0.0,
                 max_drawdown_pct=0.0,
                 sharpe_ratio=0.0,
+                sortino_ratio=0.0,
+                calmar_ratio=0.0,
                 profit_factor=0.0
             )
 
@@ -723,6 +727,8 @@ class WaveBacktester:
                 max_drawdown=0.0,
                 max_drawdown_pct=0.0,
                 sharpe_ratio=0.0,
+                sortino_ratio=0.0,
+                calmar_ratio=0.0,
                 profit_factor=0.0,
                 trades=trades
             )
