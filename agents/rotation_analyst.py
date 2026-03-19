@@ -1,6 +1,6 @@
 """
-智能体框架 - 轮动分析师智能体
-分析申万行业指数轮动，回退到板块动量分析
+智能体框架 - 轮动分析师智能体 (AI增强版)
+分析申万行业指数轮动，集成AI市场环境分析
 """
 import contextlib
 import time
@@ -14,9 +14,24 @@ from .base_agent import AgentInput, AgentOutput, AgentState, AnalysisType, BaseA
 
 
 class RotationAnalystAgent(BaseAgent):
-    """轮动分析师智能体 - 基于申万行业指数"""
+    """
+    轮动分析师智能体 - 基于申万行业指数
+    
+    功能:
+    1. 行业动量分析（申万行业指数）
+    2. 强势行业买点识别（波浪分析）
+    3. AI推理增强（MarketContextAgent）- 市场环境解读和配置建议
+    
+    使用AI增强:
+        agent = RotationAnalystAgent(use_ai=True, ai_model="deepseek/deepseek-reasoner")
+    """
 
-    def __init__(self, config_path: Path | None = None):
+    def __init__(
+        self,
+        config_path: Path | None = None,
+        use_ai: bool = False,
+        ai_model: str = "deepseek/deepseek-reasoner"
+    ):
         super().__init__(
             agent_name="rotation_analyst",
             analysis_type=AnalysisType.ROTATION,
@@ -25,6 +40,18 @@ class RotationAnalystAgent(BaseAgent):
         self.lookback_period = 60   # 动量回看60日
         self.momentum_period = 20   # 短期动量20日
         self.min_stocks_per_sector = 3  # 板块最少股票数
+        
+        # AI子代理
+        self.use_ai = use_ai
+        self.ai_agent = None
+        if use_ai:
+            try:
+                from agents.ai_subagents import MarketContextAgent
+                self.ai_agent = MarketContextAgent(model=ai_model)
+                self.logger.info(f"AI子代理已启用: {ai_model}")
+            except Exception as e:
+                self.logger.warning(f"AI子代理初始化失败: {e}")
+                self.use_ai = False
 
     def analyze(self, input_data: AgentInput) -> AgentOutput:
         """
@@ -34,7 +61,8 @@ class RotationAnalystAgent(BaseAgent):
         1. 优先查询 sw_industry_index 表（申万行业指数），计算各行业动量/相对强弱
         2. 若行业指数表为空，回退到 market_data 按板块聚合动量计算
         3. 对强势行业进行波浪分析，识别买点
-        4. 输出强弱排名、轮动建议、买点行业
+        4. AI增强：市场环境解读、板块配置建议
+        5. 输出强弱排名、轮动建议、买点行业、AI分析
 
         Args:
             input_data: 输入数据（symbol 不使用，轮动覆盖全市场）
@@ -55,7 +83,34 @@ class RotationAnalystAgent(BaseAgent):
                 buy_points = self._analyze_industry_buy_points(result.get('all_industries', []))
                 result['buy_point_industries'] = buy_points
 
-            confidence = self._calc_confidence(result)
+            # AI推理增强
+            ai_result = None
+            if self.use_ai and self.ai_agent and result.get('status') == 'success':
+                try:
+                    from agents.ai_subagents import AIAgentInput
+                    
+                    ai_input = AIAgentInput(
+                        raw_data=result,
+                        context=f"分析日期: {datetime.now().strftime('%Y-%m-%d')}"
+                    )
+                    
+                    ai_output = self.ai_agent.analyze(ai_input)
+                    
+                    ai_result = {
+                        'reasoning': ai_output.reasoning,
+                        'conclusion': ai_output.conclusion,
+                        'confidence': ai_output.confidence,
+                        'action_suggestion': ai_output.action_suggestion,
+                        'details': ai_output.details
+                    }
+                    
+                    result['ai_analysis'] = ai_result
+                    
+                except Exception as e:
+                    self.logger.warning(f"AI分析失败: {e}")
+                    result['ai_error'] = str(e)
+
+            confidence = self._calc_confidence(result, ai_result)
 
             return AgentOutput(
                 agent_type=self.analysis_type.value,
@@ -389,17 +444,26 @@ class RotationAnalystAgent(BaseAgent):
             'recommendation': recommendation,
         }
 
-    def _calc_confidence(self, result: dict) -> float:
+    def _calc_confidence(self, result: dict, ai_result: dict | None = None) -> float:
         """根据结果质量计算置信度"""
         if result.get('status') != 'success':
             return 0.0
+        
         source = result.get('data_source', '')
         count  = result.get('industry_count', 0)
+        
         if source == 'sw_industry_index':
             base = 0.85
         else:
             base = 0.45  # 回退模式置信度低
-        return min(base + count * 0.002, 1.0)
+        
+        base_confidence = min(base + count * 0.002, 1.0)
+        
+        # 综合AI置信度
+        if ai_result and ai_result.get('confidence'):
+            return (base_confidence + ai_result['confidence']) / 2
+        
+        return base_confidence
 
     def analyze_market_rotation(self) -> AgentOutput:
         """便捷入口：市场轮动分析（传入空 AgentInput）"""
