@@ -2,91 +2,117 @@
 
 A 股量化分析平台，整合艾略特波浪识别、多指标共振、行业轮动分析与事件驱动回测。
 
+## ✨ 核心特性
+
+- **🌊 艾略特波浪分析** - 自动识别推动浪、调整浪(Zigzag/Flat/Triangle)
+- **📊 多指标共振** - MACD、RSI、KDJ、布林带综合信号
+- **🏭 行业轮动** - 申万行业指数动量分析
+- **🤖 AI增强分析** - LLM推理子代理提供深度解读
+- **🌐 RESTful API** - FastAPI服务层支持外部调用
+
 ## 📁 项目结构
 
 ```
 kimi/
 ├── agents/                  # 智能体层
-│   ├── base_agent.py        # BaseAgent 抽象基类（状态机 / AgentInput / AgentOutput）
+│   ├── base_agent.py        # BaseAgent 抽象基类
 │   ├── wave_analyst.py      # 波浪分析智能体
 │   ├── tech_analyst.py      # 技术分析智能体
-│   └── rotation_analyst.py  # 行业轮动智能体（申万行业指数 + 板块回退）
+│   ├── rotation_analyst.py  # 行业轮动智能体
+│   └── ai_subagents/        # AI推理子代理
+│       ├── base_ai_agent.py
+│       ├── wave_reasoning_agent.py
+│       └── __init__.py
 │
 ├── analysis/                # 分析引擎
 │   ├── wave/                # 艾略特波浪
-│   │   ├── elliott_wave.py      # ATR ZigZag + 推动浪 / ZigZag / Flat 识别
-│   │   ├── unified_analyzer.py  # 统一信号入口（C/2/4浪 + 共振 + 趋势过滤）
-│   │   ├── entry_optimizer.py   # 入场质量评分（量价 / 时间 / MACD）
-│   │   ├── resonance.py         # 多指标共振（MACD / RSI / 布林带 / KDJ）
-│   │   └── adaptive_params.py   # 自适应参数（四种市场状态）
+│   │   ├── elliott_wave.py      # 波浪识别算法
+│   │   ├── unified_analyzer.py
+│   │   └── resonance.py
 │   ├── technical/
-│   │   └── indicators.py    # MA / EMA / MACD / RSI / KDJ / ATR / OBV（向量化）
-│   ├── backtest/
-│   │   └── wave_backtester.py  # 回测引擎（资金加权收益 / 正确 Sharpe / 移动止盈）
-│   └── optimization/
-│       └── param_optimizer.py  # 随机搜索参数优化
+│   │   └── indicators.py
+│   └── backtest/
+│
+├── api/                     # FastAPI服务层
+│   ├── __init__.py
+│   └── main.py              # API入口
 │
 ├── data/                    # 数据层
-│   ├── optimized_data_manager.py  # 全量内存缓存（681 MB，O(1) 查询）
-│   ├── db_manager.py        # PostgreSQL 数据库管理
-│   ├── ths_adapter.py       # 同花顺 HTTP 适配器（主力数据源）
-│   ├── multi_source.py      # 多源聚合 + 自动降级
-│   └── quality_monitor.py   # 数据质量监控
-│
-├── utils/                   # 工具层
-│   ├── db_connector.py      # PostgreSQL / Redis 连接池
-│   ├── config_loader.py     # YAML 配置 + 环境变量替换
-│   └── logger.py            # 结构化日志
+│   ├── db_manager.py
+│   └── optimized_data_manager.py
 │
 ├── scripts/                 # 运维脚本
-│   ├── data_sync/           # 数据同步
-│   │   ├── incremental_update_ths.py   # 每日增量更新（含节假日日历）
-│   │   ├── fill_missing_data.py        # 补全缺失日期数据
-│   │   ├── fetch_sw_industry.py        # 拉取申万行业指数历史
-│   │   ├── init_database.py            # 初始化数据库表结构
-│   │   └── check_db.py / check_yesterday.py  # 数据诊断
-│   ├── analysis/            # 分析脚本
-│   │   └── analyze_trades.py  # 回测交易明细分析报告
-│   └── maintenance/         # 维护脚本
+│   └── data_sync/
 │
 ├── tests/                   # 测试套件
-│   ├── unit/                # 单元测试（50+ 文件）
+│   ├── unit/                # 单元测试
 │   ├── integration/         # 集成测试
-│   ├── e2e/                 # 端到端回测验证
-│   ├── debug/               # 调试脚本
-│   ├── data_download/       # 数据下载工具
-│   ├── reports/             # 报告生成
-│   └── utils/               # 测试工具 / 回测运行
+│   ├── regression/          # 回归测试
+│   └── run_all_tests.sh     # 测试运行脚本
 │
-├── config/config.yaml       # 全局配置（DB / AI模型 / 调度 / 分析参数）
-├── main.py                  # 系统主入口（demo/data/tech/batch/full 模式）
-├── requirements.txt         # 依赖（Python 3.12，已锁定最新稳定版）
-└── pyproject.toml           # ruff / pytest / mypy 配置
+├── docs/                    # 文档
+│   ├── api.md               # API文档
+│   ├── ai_subagent_design.md
+│   └── testing.md           # 测试文档
+│
+├── config/config.yaml       # 全局配置
+├── main.py                  # 系统主入口
+└── requirements.txt
 ```
 
 ## 🚀 快速开始
 
+### 安装依赖
+
 ```bash
-# 安装依赖
 pip install -r requirements.txt
+```
 
-# 初始化数据库
-python scripts/data_sync/init_database.py
+### 配置环境变量
 
-# 拉取申万行业指数（可选，供轮动分析使用）
-python scripts/data_sync/fetch_sw_industry.py
+```bash
+# 复制模板
+cp .env.example .env
 
-# 运行系统演示
-python main.py --mode demo
+# 编辑 .env 文件填入你的API Key
+vim .env
+```
 
-# 每日数据增量更新
-python scripts/data_sync/incremental_update_ths.py
+### 启动API服务
 
-# 运行回测
-python tests/utils/run_tech_backtest.py
+```bash
+# 启动FastAPI服务
+python api/main.py
 
-# 分析回测结果
-python scripts/analysis/analyze_trades.py
+# 服务运行在 http://localhost:8000
+# API文档: http://localhost:8000/docs
+```
+
+### 使用API
+
+```bash
+# 波浪分析
+curl -X POST http://localhost:8000/api/v1/analysis/wave \
+  -H "Content-Type: application/json" \
+  -d '{"symbol": "600519.SH", "use_ai": true}'
+
+# 技术分析
+curl -X POST http://localhost:8000/api/v1/analysis/technical \
+  -d '{"symbol": "000001.SZ"}'
+
+# 行业轮动
+curl "http://localhost:8000/api/v1/analysis/rotation?use_ai=true"
+```
+
+### 运行测试
+
+```bash
+# 运行所有测试
+./tests/run_all_tests.sh
+
+# 或分别运行
+python tests/integration/test_audit_fixes.py  # 集成测试
+python tests/regression/test_audit_fixes.py   # 回归测试
 ```
 
 ## 📊 数据库状态
@@ -105,18 +131,33 @@ python scripts/analysis/analyze_trades.py
 | 运行时 | Python 3.12 |
 | 主存储 | PostgreSQL 16 |
 | 缓存 | Redis 7.3 |
+| Web框架 | FastAPI 0.135 |
+| AI模型 | DeepSeek-R1 / Claude Sonnet |
 | 数据处理 | pandas 3.0 / numpy 2.4 |
-| AI 模型配置 | Claude Sonnet 4.6 / DeepSeek-R1（待接入） |
-| Lint | ruff 0.15 |
 
-## 📝 开发规范
+## 📚 文档
 
-- 提交格式：`fix(module):` / `feat(module):` / `chore:` / `refactor:`
-- 提交前运行：`scripts/maintenance/` 下的 pre-commit 脚本
-- API Key 通过环境变量注入，禁止明文写入代码
-- 回测结果 CSV 已加入 `.gitignore`，不追踪到仓库
+- [API使用文档](docs/api.md) - RESTful API详细说明
+- [测试文档](docs/testing.md) - 测试套件使用指南
+- [AI子代理设计](docs/ai_subagent_design.md) - AI架构设计
 
 ## 🔑 安全提示
 
-`config/config.yaml` 中包含 API Key 配置项，请确保通过环境变量 `${CODEFLOW_API_KEY}` 等方式注入，
-切勿将真实 Key 提交到版本库。
+- API Key通过环境变量注入，配置中使用 `${VAR_NAME}` 占位符
+- 切勿将真实Key提交到版本库
+- 详见 `.env.example` 模板
+
+## 📝 开发规范
+
+- 提交格式：`fix(module):` / `feat(module):` / `test(module):`
+- 提交前运行测试：`./tests/run_all_tests.sh`
+- 代码格式化：`ruff format .`
+
+## 📈 测试覆盖
+
+| 测试类型 | 文件数 | 测试用例 | 代码行数 |
+|---------|-------|---------|---------|
+| 单元测试 | 4 | 20+ | 850+ |
+| 集成测试 | 2 | 15+ | 500+ |
+| 回归测试 | 1 | 12+ | 300+ |
+| **总计** | **7** | **47+** | **1650+** |
