@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.analysis.wave.enhanced_detector import enhanced_pivot_detection
-from src.data import get_stock_data
+from analysis.wave.enhanced_detector import enhanced_pivot_detection
+from data import get_stock_data
 
 # 测试股票
 symbol = '600519.SH'

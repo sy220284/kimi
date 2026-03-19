@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy
-from src.analysis.wave import UnifiedWaveAnalyzer
-from src.data import get_stock_data
+from analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy
+from analysis.wave import UnifiedWaveAnalyzer
+from data import get_stock_data
 
 SYMBOL = '600519'
 START = '2024-06-01'  # 使用较近期数据，MA200已可用

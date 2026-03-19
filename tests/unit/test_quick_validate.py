@@ -6,9 +6,9 @@
 from pathlib import Path
 
 
-from src.analysis.backtest.wave_backtester import WaveBacktester
-from src.analysis.wave import UnifiedWaveAnalyzer
-from src.data import get_stock_data
+from analysis.backtest.wave_backtester import WaveBacktester
+from analysis.wave import UnifiedWaveAnalyzer
+from data import get_stock_data
 
 # 单股票测试
 SYMBOL = '600519'

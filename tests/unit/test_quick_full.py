@@ -11,8 +11,8 @@ import numpy as np
 import pandas as pd
 import psycopg2
 
-from src.analysis.wave import UnifiedWaveAnalyzer
-from src.data import get_stock_data
+from analysis.wave import UnifiedWaveAnalyzer
+from data import get_stock_data
 
 # 配置
 LOOKBACK_DAYS = 60

@@ -15,9 +15,9 @@ import json
 
 import pandas as pd
 
-from src.analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy
-from src.analysis.wave import UnifiedWaveAnalyzer
-from src.data import get_stock_data
+from analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy
+from analysis.wave import UnifiedWaveAnalyzer
+from data import get_stock_data
 
 # 测试股票 (代表性样本)
 TEST_STOCKS = [

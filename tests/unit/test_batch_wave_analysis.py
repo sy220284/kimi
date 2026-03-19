@@ -13,7 +13,7 @@ from pathlib import Path
 import pandas as pd
 import psycopg2
 
-from src.analysis.wave import UnifiedWaveAnalyzer
+from analysis.wave import UnifiedWaveAnalyzer
 
 # 分析配置
 LOOKBACK_DAYS = 60      # 分析窗口

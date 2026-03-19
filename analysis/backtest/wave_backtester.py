@@ -15,8 +15,8 @@ try:
 except ImportError:
     import sys
     from pathlib import Path
-    sys.path.insert(0, str(Path(__file__).parent.parent))
-    from wave.unified_analyzer import UnifiedWaveAnalyzer, UnifiedWaveSignal
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+    from analysis.wave.unified_analyzer import UnifiedWaveAnalyzer, UnifiedWaveSignal
 
 
 class TradeAction(Enum):

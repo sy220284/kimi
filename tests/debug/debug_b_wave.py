@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.analysis.wave.enhanced_detector import enhanced_pivot_detection
-from src.data import get_stock_data
+from analysis.wave.enhanced_detector import enhanced_pivot_detection
+from data import get_stock_data
 
 symbol = '600519.SH'
 df = get_stock_data(symbol, start_date='2024-01-01', end_date='2026-03-16')

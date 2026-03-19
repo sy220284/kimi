@@ -12,7 +12,7 @@ from datetime import datetime
 import pandas as pd
 import psycopg2
 
-from src.analysis.wave.enhanced_detector import enhanced_pivot_detection
+from analysis.wave.enhanced_detector import enhanced_pivot_detection
 
 
 def get_db_connection():

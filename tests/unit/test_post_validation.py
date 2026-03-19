@@ -23,7 +23,7 @@ import numpy as np
 import pandas as pd
 import psycopg2
 
-from src.analysis.wave import UnifiedWaveAnalyzer
+from analysis.wave import UnifiedWaveAnalyzer
 
 
 @dataclass

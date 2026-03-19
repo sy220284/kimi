@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.analysis.wave import UnifiedWaveAnalyzer
-from src.data import get_stock_data
+from analysis.wave import UnifiedWaveAnalyzer
+from data import get_stock_data
 
 SYMBOLS = ['600519', '000858', '600809', '000568', '600600']
 START = '2024-01-01'
