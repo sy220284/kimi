@@ -368,6 +368,158 @@ class ParameterOptimizer:
             'best_params_id': best_generalization['param_id']
         }
 
+    def walk_forward_optimize(
+        self,
+        symbols: list[str],
+        data_loader,
+        n_iterations: int = 30,
+        n_windows: int = 4,
+        train_ratio: float = 0.7,
+        top_k: int = 3
+    ) -> dict[str, Any]:
+        """
+        Walk-Forward 参数优化 — 防过拟合的标准做法
+
+        将历史数据按时间切成 n_windows 个滑动窗口，每个窗口内：
+        - 前 train_ratio 部分用于优化参数
+        - 后 (1-train_ratio) 部分用于样本外验证
+        最终汇总所有窗口的样本外表现，选出泛化能力最强的参数。
+
+        相比简单的 70/30 分割，Walk-Forward 可以：
+        1. 验证参数在不同市场周期的稳健性
+        2. 检测参数在时间轴上的衰减情况
+        3. 提供更可靠的样本外期望收益估计
+
+        Args:
+            symbols: 股票列表
+            data_loader: 数据加载函数 (symbol -> DataFrame)
+            n_iterations: 每个窗口的随机搜索次数
+            n_windows: Walk-Forward 窗口数量（建议 3-5）
+            train_ratio: 每个窗口内训练集比例
+            top_k: 候选参数数量
+
+        Returns:
+            {
+                'best_params': ParameterSet,       # 样本外表现最佳的参数
+                'window_results': list[dict],       # 每个窗口的详细结果
+                'oos_score': float,                 # 样本外综合得分
+                'stability': float,                 # 参数稳定性评分 (0-1，越高越稳)
+                'degradation': float                # 训练/验证性能衰减
+            }
+        """
+        print(f"\n{'='*70}")
+        print(f"🔄 Walk-Forward 参数优化 ({n_windows} 个窗口)")
+        print(f"{'='*70}")
+
+        all_window_results = []
+        param_oos_scores: dict[str, list[float]] = {}  # param_id -> [oos scores]
+
+        for symbol in symbols:
+            df = data_loader(symbol)
+            if df is None or len(df) < 200:
+                print(f"  {symbol}: 数据不足 (<200条)，跳过")
+                continue
+
+            n = len(df)
+            window_size = n // n_windows
+
+            for w in range(n_windows):
+                # 窗口范围
+                win_start = w * window_size
+                win_end   = win_start + window_size if w < n_windows - 1 else n
+                window_df = df.iloc[win_start:win_end]
+
+                train_end = int(len(window_df) * train_ratio)
+                train_df  = window_df.iloc[:train_end]
+                oos_df    = window_df.iloc[train_end:]
+
+                if len(train_df) < 60 or len(oos_df) < 20:
+                    continue
+
+                period_label = (
+                    f"{str(window_df.index[0]) if hasattr(window_df.index[0], 'date') else w}"
+                    f"~W{w+1}"
+                )
+                print(f"\n  [{symbol}] 窗口 {w+1}/{n_windows} "
+                      f"(训练{len(train_df)}条 / OOS{len(oos_df)}条)")
+
+                # 在训练集上随机搜索
+                window_top: list[OptimizationResult] = []
+                for _ in range(n_iterations):
+                    params = self._random_params()
+                    res = self._single_backtest(params, symbol, train_df, '', '')
+                    if res:
+                        window_top.append(res)
+
+                if not window_top:
+                    continue
+
+                window_top.sort(key=lambda x: x.composite_score, reverse=True)
+                top_candidates = window_top[:top_k]
+
+                # 在样本外集上验证每个候选
+                for cand in top_candidates:
+                    oos_res = self._single_backtest(cand.params, symbol, oos_df, '', '')
+                    pid = cand.params.get_id()
+                    if oos_res:
+                        param_oos_scores.setdefault(pid, []).append(oos_res.composite_score)
+                        all_window_results.append({
+                            'symbol': symbol,
+                            'window': w + 1,
+                            'param_id': pid,
+                            'train_score': cand.composite_score,
+                            'oos_score': oos_res.composite_score,
+                            'degradation': cand.composite_score - oos_res.composite_score,
+                        })
+                        print(f"    参数 {pid[:8]}: 训练={cand.composite_score:.3f} "
+                              f"OOS={oos_res.composite_score:.3f}")
+
+        if not param_oos_scores:
+            print("\n❌ Walk-Forward 无有效结果")
+            return {'best_params': self._random_params(), 'window_results': [],
+                    'oos_score': 0.0, 'stability': 0.0, 'degradation': 0.0}
+
+        # 选最优参数：OOS均值最高 且 稳定性好（标准差小）
+        param_stats = {}
+        for pid, scores in param_oos_scores.items():
+            mean_oos = float(np.mean(scores))
+            std_oos  = float(np.std(scores)) if len(scores) > 1 else 0.0
+            stability = 1.0 / (1.0 + std_oos)  # 标准差越小 → 稳定性越高
+            param_stats[pid] = {
+                'mean_oos': mean_oos,
+                'std_oos': std_oos,
+                'stability': stability,
+                'combined': mean_oos * 0.7 + stability * 0.3,  # OOS表现为主
+                'n_windows': len(scores),
+            }
+
+        best_pid = max(param_stats, key=lambda p: param_stats[p]['combined'])
+        best_stat = param_stats[best_pid]
+
+        # 从 all_window_results 找对应参数对象（取最近一次）
+        matching = [r for r in all_window_results if r['param_id'] == best_pid]
+        train_scores = [r['train_score'] for r in matching]
+        degradation = float(np.mean([r['degradation'] for r in matching])) if matching else 0.0
+
+        # 重建 ParameterSet（从 param_id 反推或重新搜索）
+        # 简化：返回最优 param_id 和统计信息，调用方可用 load_results() 重建
+        print(f"\n{'='*70}")
+        print(f"✅ Walk-Forward 最优参数: {best_pid}")
+        print(f"   OOS 均值: {best_stat['mean_oos']:.3f} ± {best_stat['std_oos']:.3f}")
+        print(f"   参数稳定性: {best_stat['stability']:.3f}")
+        print(f"   训练/验证衰减: {degradation:.3f}")
+        print(f"   覆盖窗口: {best_stat['n_windows']} 个")
+        print(f"{'='*70}")
+
+        return {
+            'best_param_id': best_pid,
+            'param_stats': param_stats,
+            'window_results': all_window_results,
+            'oos_score': best_stat['mean_oos'],
+            'stability': best_stat['stability'],
+            'degradation': degradation,
+        }
+
     def save_results(self, filepath: str):
         """保存优化结果"""
         data = [r.to_dict() for r in self.results]

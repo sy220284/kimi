@@ -119,7 +119,7 @@ class UnifiedWaveAnalyzer:
                  min_resonance_score: float = 0.3,
 
                  # 自适应参数 (新增)
-                 use_adaptive_params: bool = False,
+                 use_adaptive_params: bool = True,   # 默认开启：按市场状态（趋势/震荡/高低波动）自动切参
 
                  # 便捷模式: 传入自适应参数覆盖手动设置
                  adaptive_params: dict | None = None):
@@ -1041,6 +1041,112 @@ class UnifiedWaveAnalyzer:
             if sig.confidence >= min_confidence:
                 return sig
         return None
+
+    def detect_multi_timeframe(
+        self,
+        df_daily: pd.DataFrame,
+        df_weekly: pd.DataFrame | None = None,
+        df_monthly: pd.DataFrame | None = None,
+    ) -> list[UnifiedWaveSignal]:
+        """
+        多周期波浪叠加分析（C2增强）
+
+        策略：
+        1. 在日线上检测买入信号
+        2. 周线趋势一致时，置信度 × 1.3（顺势加成）
+        3. 月线趋势一致时，额外 × 1.1
+        4. 周线/月线趋势相反时，置信度 × 0.6（逆势降权）
+        5. 过滤后仍按质量排序
+
+        Args:
+            df_daily:  日线 DataFrame（必须）
+            df_weekly: 周线 DataFrame（可选，None则自动从日线重采样）
+            df_monthly:月线 DataFrame（可选，None则自动从日线重采样）
+
+        Returns:
+            经多周期验证后的信号列表
+        """
+        # 自动重采样生成周线/月线
+        if df_weekly is None and len(df_daily) >= 20:
+            df_weekly = self._resample_to_period(df_daily, 'W')
+        if df_monthly is None and len(df_daily) >= 60:
+            df_monthly = self._resample_to_period(df_daily, 'ME')
+
+        # 日线信号
+        daily_signals = self.detect(df_daily, mode='all')
+        if not daily_signals:
+            return []
+
+        # 周线趋势（MA5 vs MA20）
+        weekly_trend = 'neutral'
+        if df_weekly is not None and len(df_weekly) >= 20:
+            wc = df_weekly['close'].values
+            ma5  = float(wc[-5:].mean())  if len(wc) >= 5  else wc[-1]
+            ma20 = float(wc[-20:].mean()) if len(wc) >= 20 else wc[-1]
+            weekly_trend = 'up' if ma5 > ma20 * 1.01 else ('down' if ma5 < ma20 * 0.99 else 'neutral')
+
+        # 月线趋势（MA3 vs MA6）
+        monthly_trend = 'neutral'
+        if df_monthly is not None and len(df_monthly) >= 6:
+            mc = df_monthly['close'].values
+            ma3 = float(mc[-3:].mean()) if len(mc) >= 3 else mc[-1]
+            ma6 = float(mc[-6:].mean()) if len(mc) >= 6 else mc[-1]
+            monthly_trend = 'up' if ma3 > ma6 * 1.01 else ('down' if ma3 < ma6 * 0.99 else 'neutral')
+
+        enhanced = []
+        for sig in daily_signals:
+            new_conf = sig.confidence
+            sig_dir  = sig.direction  # 'up' or 'down'
+
+            # 周线确认
+            if weekly_trend != 'neutral':
+                if (sig_dir == 'up' and weekly_trend == 'up') or (sig_dir == 'down' and weekly_trend == 'down'):
+                    new_conf = min(new_conf * 1.3, 0.95)   # 顺势：+30%
+                else:
+                    new_conf = new_conf * 0.6               # 逆势：-40%
+
+            # 月线确认
+            if monthly_trend != 'neutral':
+                if (sig_dir == 'up' and monthly_trend == 'up') or (sig_dir == 'down' and monthly_trend == 'down'):
+                    new_conf = min(new_conf * 1.1, 0.95)   # 月线顺势：+10%
+                else:
+                    new_conf = new_conf * 0.85              # 月线逆势：-15%
+
+            # 只保留调整后仍满足门槛的信号
+            if new_conf >= self.min_confidence:
+                # 创建副本避免修改原信号
+                import dataclasses
+                enhanced_sig = dataclasses.replace(
+                    sig,
+                    confidence=round(new_conf, 4),
+                    wave_structure={
+                        **(sig.wave_structure or {}),
+                        'weekly_trend': weekly_trend,
+                        'monthly_trend': monthly_trend,
+                        'mtf_adjusted': True,
+                    }
+                )
+                enhanced.append(enhanced_sig)
+
+        enhanced.sort(key=lambda x: (x.confidence + x.resonance_score) / 2, reverse=True)
+        return enhanced
+
+    @staticmethod
+    def _resample_to_period(df: pd.DataFrame, period: str) -> pd.DataFrame:
+        """将日线 DataFrame 重采样为周线/月线"""
+        df = df.copy()
+        df['date'] = pd.to_datetime(df['date'])
+        df = df.set_index('date')
+        resampled = df.resample(period).agg({
+            'open':   'first',
+            'high':   'max',
+            'low':    'min',
+            'close':  'last',
+            'volume': 'sum',
+        }).dropna()
+        resampled = resampled.reset_index()
+        resampled['date'] = resampled['date'].dt.strftime('%Y-%m-%d')
+        return resampled
 
 
 # 便捷函数

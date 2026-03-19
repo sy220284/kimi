@@ -114,6 +114,8 @@ class BacktestResult:
     max_drawdown_pct: float
     sharpe_ratio: float
     profit_factor: float
+    calmar_ratio: float = 0.0   # 年化收益 / 最大回撤，衡量单位回撤的回报
+    sortino_ratio: float = 0.0  # 超额收益 / 下行标准差，比Sharpe更适合股票策略
     trades: list[Trade] = field(default_factory=list)
     equity_curve: list[dict[str, Any]] = field(default_factory=list)
 
@@ -127,6 +129,8 @@ class BacktestResult:
             'avg_return_per_trade': f"{self.avg_return_per_trade:.2f}%",
             'max_drawdown': f"{self.max_drawdown_pct:.2f}%",
             'sharpe_ratio': f"{self.sharpe_ratio:.2f}",
+            'sortino_ratio': f"{self.sortino_ratio:.2f}",
+            'calmar_ratio': f"{self.calmar_ratio:.2f}",
             'profit_factor': f"{self.profit_factor:.2f}"
         }
 
@@ -145,7 +149,7 @@ class WaveStrategy:
     def __init__(
         self,
         initial_capital: float = 100000,
-        position_size: float = 0.2,  # 单笔仓位20%
+        position_size: float = 0.2,  # 单笔基础仓位20%（Kelly模式下作为上限）
         max_positions: int = 3,  # 最大持仓数量
         max_total_position: float = 0.8,  # 最大总仓位80%
         stop_loss_pct: float = 0.05,  # 5%止损
@@ -159,6 +163,9 @@ class WaveStrategy:
         target_proximity_pct: float = 0.03,  # 接近目标价3%即考虑卖出
         wave_structure_break_pct: float = 0.03,  # 浪型破坏阈值3%
         commission_rate: float = 0.0003,  # 佣金费率0.03%
+        # B3: Kelly 仓位管理
+        use_kelly: bool = True,          # 是否启用Kelly公式动态仓位
+        kelly_max_fraction: float = 0.25, # Kelly仓位上限（防止过度集中）
         stamp_tax_rate: float = 0.001,  # 印花税0.1%(仅卖出)
         slippage_rate: float = 0.001,  # 滑点0.1%
         # 移动止盈参数
@@ -184,7 +191,9 @@ class WaveStrategy:
         self.stamp_tax_rate = stamp_tax_rate
         self.slippage_rate = slippage_rate
 
-        # 移动止盈参数
+        # B3: Kelly 仓位管理
+        self.use_kelly = use_kelly
+        self.kelly_max_fraction = kelly_max_fraction
         self.use_trailing_stop = use_trailing_stop
         self.trailing_stop_pct = trailing_stop_pct
         self.trailing_stop_activation = trailing_stop_activation
@@ -196,6 +205,44 @@ class WaveStrategy:
 
         # 记录持仓时的最新分析结果，用于动态更新目标价
         self.position_analysis: dict[str, Any] = {}
+
+    def _kelly_fraction(self, wave_signal: Any) -> float:
+        """
+        Kelly 公式仓位计算
+
+        f* = (b×p - q) / b
+          b = 盈亏比（目标收益 / 止损距离）
+          p = 置信度（信号强度作为胜率估计）
+          q = 1 - p
+
+        Returns:
+            Kelly 仓位比例，限制在 [position_size×0.5, kelly_max_fraction] 之间
+        """
+        try:
+            p = min(max(float(wave_signal.confidence), 0.3), 0.9)
+            q = 1.0 - p
+
+            entry = wave_signal.entry_price
+            target = wave_signal.target_price
+            stop   = wave_signal.stop_loss
+
+            if entry <= 0 or target <= entry or stop >= entry:
+                return self.position_size
+
+            reward = target - entry
+            risk   = entry - stop
+            if risk <= 0:
+                return self.position_size
+
+            b = reward / risk            # 盈亏比
+            kelly = (b * p - q) / b      # Kelly公式
+
+            # 约束：不低于 position_size×0.5（避免过于保守），不超过 kelly_max_fraction
+            fraction = max(self.position_size * 0.5, min(kelly, self.kelly_max_fraction))
+            return round(fraction, 4)
+
+        except Exception:
+            return self.position_size
 
     def reset(self):
         """重置策略状态"""
@@ -244,8 +291,16 @@ class WaveStrategy:
             if current_position_ratio >= self.max_total_position:
                 return
 
+            # B3: Kelly 公式动态仓位
+            # f* = (b×p - q) / b，其中 b=盈亏比，p=置信度（胜率估计），q=1-p
+            # 使用 min(kelly_fraction, kelly_max_fraction) 防止过度集中
+            if self.use_kelly and wave_signal is not None:
+                kelly_frac = self._kelly_fraction(wave_signal)
+            else:
+                kelly_frac = self.position_size
+
             # 计算可用资金
-            available_capital = self.capital * self.position_size
+            available_capital = self.capital * kelly_frac
 
             # 考虑买入成本(佣金+滑点)
             buy_cost_rate = self.commission_rate + self.slippage_rate
@@ -689,16 +744,23 @@ class WaveBacktester:
             # 资金加权收益率 = (期末权益 - 期初资金) / 期初资金 * 100
             total_return_pct = (final_equity - self.strategy.initial_capital) / self.strategy.initial_capital * 100
 
-            # 计算每日收益率用于Sharpe（扣除无风险利率，A股年化3%≈日化0.0119%）
+            # 计算每日收益率用于Sharpe/Sortino（扣除无风险利率，A股年化3%≈日化0.0119%）
             daily_returns = pd.Series(equity_values).pct_change().dropna()
+            rf_daily = 0.03 / 252
             if len(daily_returns) > 1 and daily_returns.std() > 0:
-                rf_daily = 0.03 / 252  # 年化3%无风险利率折算为日化
                 sharpe = ((daily_returns.mean() - rf_daily) / daily_returns.std()) * np.sqrt(252)
             else:
-                sharpe = 0
+                sharpe = 0.0
+
+            # Sortino：只惩罚下行波动（比Sharpe更适合股票策略）
+            downside = daily_returns[daily_returns < rf_daily] - rf_daily
+            downside_std = float(downside.std()) if len(downside) > 1 else 0.0
+            sortino = ((daily_returns.mean() - rf_daily) / downside_std * np.sqrt(252)
+                       ) if downside_std > 0 else 0.0
         else:
             total_return_pct = 0.0
             sharpe = 0.0
+            sortino = 0.0
 
         # 最大回撤
         max_dd = 0
@@ -716,6 +778,14 @@ class WaveBacktester:
                 if dd_pct > max_dd_pct:
                     max_dd_pct = dd_pct
 
+        # Calmar：年化收益率 / 最大回撤（衡量单位风险的回报）
+        if equity_values and len(equity_values) >= 2:
+            n_days = len(equity_values)
+            annual_return = total_return_pct / 100 * (252 / max(n_days, 1))
+            calmar = (annual_return / (max_dd_pct / 100)) if max_dd_pct > 0 else 0.0
+        else:
+            calmar = 0.0
+
         return BacktestResult(
             symbol=symbol,
             start_date=df['date'].min(),
@@ -730,6 +800,8 @@ class WaveBacktester:
             max_drawdown=max_dd,
             max_drawdown_pct=max_dd_pct,
             sharpe_ratio=sharpe,
+            sortino_ratio=round(sortino, 4),
+            calmar_ratio=round(calmar, 4),
             profit_factor=gross_profit / gross_loss if gross_loss > 0 else float('inf'),
             trades=trades,
             equity_curve=self.strategy.equity_curve
@@ -759,6 +831,8 @@ class WaveBacktester:
 
         lines.append("\n【风险指标】")
         lines.append(f"  Sharpe比率: {result.sharpe_ratio:.2f}")
+        lines.append(f"  Sortino比率: {result.sortino_ratio:.2f}")
+        lines.append(f"  Calmar比率: {result.calmar_ratio:.2f}")
         lines.append(f"  盈亏比: {result.profit_factor:.2f}")
 
         # 最近5笔交易

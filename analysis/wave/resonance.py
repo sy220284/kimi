@@ -266,6 +266,88 @@ class VolumeAnalyzer:
         )
 
 
+class KDJAnalyzer:
+    """KDJ随机指标分析器 — A股散户常用，权重提升至1.0"""
+
+    @staticmethod
+    def calculate(df: pd.DataFrame, k_period: int = 9,
+                  d_period: int = 3, j_period: int = 3) -> pd.DataFrame:
+        """计算KDJ指标 (RSV → K → D → J)"""
+        df = df.copy()
+        n = k_period
+        low_n  = df['low'].rolling(n, min_periods=1).min()
+        high_n = df['high'].rolling(n, min_periods=1).max()
+        rsv = (df['close'] - low_n) / (high_n - low_n + 1e-12) * 100
+        df['kdj_k'] = rsv.ewm(com=d_period - 1, adjust=False).mean()
+        df['kdj_d'] = df['kdj_k'].ewm(com=d_period - 1, adjust=False).mean()
+        df['kdj_j'] = j_period * df['kdj_k'] - (j_period - 1) * df['kdj_d']
+        return df
+
+    @staticmethod
+    def analyze_signal(df: pd.DataFrame,
+                       oversold: float = 20.0,
+                       overbought: float = 80.0) -> 'IndicatorSignal':
+        """分析KDJ信号：超买/超卖/金叉/死叉"""
+        if len(df) < 15:
+            return IndicatorSignal(name="KDJ", direction=SignalDirection.NEUTRAL,
+                                   strength=0.0, description="数据不足", confidence=0.0)
+
+        df = KDJAnalyzer.calculate(df)
+        k = df['kdj_k'].iloc[-1]
+        d = df['kdj_d'].iloc[-1]
+        j = df['kdj_j'].iloc[-1]
+        k_prev = df['kdj_k'].iloc[-2]
+        d_prev = df['kdj_d'].iloc[-2]
+
+        direction = SignalDirection.NEUTRAL
+        strength = 0.0
+        confidence = 0.7
+
+        # 金叉（K上穿D）
+        if k_prev <= d_prev and k > d:
+            if k < oversold:          # 超卖区金叉，最强买入
+                direction = SignalDirection.BULLISH
+                strength = 1.0
+                desc = f"KDJ超卖金叉({k:.1f})"
+            elif k < 50:
+                direction = SignalDirection.BULLISH
+                strength = 0.7
+                desc = f"KDJ金叉({k:.1f})"
+            else:
+                direction = SignalDirection.BULLISH
+                strength = 0.4
+                desc = f"KDJ高位金叉({k:.1f})，谨慎"
+        # 死叉（K下穿D）
+        elif k_prev >= d_prev and k < d:
+            if k > overbought:        # 超买区死叉，最强卖出
+                direction = SignalDirection.BEARISH
+                strength = 1.0
+                desc = f"KDJ超买死叉({k:.1f})"
+            elif k > 50:
+                direction = SignalDirection.BEARISH
+                strength = 0.7
+                desc = f"KDJ死叉({k:.1f})"
+            else:
+                direction = SignalDirection.BEARISH
+                strength = 0.4
+                desc = f"KDJ低位死叉({k:.1f})"
+        # 极端值
+        elif j < 0:
+            direction = SignalDirection.BULLISH
+            strength = 0.8
+            desc = f"J值极低({j:.1f})，超卖"
+        elif j > 100:
+            direction = SignalDirection.BEARISH
+            strength = 0.8
+            desc = f"J值极高({j:.1f})，超买"
+        else:
+            desc = f"KDJ中性(K={k:.1f},D={d:.1f})"
+
+        return IndicatorSignal(name="KDJ", direction=direction,
+                               strength=strength, description=desc,
+                               confidence=confidence)
+
+
 class ResonanceAnalyzer:
     """共振分析器 - 整合波浪 + 技术指标"""
 
@@ -273,6 +355,7 @@ class ResonanceAnalyzer:
         self.macd_analyzer = MACDAnalyzer()
         self.rsi_analyzer = RSIAnalyzer()
         self.volume_analyzer = VolumeAnalyzer()
+        self.kdj_analyzer = KDJAnalyzer()  # A3: KDJ权重1.0，与MACD并列最高
 
     def analyze(self, df: pd.DataFrame, wave_signal: Any = None) -> ResonanceResult:
         """
@@ -298,6 +381,10 @@ class ResonanceAnalyzer:
         # 3. 成交量信号
         vol_signal = self.volume_analyzer.analyze_signal(df)
         signals.append(vol_signal)
+
+        # 4. KDJ信号 (A3增强：A股散户常用，权重与MACD并列最高)
+        kdj_signal = self.kdj_analyzer.analyze_signal(df)
+        signals.append(kdj_signal)
 
         # 4. 波浪信号 (如果有)
         wave_direction = SignalDirection.NEUTRAL
