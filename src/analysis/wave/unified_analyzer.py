@@ -24,11 +24,13 @@ try:
     from .adaptive_params import AdaptiveParameterOptimizer, MarketCondition
     from .elliott_wave import WaveDirection, WaveType
     from .enhanced_detector import PivotPoint, enhanced_pivot_detection
+    from .entry_optimizer import WaveEntryOptimizer
     from .resonance import ResonanceAnalyzer, SignalDirection
 except ImportError:
     from adaptive_params import AdaptiveParameterOptimizer, MarketCondition
     from elliott_wave import WaveDirection, WaveType
     from enhanced_detector import PivotPoint, enhanced_pivot_detection
+    from entry_optimizer import WaveEntryOptimizer
     from resonance import ResonanceAnalyzer, SignalDirection
 
 
@@ -70,8 +72,13 @@ class UnifiedWaveSignal:
     # 市场状态 (新增)
     market_condition: str = "unknown"
 
+    # 量价优化评分 (新增)
+    quality_score: float = 0.0
+    volume_score: float = 0.0
+    time_score: float = 0.0
+
     def __repr__(self):
-        return f"WaveSignal({self.entry_type.value}, ¥{self.entry_price:.2f}, conf={self.confidence:.2f}, res={self.resonance_score:.2f})"
+        return f"WaveSignal({self.entry_type.value}, ¥{self.entry_price:.2f}, conf={self.confidence:.2f}, res={self.resonance_score:.2f}, quality={self.quality_score:.2f})"
 
 
 class UnifiedWaveAnalyzer:
@@ -147,6 +154,11 @@ class UnifiedWaveAnalyzer:
         self.min_resonance_score = min_resonance_score
         self._resonance_analyzer = ResonanceAnalyzer() if use_resonance else None
 
+        # 量价优化器 (新增)
+        self._entry_optimizer = WaveEntryOptimizer()
+        self.use_quality_filter = True
+        self.min_quality_score = 0.40  # 降低阈值
+
         # 记录当前市场状态
         self._current_market_condition = MarketCondition.TRENDING
 
@@ -216,6 +228,10 @@ class UnifiedWaveAnalyzer:
         # 步骤4: 共振分析验证
         if self.use_resonance and signals:
             signals = self._apply_resonance_analysis(signals, df)
+
+        # 步骤4.5: 量价优化 (新增)
+        if self.use_quality_filter and signals:
+            signals = self._apply_quality_optimization(signals, df, pivots)
 
         # 步骤5: 趋势过滤后置
         if self.use_trend_filter and signals:
@@ -366,6 +382,87 @@ class UnifiedWaveAnalyzer:
             return signals
 
         return filtered
+
+    def _apply_quality_optimization(self, signals: list[UnifiedWaveSignal],
+                                    df: pd.DataFrame,
+                                    pivots: list) -> list[UnifiedWaveSignal]:
+        """
+        应用量价优化 - 针对C/2/4浪的不同特征进行质量评分
+
+        新增步骤:
+        1. C浪: 缩量调整+放量反弹确认
+        2. 2浪: 缩量回撤+MACD金叉确认
+        3. 4浪: 时间比例+波动率收缩确认
+        """
+        if not self._entry_optimizer or len(df) < 30:
+            return signals
+
+        optimized_signals = []
+        entry_idx = len(df) - 1
+
+        for sig in signals:
+            try:
+                if sig.entry_type.value == 'C':
+                    # C浪优化 - 使用pivots的实际索引
+                    if len(pivots) >= 3 and sig.wave_structure:
+                        # 从wave_structure获取波浪位置
+                        wave_b_idx = pivots[-2].idx if hasattr(pivots[-2], 'idx') else len(df) - 5
+                        wave_a_idx = pivots[-3].idx if hasattr(pivots[-3], 'idx') else len(df) - 15
+                        quality = self._entry_optimizer.optimize_wave_c(
+                            df, entry_idx,
+                            wave_a_idx, wave_b_idx,
+                            sig.confidence
+                        )
+                    else:
+                        continue
+
+                elif sig.entry_type.value == '2':
+                    # 2浪优化
+                    if len(pivots) >= 3 and sig.wave_structure:
+                        wave1_start_idx = pivots[-3].idx if hasattr(pivots[-3], 'idx') else len(df) - 15
+                        wave1_end_idx = pivots[-2].idx if hasattr(pivots[-2], 'idx') else len(df) - 5
+                        quality = self._entry_optimizer.optimize_wave2(
+                            df, entry_idx,
+                            wave1_start_idx, wave1_end_idx,
+                            sig.confidence
+                        )
+                    else:
+                        continue
+
+                elif sig.entry_type.value == '4':
+                    # 4浪优化
+                    if len(pivots) >= 4 and sig.wave_structure:
+                        wave3_start_idx = pivots[-4].idx if hasattr(pivots[-4], 'idx') else len(df) - 20
+                        wave3_end_idx = pivots[-2].idx if hasattr(pivots[-2], 'idx') else len(df) - 5
+                        quality = self._entry_optimizer.optimize_wave4(
+                            df, entry_idx,
+                            wave3_start_idx, wave3_end_idx,
+                            sig.confidence
+                        )
+                    else:
+                        continue
+                else:
+                    optimized_signals.append(sig)
+                    continue
+
+                # 更新信号质量分数
+                sig.quality_score = quality.final_score
+                sig.volume_score = quality.volume_score
+                sig.time_score = quality.time_score
+
+                # 质量过滤
+                if quality.final_score >= self.min_quality_score:
+                    optimized_signals.append(sig)
+
+            except Exception:
+                # 优化失败保留原信号
+                optimized_signals.append(sig)
+
+        # 如果全部过滤，返回空列表（严格过滤）
+        if not optimized_signals:
+            return []
+
+        return optimized_signals
 
     def _detect_wave_c(self, pivots: list[PivotPoint], prices: np.ndarray,
                        atr: float) -> UnifiedWaveSignal | None:
