@@ -361,6 +361,92 @@ def validate_flat(points):
     return True, [], score
 
 
+def validate_triangle(points):
+    """
+    Triangle调整浪验证（三角形整理）
+    
+    Triangle特征：
+    - 5浪结构：A-B-C-D-E
+    - 收敛形态：每个子浪都短于前一个
+    - A-B-C-D-E逐步收敛
+    - 常见于4浪或B浪
+    
+    子类型：
+    - 对称三角形：上下轨收敛速度相近
+    - 上升三角形：下轨水平，上轨下降
+    - 下降三角形：上轨水平，下轨上升
+    - 扩散三角形：上下轨发散（少见）
+    
+    Args:
+        points: 5个WavePoint（A-B-C-D-E）
+        
+    Returns:
+        (is_valid, errors, score)
+    """
+    if len(points) != 5:
+        return False, ["需要5个点(A-B-C-D-E)"], 0.0
+    
+    pA, pB, pC, pD, pE = [p.price for p in points]
+    
+    # 计算各浪长度
+    ab_len = abs(pB - pA)
+    bc_len = abs(pC - pB)
+    cd_len = abs(pD - pC)
+    de_len = abs(pE - pD)
+    
+    # 核心条件1：子浪长度递减（收敛）
+    converging = (bc_len < ab_len and cd_len < bc_len and de_len < cd_len)
+    
+    # 核心条件2：各浪长度不能太短
+    min_wave = min(ab_len, bc_len, cd_len, de_len)
+    if min_wave < 1e-6:
+        return False, ["子浪过短"], 0.0
+    
+    # 核心条件3：B-C-D应在A-E连成的通道内
+    # 简化验证：E应在A-D的范围内
+    if pA < pD:  # 上升趋势的三角形
+        if not (pE >= min(pA, pD) * 0.99 and pE <= max(pA, pD) * 1.01):
+            return False, ["E浪超出三角形范围"], 0.0
+    else:  # 下降趋势的三角形
+        if not (pE <= max(pA, pD) * 1.01 and pE >= min(pA, pD) * 0.99):
+            return False, ["E浪超出三角形范围"], 0.0
+    
+    # 评分
+    score = 0.0
+    
+    # 收敛程度
+    if converging:
+        score += 0.40
+    elif bc_len < ab_len and cd_len < bc_len:
+        score += 0.25  # 部分收敛
+    else:
+        score += 0.10
+    
+    # 各浪长度比例合理性
+    bc_ab = bc_len / (ab_len + 1e-12)
+    cd_bc = cd_len / (bc_len + 1e-12)
+    de_cd = de_len / (cd_len + 1e-12)
+    
+    # 理想比例：0.618-0.786
+    if 0.50 <= bc_ab <= 0.85:
+        score += 0.15
+    if 0.50 <= cd_bc <= 0.85:
+        score += 0.15
+    if 0.50 <= de_cd <= 0.85:
+        score += 0.15
+    
+    # 最终E浪长度应最短
+    if de_len < cd_len < bc_len < ab_len:
+        score += 0.15
+    
+    score = min(score, 1.0)
+    
+    # 收敛是必要条件，但不是充分条件
+    is_valid = score >= 0.50 or converging
+    
+    return is_valid, [], score
+
+
 # ============================================================================
 # SECTION 4 — Elliott Wave Analyzer (整合版)
 # ============================================================================
@@ -505,6 +591,14 @@ class ElliottWaveAnalyzer:
         for i in range(len(points) - 3):
             window_points = points[i:i+4]
             pattern = self._try_flat(window_points)
+            if pattern and pattern.confidence > best_confidence:
+                best_confidence = pattern.confidence
+                best_pattern = pattern
+
+        # 尝试5点模式 (Triangle三角形调整浪)
+        for i in range(len(points) - 4):
+            window_points = points[i:i+5]
+            pattern = self._try_triangle(window_points)
             if pattern and pattern.confidence > best_confidence:
                 best_confidence = pattern.confidence
                 best_pattern = pattern
@@ -805,6 +899,75 @@ class ElliottWaveAnalyzer:
             confidence=conf,
             start_date=p0.date,
             end_date=pC.date,
+            target_price=round(target, 4),
+            stop_loss=round(stop_loss, 4)
+        )
+
+    def _try_triangle(self, points: list[WavePoint]) -> WavePattern | None:
+        """
+        尝试识别Triangle三角形调整浪
+        
+        Triangle特征：
+        - 5浪结构：A-B-C-D-E
+        - 收敛形态，每个子浪长度递减
+        - 常见于4浪或B浪位置
+        
+        Args:
+            points: 5个WavePoint (A-B-C-D-E)
+            
+        Returns:
+            WavePattern或None
+        """
+        if len(points) != 5:
+            return None
+        
+        valid, violations, conf = validate_triangle(points)
+        # Triangle识别难度较高，降低阈值
+        if not valid or conf < self.confidence_threshold * 0.6:
+            return None
+        
+        # 标注浪号
+        labels = ['A', 'B', 'C', 'D', 'E']
+        labeled_points = []
+        for i, p in enumerate(points):
+            new_p = WavePoint(
+                index=p.index,
+                date=p.date,
+                price=p.price,
+                volume=p.volume,
+                is_peak=p.is_peak,
+                is_trough=p.is_trough,
+                strength=p.strength
+            )
+            new_p.wave_num = labels[i] if i < len(labels) else 'E'
+            labeled_points.append(new_p)
+        
+        pA, pB, pC, pD, pE = labeled_points
+        
+        # 判断方向（A到B的方向决定整体方向）
+        bear = pB.price < pA.price
+        direction = WaveDirection.DOWN if bear else WaveDirection.UP
+        
+        # Triangle突破目标：E浪结束后沿原趋势方向突破
+        # 目标 = E + (A浪长度 × 0.618)
+        a_len = abs(pB.price - pA.price)
+        
+        if bear:
+            # 下降三角形，向下突破
+            target = pE.price - a_len * 0.618
+            stop_loss = max(pD.price, pB.price) * 1.01
+        else:
+            # 上升三角形，向上突破
+            target = pE.price + a_len * 0.618
+            stop_loss = min(pD.price, pB.price) * 0.99
+        
+        return WavePattern(
+            wave_type=WaveType.TRIANGLE,
+            direction=direction,
+            points=labeled_points,
+            confidence=conf,
+            start_date=pA.date,
+            end_date=pE.date,
             target_price=round(target, 4),
             stop_loss=round(stop_loss, 4)
         )

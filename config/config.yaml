@@ -134,16 +134,19 @@ agents:
     model: deepseek/deepseek-reasoner
     thinking: high
     timeout_seconds: 300
+    use_ai: true  # 是否启用AI增强
   
   technical_analyst:
     model: deepseek/deepseek-chat
     thinking: medium
     timeout_seconds: 180
+    use_ai: true  # 是否启用AI增强
   
   rotation_analyst:
     model: deepseek/deepseek-reasoner
     thinking: high
     timeout_seconds: 300
+    use_ai: true  # 是否启用AI增强
 
 # 调度配置
 scheduler:
