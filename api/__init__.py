@@ -14,6 +14,12 @@ API模块 - FastAPI服务层
     uvicorn.run(app, host="0.0.0.0", port=8000)
 """
 
-from .main import app
-
-__all__ = ['app']
+try:
+    from .main import app
+    __all__ = ['app']
+except ImportError as e:
+    # FastAPI未安装时的降级处理
+    import warnings
+    warnings.warn(f"API模块导入失败: {e}. 运行 'pip install fastapi uvicorn' 安装依赖")
+    app = None
+    __all__ = []
