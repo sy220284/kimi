@@ -33,7 +33,8 @@ class RotationAnalystAgent(BaseAgent):
         策略：
         1. 优先查询 sw_industry_index 表（申万行业指数），计算各行业动量/相对强弱
         2. 若行业指数表为空，回退到 market_data 按板块聚合动量计算
-        3. 输出强弱排名、轮动建议
+        3. 对强势行业进行波浪分析，识别买点
+        4. 输出强弱排名、轮动建议、买点行业
 
         Args:
             input_data: 输入数据（symbol 不使用，轮动覆盖全市场）
@@ -48,6 +49,11 @@ class RotationAnalystAgent(BaseAgent):
             if result['status'] == 'no_data':
                 # 申万行业表为空，回退到市值板块分析
                 result = self._analyze_by_market_sector()
+
+            # 分析强势行业的买点
+            if result.get('status') == 'success':
+                buy_points = self._analyze_industry_buy_points(result.get('all_industries', []))
+                result['buy_point_industries'] = buy_points
 
             confidence = self._calc_confidence(result)
 
@@ -74,6 +80,109 @@ class RotationAnalystAgent(BaseAgent):
                 execution_time=time.time() - start_time,
                 error_message=str(e)
             )
+
+    def _analyze_industry_buy_points(self, industries: list) -> list:
+        """
+        分析强势行业的波浪买点
+        
+        对排名靠前的行业进行波浪分析，识别：
+        - C浪底部 (调整浪结束)
+        - 2浪回调买点
+        - 4浪整理买点
+        """
+        from utils.config_loader import load_config
+        from utils.db_connector import PostgresConnector
+        from analysis.wave.unified_analyzer import UnifiedWaveAnalyzer
+
+        if not industries:
+            return []
+
+        cfg = load_config()
+        pg_cfg = cfg.get('database', {}).get('postgres', {})
+
+        pg = PostgresConnector(
+            host=pg_cfg.get('host', 'localhost'),
+            port=pg_cfg.get('port', 5432),
+            database=pg_cfg.get('database', 'quant_analysis'),
+            username=pg_cfg.get('username', 'quant_user'),
+            password=pg_cfg.get('password', 'quant_password'),
+        )
+
+        buy_point_industries = []
+        analyzer = UnifiedWaveAnalyzer()
+
+        # 只分析排名前10的行业
+        top_industries = [ind for ind in industries if ind.get('momentum_20d', 0) > 0][:10]
+
+        for industry in top_industries:
+            code = industry.get('code', '')
+            name = industry.get('name', '')
+
+            try:
+                pg.connect()
+
+                # 获取行业指数近期数据
+                sql = """
+                    SELECT date, open, high, low, close, volume
+                    FROM sw_industry_index
+                    WHERE industry_code = %s
+                    ORDER BY date DESC
+                    LIMIT 120
+                """
+                rows = pg.execute(sql, (code,), fetch=True)
+
+                if not rows or len(rows) < 60:
+                    continue
+
+                # 转换为DataFrame并转换数据类型
+                df = pd.DataFrame(rows)
+                df = df.sort_values('date')
+                df['date'] = pd.to_datetime(df['date'])
+                
+                # 转换价格列为float避免Decimal问题
+                price_cols = ['open', 'high', 'low', 'close', 'volume']
+                for col in price_cols:
+                    if col in df.columns:
+                        df[col] = df[col].astype(float)
+
+                # 运行波浪分析
+                signals = analyzer.detect(df, mode='all')
+                
+                # 获取最佳信号
+                best_signal = None
+                for signal in signals:
+                    if signal.is_valid and signal.confidence >= 0.5:
+                        if best_signal is None or signal.confidence > best_signal.confidence:
+                            best_signal = signal
+                
+                if best_signal:
+                    buy_point_industries.append({
+                        'code': code,
+                        'name': name,
+                        'momentum_20d': industry.get('momentum_20d'),
+                        'buy_signal': {
+                            'type': best_signal.entry_type.value,
+                            'entry_price': round(best_signal.entry_price, 4),
+                            'stop_loss': round(best_signal.stop_loss, 4),
+                            'target_price': round(best_signal.target_price, 4),
+                            'confidence': round(best_signal.confidence, 2),
+                            'quality_score': round(best_signal.quality_score, 2) if hasattr(best_signal, 'quality_score') else 0,
+                        }
+                    })
+
+            except Exception as e:
+                self.logger.warning(f"行业 {name} 买点分析失败: {e}")
+            finally:
+                with contextlib.suppress(Exception):
+                    pg.disconnect()
+
+        # 按置信度排序
+        buy_point_industries.sort(
+            key=lambda x: x['buy_signal']['confidence'],
+            reverse=True
+        )
+
+        return buy_point_industries
 
     # ──────────────────────────────────────────────────
     # 主路径：申万行业指数

@@ -31,7 +31,7 @@ class ConfigLoader:
         if config_path is None:
             # 从当前文件位置推断项目根目录
             current_file = Path(__file__).resolve()
-            project_root = current_file.parent.parent.parent
+            project_root = current_file.parent.parent  # utils -> 项目根目录
             config_path = project_root / "config" / "config.yaml"
 
         self.config_path = config_path
