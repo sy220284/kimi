@@ -2,6 +2,7 @@
 智能体框架 - 轮动分析师智能体
 分析申万行业指数轮动，回退到板块动量分析
 """
+import contextlib
 import sys
 import time
 from datetime import datetime, timedelta
@@ -83,8 +84,8 @@ class RotationAnalystAgent(BaseAgent):
 
     def _analyze_sw_industry(self) -> dict:
         """从 sw_industry_index 表读取行业指数并计算轮动指标"""
-        from utils.db_connector import PostgresConnector
         from utils.config_loader import load_config
+        from utils.db_connector import PostgresConnector
 
         cfg = load_config()
         pg_cfg = cfg.get('database', {}).get('postgres', {})
@@ -117,10 +118,8 @@ class RotationAnalystAgent(BaseAgent):
             self.logger.warning(f"sw_industry_index 查询失败: {e}")
             return {'status': 'no_data', 'reason': str(e)}
         finally:
-            try:
+            with contextlib.suppress(Exception):
                 pg.disconnect()
-            except Exception:
-                pass
 
         if df is None or df.empty:
             return {'status': 'no_data', 'reason': 'table_empty'}
