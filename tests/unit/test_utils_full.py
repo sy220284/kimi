@@ -3,10 +3,8 @@
 工具函数全覆盖测试
 测试所有工具函数
 """
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 import unittest
 from datetime import datetime, timedelta

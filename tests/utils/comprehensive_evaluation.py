@@ -1,12 +1,10 @@
 """
 综合评估报告 - 波浪策略回测（2017-2024）
 """
-import sys
 from pathlib import Path
 
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 print("="*80)
 print("📊 波浪策略回测综合评估报告")

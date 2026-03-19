@@ -3,9 +3,11 @@
 完整回测对比 - 原策略 vs 2/4浪优化策略
 信号有效期: 检测后3天内有效
 """
-import sys
 
-sys.path.insert(0, 'src')
+
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import contextlib
 from datetime import datetime

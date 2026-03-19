@@ -4,9 +4,11 @@
 检查C/2/4浪买点 + 1/3/5浪卖点
 评估浪型识别准确度
 """
-import sys
 
-sys.path.insert(0, 'src')
+
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from collections import defaultdict
 from dataclasses import dataclass, field

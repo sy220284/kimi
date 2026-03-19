@@ -3,10 +3,8 @@
 完整测试套件运行器
 运行所有测试并生成报告
 """
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 import time
 import unittest

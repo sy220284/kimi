@@ -3,9 +3,11 @@
 使用统一波浪分析器的回测
 简化版 - 单一入口
 """
-import sys
 
-sys.path.insert(0, 'src')
+
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from dataclasses import dataclass
 

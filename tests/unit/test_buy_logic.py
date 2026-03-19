@@ -3,10 +3,8 @@
 直接测试回测器买入逻辑
 """
 
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
 

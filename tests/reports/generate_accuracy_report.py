@@ -4,10 +4,8 @@
 对比实时识别 vs 事后真实浪型
 """
 
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import json
 

@@ -3,9 +3,11 @@
 多行业多市值股票波浪策略测试
 覆盖: 白酒、乳制品、调味品、啤酒、新能源、银行、科技
 """
-import sys
 
-sys.path.insert(0, 'src')
+
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from collections import Counter
 

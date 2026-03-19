@@ -8,10 +8,8 @@
 4. 不同均线周期 (60/120/200日)
 """
 
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import json
 

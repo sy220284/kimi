@@ -2,9 +2,11 @@
 """
 信号vs交易对比分析 - 理解为什么30个信号只产生14笔交易
 """
-import sys
 
-sys.path.insert(0, 'src')
+
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import pandas as pd
 

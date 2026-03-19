@@ -4,9 +4,11 @@
 """
 import sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+from pathlib import Path
 
 # 添加src到路径
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from data.ths_adapter import ThsAdapter
 

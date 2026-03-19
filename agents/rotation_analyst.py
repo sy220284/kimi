@@ -3,15 +3,12 @@
 分析申万行业指数轮动，回退到板块动量分析
 """
 import contextlib
-import sys
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from .base_agent import AgentInput, AgentOutput, AgentState, AnalysisType, BaseAgent
 

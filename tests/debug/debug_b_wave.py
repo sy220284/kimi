@@ -2,10 +2,8 @@
 """
 深入调试B浪验证逻辑
 """
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
 

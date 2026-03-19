@@ -2,9 +2,11 @@
 """
 测试增强版浪型检测器
 """
-import sys
 
-sys.path.insert(0, 'src')
+
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy
 from analysis.wave import UnifiedWaveAnalyzer

@@ -3,9 +3,11 @@
 食品饮料板块波浪分析参数优化
 使用历史数据优化波浪检测和交易策略参数
 """
-import sys
 
-sys.path.insert(0, 'src')
+
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from analysis.backtest.wave_backtester import WaveBacktester
 from analysis.optimization.param_optimizer import run_optimization

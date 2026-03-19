@@ -2,9 +2,11 @@
 """
 分析买入时的波浪状态
 """
-import sys
 
-sys.path.insert(0, 'src')
+
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from analysis.wave import UnifiedWaveAnalyzer
 from data import get_stock_data

@@ -1,12 +1,10 @@
 """
 科技板块亏损股票特征分析报告
 """
-import sys
 from pathlib import Path
 
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 # 读取数据
 df = pd.read_csv('tests/results/techtrade_details_20260318_1053.csv')

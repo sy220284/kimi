@@ -2,9 +2,7 @@
 """
 2浪买入点检测器 - 推动浪回调买入
 """
-import sys
 
-sys.path.insert(0, 'src')
 
 from dataclasses import dataclass
 

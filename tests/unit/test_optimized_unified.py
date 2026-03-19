@@ -2,10 +2,12 @@
 """
 优化版统一分析器回测
 """
+
+
+
 import sys
-
-sys.path.insert(0, 'src')
-
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import pandas as pd
 

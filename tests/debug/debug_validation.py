@@ -2,10 +2,8 @@
 """
 验证逻辑调试脚本 - 诊断B浪和1浪验证通过率问题
 """
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
 

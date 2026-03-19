@@ -5,8 +5,10 @@ Phase 2 测试 - 增强版波浪分析
 """
 import sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+from pathlib import Path
+
 
 from analysis.wave import UnifiedWaveAnalyzer
 from analysis.wave.adaptive_params import get_adaptive_params

@@ -4,10 +4,8 @@
 对比增强版 vs 上一版本
 """
 
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import json
 import time

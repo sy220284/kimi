@@ -5,8 +5,10 @@ Redis缓存一致性测试 (简化版)
 """
 import sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+from pathlib import Path
+
 
 import time
 import unittest

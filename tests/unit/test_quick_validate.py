@@ -3,10 +3,8 @@
 快速集成验证 - 单股票单配置测试
 """
 
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.analysis.backtest.wave_backtester import WaveBacktester
 from src.analysis.wave import UnifiedWaveAnalyzer

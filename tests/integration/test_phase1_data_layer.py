@@ -3,10 +3,12 @@
 数据层优化测试 - Phase 1 验证
 """
 import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from data import DataAPI, get_stock_data
 

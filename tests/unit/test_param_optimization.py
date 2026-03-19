@@ -3,9 +3,11 @@
 波浪分析器参数调优
 网格搜索最佳参数组合
 """
-import sys
 
-sys.path.insert(0, 'src')
+
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from dataclasses import dataclass
 

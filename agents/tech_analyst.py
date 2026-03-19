@@ -1,14 +1,12 @@
 """
 智能体框架 - 技术分析师智能体 (简化版，无外部依赖)
 """
-import sys
 import time
 from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from analysis.technical.indicators import TechnicalIndicators
 

@@ -2,10 +2,8 @@
 """
 极值点检测调试 - 分析为什么极值点数量不足
 """
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
 

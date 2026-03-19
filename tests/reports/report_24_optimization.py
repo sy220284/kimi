@@ -2,9 +2,7 @@
 """
 2/4浪优化总结报告
 """
-import sys
 
-sys.path.insert(0, 'src')
 
 print("="*80)
 print("📊 2/4浪买卖点优化总结报告")

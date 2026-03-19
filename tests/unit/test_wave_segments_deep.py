@@ -4,10 +4,8 @@
 扩大样本范围，分析历史数据中B浪和1浪的特征
 """
 
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from datetime import datetime
 

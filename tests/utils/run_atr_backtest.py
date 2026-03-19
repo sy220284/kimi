@@ -4,8 +4,10 @@ ATR(14) * 2 作为止损，移动止盈同样基于ATR
 """
 import sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+from pathlib import Path
+
 
 from datetime import datetime
 

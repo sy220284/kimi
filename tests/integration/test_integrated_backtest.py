@@ -3,9 +3,11 @@
 集成2/4浪检测的完整回测框架
 同时使用原始波浪检测 + 4浪检测器 + 2浪检测器
 """
-import sys
 
-sys.path.insert(0, 'src')
+
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import contextlib
 from dataclasses import dataclass

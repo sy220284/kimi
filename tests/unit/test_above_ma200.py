@@ -3,10 +3,8 @@
 测试价格在MA200上方时的买入逻辑
 """
 
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
 

@@ -2,10 +2,12 @@
 """
 优化版回测 - 集成2/4浪买卖点
 """
+
+
+
 import sys
-
-sys.path.insert(0, 'src')
-
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import numpy as np
 import pandas as pd

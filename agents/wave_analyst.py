@@ -1,12 +1,10 @@
 """
 智能体框架 - 波浪分析师智能体 (简化版)
 """
-import sys
 import time
 from datetime import datetime
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from analysis.wave.elliott_wave import ElliottWaveAnalyzer
 

@@ -2,9 +2,7 @@
 """
 集成4浪检测的实用模块 - 用于回测框架
 """
-import sys
 
-sys.path.insert(0, 'src')
 
 from dataclasses import dataclass
 

@@ -3,7 +3,6 @@
 定义通用接口
 """
 import json
-import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -11,7 +10,6 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.config_loader import load_config
 from utils.logger import get_logger
 

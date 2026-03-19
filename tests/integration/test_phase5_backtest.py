@@ -5,8 +5,10 @@ Phase 5 测试 - 回测验证
 """
 import sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+from pathlib import Path
+
 
 from analysis.backtest.wave_backtester import WaveBacktester
 from analysis.wave import UnifiedWaveAnalyzer

@@ -4,11 +4,13 @@
 """
 import sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from pathlib import Path
 
 import akshare as ak
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).parent / 'src'))
 from data import get_db_manager
 
 

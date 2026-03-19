@@ -5,7 +5,6 @@
      不传路径时自动选取 tests/results/ 下最新的 techtrade_details_*.csv
 """
 
-import sys
 from pathlib import Path
 
 import pandas as pd
