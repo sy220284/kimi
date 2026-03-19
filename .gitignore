@@ -32,3 +32,5 @@ archive/
 .DS_Store
 Thumbs.db
 *.pyc
+tests/results/*.csv
+tests/results/*.json

@@ -564,10 +564,10 @@ class UnifiedWaveAnalyzer:
         atr_stop = self.atr_stop_mult * atr
 
         if direction_up:
-            target = current_price + wave_a * 0.618
+            target = current_price + wave_a * 1.0  # C浪目标 = 1.0×A浪（ZigZag理论标准，原0.618过于保守）
             stop_loss = max(p_c.price * 0.97, current_price - atr_stop)
         else:
-            target = current_price - wave_a * 0.618
+            target = current_price - wave_a * 1.0  # C浪目标 = 1.0×A浪
             stop_loss = min(p_c.price * 1.03, current_price + atr_stop)
 
         confidence = 0.3  # 基础分降至0.3，需通过验证项积累才能达到0.5+阈值

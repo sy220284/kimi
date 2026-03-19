@@ -1,12 +1,28 @@
 #!/usr/bin/env python3
 """
 买卖点准确率分析
+用法: python analyze_trades.py [csv_path]
+     不传路径时自动选取 tests/results/ 下最新的 techtrade_details_*.csv
 """
 
+import sys
+from pathlib import Path
 import pandas as pd
 
+
+def find_latest_csv():
+    results_dir = Path('tests/results')
+    files = sorted(results_dir.glob('techtrade_details_*.csv'))
+    if not files:
+        raise FileNotFoundError('tests/results/ 下未找到 techtrade_details_*.csv 文件')
+    return files[-1]
+
+
+csv_path = Path(sys.argv[1]) if len(sys.argv) > 1 else find_latest_csv()
+print(f'📂 读取文件: {csv_path}')
+
 # 读取交易明细
-df = pd.read_csv('tests/results/techtrade_details_20260318_2240.csv')
+df = pd.read_csv(csv_path)
 
 print("=" * 70)
 print("📊 买卖点准确率分析报告")

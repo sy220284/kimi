@@ -29,15 +29,21 @@ print('\n📅 最近3天数据:')
 for row in result:
     print(f'  {row["date"]}: {row["count"]:,} 条')
 
-# 5. 板块分布
+# 5. 板块分布（按股票代码前缀推断）
 result = db.pg.execute("""
-    SELECT sector, COUNT(DISTINCT symbol) as count
-    FROM stock_info
-    WHERE sector IS NOT NULL
+    SELECT
+        CASE
+            WHEN symbol LIKE '688%' THEN '科创板'
+            WHEN symbol LIKE '300%' OR symbol LIKE '301%' THEN '创业板'
+            WHEN symbol LIKE '60%'  THEN '沪市主板'
+            WHEN symbol LIKE '00%'  THEN '深市主板'
+            ELSE '其他'
+        END AS sector,
+        COUNT(DISTINCT symbol) as count
+    FROM market_data
     GROUP BY sector
     ORDER BY count DESC
-    LIMIT 5
 """, fetch=True)
-print('\n🏢 前5大板块:')
+print('\n🏢 板块分布:')
 for row in result:
     print(f'  {row["sector"]}: {row["count"]} 只')

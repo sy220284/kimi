@@ -391,8 +391,8 @@ class WaveStrategy:
                 # 检查是否触发移动止盈
                 if trade.trailing_stop_price and price <= trade.trailing_stop_price:
                     self.execute_trade(symbol, date, price, TradeAction.CLOSE, data_idx=data_idx, is_limit_down=is_limit_down,
-                                     reason=f"trailing_stop({trade.trailing_stop_price:.2f})")
-                    return f"trailing_stop({trade.trailing_stop_price:.2f})"
+                                     reason="trailing_stop")
+                    return "trailing_stop"
 
         # 3. 原动态止盈逻辑（当不启用移动止盈或作为备选）
         if not self.use_trailing_stop and trade.target_price:

@@ -113,16 +113,16 @@ class RotationAnalystAgent(BaseAgent):
         """
 
         try:
-            df = pg.execute_query(sql)
+            rows = pg.execute(sql, fetch=True)
+            if not rows:
+                return {'status': 'no_data', 'reason': 'table_empty'}
+            df = pd.DataFrame(rows)
         except Exception as e:
             self.logger.warning(f"sw_industry_index 查询失败: {e}")
             return {'status': 'no_data', 'reason': str(e)}
         finally:
             with contextlib.suppress(Exception):
                 pg.disconnect()
-
-        if df is None or df.empty:
-            return {'status': 'no_data', 'reason': 'table_empty'}
 
         return self._calc_industry_rotation(df)
 
