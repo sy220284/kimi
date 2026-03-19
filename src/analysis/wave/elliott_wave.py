@@ -288,6 +288,79 @@ def validate_zigzag(points):
     return True, [], score
 
 
+def validate_flat(points):
+    """
+    Flat调整浪验证（平台型整理）
+
+    Flat 三种子型:
+    - Regular Flat:  B≈A，C≈A（经典平台）
+    - Expanded Flat: B > A，C > A（扩散平台，A股最常见）
+    - Running Flat:  B > A，C < A（逃跑平台）
+
+    关键特征: B浪回撤 >= 80% A浪（区别于ZigZag的B浪≤61.8%）
+    """
+    if len(points) != 4:
+        return False, [], 0.0
+
+    p0, pA, pB, pC = (p.price for p in points)
+    a_len = abs(pA - p0)
+    b_len = abs(pB - pA)
+    b_ret = b_len / (a_len + 1e-12)
+
+    if a_len < 1e-8:
+        return False, ["A浪过短"], 0.0
+
+    # Flat核心条件：B浪深度回撤（>= 80% A浪），区别于ZigZag
+    if b_ret < 0.80:
+        return False, ["B浪回撤不足80%，非Flat型"], 0.0
+
+    c_a = abs(pC - pB) / (a_len + 1e-12)
+
+    # C浪不能太短（至少 0.618 倍A浪），否则可能只是噪声
+    if c_a < 0.618:
+        return False, ["C浪过短"], 0.0
+
+    # 方向验证：A-C同向（调整方向一致）
+    bear_flat = (pA < p0)  # 下跌Flat
+    if bear_flat:
+        ac_same_dir = pC < pB  # A下跌，C也应下跌
+    else:
+        ac_same_dir = pC > pB  # A上涨（少见），C也应上涨
+
+    if not ac_same_dir:
+        return False, ["C浪方向异常"], 0.0
+
+    # 评分
+    score = 0.0
+
+    # B浪深度（Flat标志）
+    if 0.90 <= b_ret <= 1.05:
+        score += 0.35  # Regular Flat（B≈A）
+    elif b_ret > 1.05:
+        score += 0.30  # Expanded Flat（B突破A起点，A股最常见）
+    else:
+        score += 0.20  # 80%-90%，弱Flat
+
+    # C浪长度
+    if 0.90 <= c_a <= 1.10:
+        score += 0.30  # C≈A，Regular Flat
+    elif c_a > 1.10:
+        score += 0.25  # C > A，Expanded Flat（常见）
+    elif 0.618 <= c_a < 0.90:
+        score += 0.15  # Running Flat（C较短）
+
+    # B浪超出A浪起点（Expanded Flat特征，A股极常见）
+    if bear_flat and pB > p0:
+        score += 0.20  # B浪新高，扩散型
+    elif not bear_flat and pB < p0:
+        score += 0.20
+
+    # 最终加权
+    score = min(score, 1.0)
+
+    return True, [], score
+
+
 # ============================================================================
 # SECTION 4 — Elliott Wave Analyzer (整合版)
 # ============================================================================
@@ -424,6 +497,14 @@ class ElliottWaveAnalyzer:
         for i in range(len(points) - 3):
             window_points = points[i:i+4]
             pattern = self._try_zigzag(window_points)
+            if pattern and pattern.confidence > best_confidence:
+                best_confidence = pattern.confidence
+                best_pattern = pattern
+
+        # 尝试4点模式 (Flat调整浪)
+        for i in range(len(points) - 3):
+            window_points = points[i:i+4]
+            pattern = self._try_flat(window_points)
             if pattern and pattern.confidence > best_confidence:
                 best_confidence = pattern.confidence
                 best_pattern = pattern
@@ -665,6 +746,67 @@ class ElliottWaveAnalyzer:
             end_date=pC.date,
             target_price=round(target, 4),
             stop_loss=round(pB.price, 4)
+        )
+
+    def _try_flat(self, points: list[WavePoint]) -> WavePattern | None:
+        """
+        尝试识别Flat平台型调整浪
+
+        Flat特征：B浪深度回撤(≥80% A浪)，区别于ZigZag(B浪≤61.8%)
+        常见子型：Regular Flat、Expanded Flat（A股最常见）、Running Flat
+        """
+        if len(points) != 4:
+            return None
+
+        valid, violations, conf = validate_flat(points)
+        # Flat阈值略低于ZigZag，因为识别难度更高
+        if not valid or conf < self.confidence_threshold * 0.8:
+            return None
+
+        labels = ['A', 'B', 'C']
+        labeled_points = []
+        for i, p in enumerate(points):
+            new_p = WavePoint(
+                index=p.index,
+                date=p.date,
+                price=p.price,
+                volume=p.volume,
+                is_peak=p.is_peak,
+                is_trough=p.is_trough,
+                strength=p.strength
+            )
+            new_p.wave_num = labels[i] if i < len(labels) else 'C'
+            labeled_points.append(new_p)
+
+        p0, pA, pB, pC = labeled_points
+        bear = pA.price < p0.price  # 下跌调整
+
+        a_len = abs(pA.price - p0.price)
+
+        # Flat C浪目标：通常等于A浪长度，Expanded Flat可达1.618倍
+        b_ret = abs(pB.price - pA.price) / (a_len + 1e-12)
+        if b_ret > 1.05:
+            # Expanded Flat：C浪目标更远
+            target_mult = 1.382
+        else:
+            target_mult = 1.0
+
+        if bear:
+            target = pB.price - a_len * target_mult
+            stop_loss = pB.price * 1.02  # 止损在B浪高点上方
+        else:
+            target = pB.price + a_len * target_mult
+            stop_loss = pB.price * 0.98
+
+        return WavePattern(
+            wave_type=WaveType.FLAT,
+            direction=WaveDirection.DOWN if bear else WaveDirection.UP,
+            points=labeled_points,
+            confidence=conf,
+            start_date=p0.date,
+            end_date=pC.date,
+            target_price=round(target, 4),
+            stop_loss=round(stop_loss, 4)
         )
 
     def _try_impulse_enhanced(self, pivots, df: pd.DataFrame) -> WavePattern | None:

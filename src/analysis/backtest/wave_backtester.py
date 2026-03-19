@@ -689,11 +689,11 @@ class WaveBacktester:
             # 资金加权收益率 = (期末权益 - 期初资金) / 期初资金 * 100
             total_return_pct = (final_equity - self.strategy.initial_capital) / self.strategy.initial_capital * 100
 
-            # 计算每日收益率用于Sharpe
+            # 计算每日收益率用于Sharpe（扣除无风险利率，A股年化3%≈日化0.0119%）
             daily_returns = pd.Series(equity_values).pct_change().dropna()
             if len(daily_returns) > 1 and daily_returns.std() > 0:
-                # Sharpe = (平均日收益率 - 无风险利率) / 日收益率标准差 * sqrt(年交易日)
-                sharpe = (daily_returns.mean() / daily_returns.std()) * np.sqrt(252)
+                rf_daily = 0.03 / 252  # 年化3%无风险利率折算为日化
+                sharpe = ((daily_returns.mean() - rf_daily) / daily_returns.std()) * np.sqrt(252)
             else:
                 sharpe = 0
         else:
@@ -726,7 +726,7 @@ class WaveBacktester:
             win_rate=len(winning_trades) / len(closed_trades) if closed_trades else 0,
             total_return=total_pnl,
             total_return_pct=total_return_pct,
-            avg_return_per_trade=total_return_pct / len(closed_trades) if closed_trades else 0,
+            avg_return_per_trade=float(np.mean([t.pnl_pct for t in closed_trades])) if closed_trades else 0,
             max_drawdown=max_dd,
             max_drawdown_pct=max_dd_pct,
             sharpe_ratio=sharpe,

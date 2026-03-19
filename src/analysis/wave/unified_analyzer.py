@@ -157,7 +157,7 @@ class UnifiedWaveAnalyzer:
         # 量价优化器 (新增)
         self._entry_optimizer = WaveEntryOptimizer()
         self.use_quality_filter = True
-        self.min_quality_score = 0.40  # 降低阈值
+        self.min_quality_score = 0.55  # 权重合计1.0，门槛0.55有效过滤劣质信号
 
         # 记录当前市场状态
         self._current_market_condition = MarketCondition.TRENDING
@@ -200,9 +200,10 @@ class UnifiedWaveAnalyzer:
         if len(pivots) < 3:
             return []
 
-        # 使用完整数据计算当前价格和ATR
-        prices = df['close'].values
-        current_price = prices[-1]  # noqa: F841
+        # prices 与 detect_df 对齐，避免独立调用时极值点索引引用到未来K线
+        # _calculate_atr 和 current_price 仍用完整 df（不涉及极值点索引）
+        prices = detect_df['close'].values
+        current_price = df['close'].values[-1]  # noqa: F841
         atr = self._calculate_atr(df)
 
         # 步骤3: 检测各浪型
@@ -308,9 +309,9 @@ class UnifiedWaveAnalyzer:
             elif sig.confidence >= 0.6:  # 高置信度信号绕过共振过滤 (降低从0.7)
                 validated_signals.append(sig)
 
-        # 如果全部过滤，返回原信号
+        # 如果全部过滤，返回空列表（共振过滤应严格执行，避免噪声信号入场）
         if not validated_signals:
-            return signals
+            return []
 
         return validated_signals
 
@@ -404,42 +405,54 @@ class UnifiedWaveAnalyzer:
             try:
                 if sig.entry_type.value == 'C':
                     # C浪优化 - 使用pivots的实际索引
-                    if len(pivots) >= 3 and sig.wave_structure:
-                        # 从wave_structure获取波浪位置
-                        wave_b_idx = pivots[-2].idx if hasattr(pivots[-2], 'idx') else len(df) - 5
-                        wave_a_idx = pivots[-3].idx if hasattr(pivots[-3], 'idx') else len(df) - 15
+                    # wave_a_idx 取 pivots[-4]（A浪真正起点），wave_b_idx 取 pivots[-3]（B浪起点/C浪终点前）
+                    if len(pivots) >= 4 and sig.wave_structure:
+                        wave_a_idx = pivots[-4].idx if hasattr(pivots[-4], 'idx') else max(0, len(df) - 20)
+                        wave_b_idx = pivots[-2].idx if hasattr(pivots[-2], 'idx') else max(0, len(df) - 5)
+                        quality = self._entry_optimizer.optimize_wave_c(
+                            df, entry_idx,
+                            wave_a_idx, wave_b_idx,
+                            sig.confidence
+                        )
+                    elif len(pivots) >= 3 and sig.wave_structure:
+                        # 只有3个极值点时，以 pivots[-3] 作为起点近似
+                        wave_a_idx = pivots[-3].idx if hasattr(pivots[-3], 'idx') else max(0, len(df) - 20)
+                        wave_b_idx = pivots[-2].idx if hasattr(pivots[-2], 'idx') else max(0, len(df) - 5)
                         quality = self._entry_optimizer.optimize_wave_c(
                             df, entry_idx,
                             wave_a_idx, wave_b_idx,
                             sig.confidence
                         )
                     else:
+                        optimized_signals.append(sig)  # 无法优化时保留原信号
                         continue
 
                 elif sig.entry_type.value == '2':
                     # 2浪优化
                     if len(pivots) >= 3 and sig.wave_structure:
-                        wave1_start_idx = pivots[-3].idx if hasattr(pivots[-3], 'idx') else len(df) - 15
-                        wave1_end_idx = pivots[-2].idx if hasattr(pivots[-2], 'idx') else len(df) - 5
+                        wave1_start_idx = pivots[-3].idx if hasattr(pivots[-3], 'idx') else max(0, len(df) - 20)
+                        wave1_end_idx = pivots[-2].idx if hasattr(pivots[-2], 'idx') else max(0, len(df) - 5)
                         quality = self._entry_optimizer.optimize_wave2(
                             df, entry_idx,
                             wave1_start_idx, wave1_end_idx,
                             sig.confidence
                         )
                     else:
+                        optimized_signals.append(sig)  # 无法优化时保留原信号
                         continue
 
                 elif sig.entry_type.value == '4':
                     # 4浪优化
                     if len(pivots) >= 4 and sig.wave_structure:
-                        wave3_start_idx = pivots[-4].idx if hasattr(pivots[-4], 'idx') else len(df) - 20
-                        wave3_end_idx = pivots[-2].idx if hasattr(pivots[-2], 'idx') else len(df) - 5
+                        wave3_start_idx = pivots[-4].idx if hasattr(pivots[-4], 'idx') else max(0, len(df) - 25)
+                        wave3_end_idx = pivots[-2].idx if hasattr(pivots[-2], 'idx') else max(0, len(df) - 5)
                         quality = self._entry_optimizer.optimize_wave4(
                             df, entry_idx,
                             wave3_start_idx, wave3_end_idx,
                             sig.confidence
                         )
                     else:
+                        optimized_signals.append(sig)  # 无法优化时保留原信号
                         continue
                 else:
                     optimized_signals.append(sig)
@@ -557,7 +570,7 @@ class UnifiedWaveAnalyzer:
             target = current_price - wave_a * 0.618
             stop_loss = min(p_c.price * 1.03, current_price + atr_stop)
 
-        confidence = 0.5
+        confidence = 0.3  # 基础分降至0.3，需通过验证项积累才能达到0.5+阈值
         if wave_c >= wave_a * 0.8:
             confidence += 0.1
         if p_c.strength >= 3:
@@ -697,7 +710,7 @@ class UnifiedWaveAnalyzer:
             stop_loss = min(p1_start.price * 1.01, current_price + atr_stop)
 
         # 置信度加权
-        confidence = 0.5
+        confidence = 0.3  # 基础分降至0.3，需通过验证项积累才能达到0.5+阈值
         if 0.382 <= retrace <= 0.5:  # 最优回撤区域
             confidence += 0.2
         elif 0.5 < retrace <= 0.618:
@@ -858,7 +871,7 @@ class UnifiedWaveAnalyzer:
             stop_loss = min(max(current_price * 1.02, p3.price * 1.01), current_price + atr_stop)
 
         # 置信度加权
-        confidence = 0.5
+        confidence = 0.3  # 基础分降至0.3，需通过验证项积累才能达到0.5+阈值
         if 0.382 <= w2_retrace <= 0.5:
             confidence += 0.1
         if 0.2 <= w4_retrace <= 0.382:
@@ -999,7 +1012,7 @@ class UnifiedWaveAnalyzer:
             stop_loss = min(p3.price * 1.02, current_price + atr_stop)
 
         # 置信度计算
-        confidence = 0.5
+        confidence = 0.3  # 基础分降至0.3，需通过验证项积累才能达到0.5+阈值
         if 0.382 <= w2_retrace <= 0.5:
             confidence += 0.1
         if 0.20 <= w4_retrace <= 0.382:

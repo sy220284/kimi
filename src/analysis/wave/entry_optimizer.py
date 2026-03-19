@@ -184,14 +184,14 @@ class WaveEntryOptimizer:
             scores['macd'] = 0.5
         
         # 计算最终得分
-        # 权重: 量能30%, 价格行为25%, 时间20%, MACD15%, 基础10%
+        # 权重: 量能30%, 价格行为25%, 时间20%, MACD15%, 基础10% => 合计100%，无需放大
         final_score = (
             base_confidence * 0.1 +
             scores['volume'] * 0.30 +
             scores['price_action'] * 0.25 +
             scores['time'] * 0.20 +
             scores['macd'] * 0.15
-        ) * 2.5  # 放大到0-1范围
+        )
         
         return WaveQualityScore(
             wave_type='C',
@@ -295,14 +295,14 @@ class WaveEntryOptimizer:
         else:
             scores['macd'] = 0.5
         
-        # 计算最终得分
+        # 计算最终得分（权重合计1.0，无需放大）
         final_score = (
             base_confidence * 0.1 +
             scores['volume'] * 0.25 +
             scores['price_action'] * 0.30 +
             scores['time'] * 0.20 +
             scores['macd'] * 0.15
-        ) * 2.5
+        )
         
         return WaveQualityScore(
             wave_type='2',
@@ -398,14 +398,14 @@ class WaveEntryOptimizer:
             else:
                 scores['macd'] = 0.2
         
-        # 计算最终得分
+        # 计算最终得分（权重合计1.0，无需放大）
         final_score = (
             base_confidence * 0.1 +
             scores['volume'] * 0.20 +
             scores['price_action'] * 0.25 +
             scores['time'] * 0.30 +  # 4浪时间权重更高
             scores['macd'] * 0.15
-        ) * 2.5
+        )
         
         return WaveQualityScore(
             wave_type='4',
