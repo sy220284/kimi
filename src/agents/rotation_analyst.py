@@ -140,7 +140,7 @@ class RotationAnalystAgent(BaseAgent):
                 continue
 
             name = idf['industry_name'].iloc[-1] if 'industry_name' in idf.columns else code
-            closes = idf['close'].values
+            closes = np.array(idf['close'].values, dtype=float)  # 转换为float避免Decimal问题
 
             # 动量指标
             mom_20d = (closes[-1] / closes[-self.momentum_period] - 1) * 100 if len(closes) >= self.momentum_period else 0.0
