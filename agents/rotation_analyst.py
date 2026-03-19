@@ -105,7 +105,7 @@ class RotationAnalystAgent(BaseAgent):
             port=pg_cfg.get('port', 5432),
             database=pg_cfg.get('database', 'quant_analysis'),
             username=pg_cfg.get('username', 'quant_user'),
-            password=pg_cfg.get('password', 'quant_password'),
+            password=pg_cfg.get('password', ''),
         )
 
         buy_point_industries = []
@@ -114,67 +114,73 @@ class RotationAnalystAgent(BaseAgent):
         # 只分析排名前10的行业
         top_industries = [ind for ind in industries if ind.get('momentum_20d', 0) > 0][:10]
 
-        for industry in top_industries:
-            code = industry.get('code', '')
-            name = industry.get('name', '')
+        # 在循环外统一连接，避免重复初始化和连接泄漏
+        try:
+            pg.connect()
+            
+            for industry in top_industries:
+                code = industry.get('code', '')
+                name = industry.get('name', '')
 
-            try:
-                pg.connect()
+                try:
+                    # 获取行业指数近期数据
+                    sql = """
+                        SELECT date, open, high, low, close, volume
+                        FROM sw_industry_index
+                        WHERE industry_code = %s
+                        ORDER BY date DESC
+                        LIMIT 120
+                    """
+                    rows = pg.execute(sql, (code,), fetch=True)
 
-                # 获取行业指数近期数据
-                sql = """
-                    SELECT date, open, high, low, close, volume
-                    FROM sw_industry_index
-                    WHERE industry_code = %s
-                    ORDER BY date DESC
-                    LIMIT 120
-                """
-                rows = pg.execute(sql, (code,), fetch=True)
+                    if not rows or len(rows) < 60:
+                        continue
 
-                if not rows or len(rows) < 60:
-                    continue
+                    # 转换为DataFrame并转换数据类型
+                    df = pd.DataFrame(rows)
+                    df = df.sort_values('date')
+                    df['date'] = pd.to_datetime(df['date'])
+                    
+                    # 转换价格列为float避免Decimal问题
+                    price_cols = ['open', 'high', 'low', 'close', 'volume']
+                    for col in price_cols:
+                        if col in df.columns:
+                            df[col] = df[col].astype(float)
 
-                # 转换为DataFrame并转换数据类型
-                df = pd.DataFrame(rows)
-                df = df.sort_values('date')
-                df['date'] = pd.to_datetime(df['date'])
-                
-                # 转换价格列为float避免Decimal问题
-                price_cols = ['open', 'high', 'low', 'close', 'volume']
-                for col in price_cols:
-                    if col in df.columns:
-                        df[col] = df[col].astype(float)
+                    # 运行波浪分析
+                    signals = analyzer.detect(df, mode='all')
+                    
+                    # 获取最佳信号
+                    best_signal = None
+                    for signal in signals:
+                        if signal.is_valid and signal.confidence >= 0.5:
+                            if best_signal is None or signal.confidence > best_signal.confidence:
+                                best_signal = signal
+                    
+                    if best_signal:
+                        buy_point_industries.append({
+                            'code': code,
+                            'name': name,
+                            'momentum_20d': industry.get('momentum_20d'),
+                            'buy_signal': {
+                                'type': best_signal.entry_type.value,
+                                'entry_price': round(best_signal.entry_price, 4),
+                                'stop_loss': round(best_signal.stop_loss, 4),
+                                'target_price': round(best_signal.target_price, 4),
+                                'confidence': round(best_signal.confidence, 2),
+                                'quality_score': round(best_signal.quality_score, 2) if hasattr(best_signal, 'quality_score') else 0,
+                            }
+                        })
 
-                # 运行波浪分析
-                signals = analyzer.detect(df, mode='all')
-                
-                # 获取最佳信号
-                best_signal = None
-                for signal in signals:
-                    if signal.is_valid and signal.confidence >= 0.5:
-                        if best_signal is None or signal.confidence > best_signal.confidence:
-                            best_signal = signal
-                
-                if best_signal:
-                    buy_point_industries.append({
-                        'code': code,
-                        'name': name,
-                        'momentum_20d': industry.get('momentum_20d'),
-                        'buy_signal': {
-                            'type': best_signal.entry_type.value,
-                            'entry_price': round(best_signal.entry_price, 4),
-                            'stop_loss': round(best_signal.stop_loss, 4),
-                            'target_price': round(best_signal.target_price, 4),
-                            'confidence': round(best_signal.confidence, 2),
-                            'quality_score': round(best_signal.quality_score, 2) if hasattr(best_signal, 'quality_score') else 0,
-                        }
-                    })
-
-            except Exception as e:
-                self.logger.warning(f"行业 {name} 买点分析失败: {e}")
-            finally:
-                with contextlib.suppress(Exception):
-                    pg.disconnect()
+                except Exception as e:
+                    self.logger.warning(f"行业 {name} 买点分析失败: {e}")
+                    
+        except Exception as e:
+            self.logger.error(f"数据库连接失败: {e}")
+        finally:
+            # 循环结束后统一断开连接
+            with contextlib.suppress(Exception):
+                pg.disconnect()
 
         # 按置信度排序
         buy_point_industries.sort(
@@ -211,15 +217,17 @@ class RotationAnalystAgent(BaseAgent):
             return {'status': 'no_data', 'reason': 'db_connect_failed'}
 
         cutoff = (datetime.now() - timedelta(days=self.lookback_period + 10)).strftime('%Y-%m-%d')
-        sql = f"""
+        # 使用参数化查询防止SQL注入
+        sql = """
             SELECT industry_code, industry_name, date, close
             FROM sw_industry_index
-            WHERE date >= '{cutoff}'
+            WHERE date >= %s
             ORDER BY industry_code, date
         """
 
         try:
-            rows = pg.execute(sql, fetch=True)
+            # 使用参数化查询
+            rows = pg.execute(sql, (cutoff,), fetch=True)
             if not rows:
                 return {'status': 'no_data', 'reason': 'table_empty'}
             df = pd.DataFrame(rows)

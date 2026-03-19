@@ -1,4 +1,7 @@
 # 智能体量化分析系统配置
+# ⚠️ 安全警告: 不要将API Key直接写入此文件！
+# 请通过环境变量设置: export CODEFLOW_API_KEY=xxx
+# 或创建 .env 文件 (已提供 .env.example 模板)
 
 # 模型配置
 models:
@@ -6,7 +9,7 @@ models:
   codeflow:
     enabled: true
     base_url: https://codeflow.asia
-    api_key: sk-0TDDM87yNB4yb6f21VOX2TJhOuKtwB4zHB1WvEidYboc56fZ
+    api_key: ${CODEFLOW_API_KEY}  # 从环境变量读取
     timeout: 120
     models:
       - id: claude-haiku-4-5-20251001
@@ -35,7 +38,7 @@ models:
   deepseek:
     enabled: true
     base_url: https://api.deepseek.com
-    api_key: ""  # 从环境变量或单独配置文件读取
+    api_key: ${DEEPSEEK_API_KEY}  # 从环境变量读取
     models:
       - name: deepseek-reasoner
         alias: r1
@@ -51,14 +54,14 @@ database:
     port: 5432
     database: quant_analysis
     username: quant_user
-    password: quant_password
+    password: ${POSTGRES_PASSWORD}  # 从环境变量读取
     pool_size: 10
   
   redis:
     host: localhost
     port: 6379
     db: 0
-    password: ""
+    password: ${REDIS_PASSWORD}  # 从环境变量读取
   
   mongodb:
     host: localhost
@@ -68,7 +71,7 @@ database:
 # 数据源配置
 data_sources:
   tushare:
-    token: ""
+    token: ${TUSHARE_TOKEN}  # 从环境变量读取
     enabled: false  # 已替换为同花顺接口
   
   akshare:
