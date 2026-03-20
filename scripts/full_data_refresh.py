@@ -14,15 +14,16 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 
 # 添加项目路径
-sys.path.insert(0, '/root/.openclaw/workspace/智能体系统')
+PROJECT_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from data.ths_adapter import ThsAdapter
 import psycopg2
 from psycopg2.extras import execute_values
 
 # 配置
-CACHE_DIR = Path('/root/.openclaw/workspace/智能体系统/.cache/stock_data')
-BACKUP_DIR = Path('/root/.openclaw/workspace/智能体系统/.cache/backup')
+CACHE_DIR = PROJECT_ROOT / '.cache/stock_data'
+BACKUP_DIR = PROJECT_ROOT / '.cache/backup'
 PROGRESS_FILE = CACHE_DIR / '.progress_optimized.json'
 DB_CONFIG = {
     'host': 'localhost', 'port': 5432, 'database': 'quant_analysis',
@@ -48,12 +49,12 @@ class OptimizedRefresher:
         self.start_time = datetime.now()
         
     def _load_stock_list(self):
-        select_file = Path('/root/.openclaw/workspace/智能体系统') / 'selfselect_stocks.json'
+        select_file = PROJECT_ROOT / 'selfselect_stocks.json'
         if select_file.exists():
             with open(select_file) as f:
                 data = json.load(f)
                 return [s['symbol'] for s in data.get('stocks', [])]
-        with open('/root/.openclaw/workspace/智能体系统/all_industry_stocks.txt') as f:
+        with open(PROJECT_ROOT / 'config/all_industry_stocks.txt') as f:
             return [line.strip() for line in f if line.strip()]
     
     def _load_progress(self):

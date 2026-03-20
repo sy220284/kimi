@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 """
 波浪识别事后验证分析
 
@@ -64,7 +65,7 @@ class WavePostValidator:
         """从数据库获取股票数据"""
         conn = psycopg2.connect(
             host='localhost', port=5432, database='quant_analysis',
-            user='quant_user', password='quant_password'
+            user=os.getenv('DB_USER', 'quant_user'), password=os.getenv('DB_PASSWORD', 'quant_password')
         )
         sql = '''
         SELECT date, open, high, low, close, volume, amount
@@ -358,7 +359,7 @@ def main():
     # 获取股票列表
     conn = psycopg2.connect(
         host='localhost', port=5432, database='quant_analysis',
-        user='quant_user', password='quant_password'
+        user=os.getenv('DB_USER', 'quant_user'), password=os.getenv('DB_PASSWORD', 'quant_password')
     )
     sql = '''
     SELECT symbol, COUNT(*) as records

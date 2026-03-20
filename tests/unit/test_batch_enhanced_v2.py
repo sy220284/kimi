@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 """
 批量波浪分析回测 - 带进度跟踪
 对比增强版 vs 上一版本
@@ -52,7 +53,7 @@ class ProgressTracker:
 def get_db_connection():
     return psycopg2.connect(
         host='localhost', port=5432, database='quant_analysis',
-        user='quant_user', password='quant_password'
+        user=os.getenv('DB_USER', 'quant_user'), password=os.getenv('DB_PASSWORD', 'quant_password')
     )
 
 def get_stock_list(min_records=1000):

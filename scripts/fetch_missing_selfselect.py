@@ -11,14 +11,15 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 
-sys.path.insert(0, '/root/.openclaw/workspace/智能体系统')
+PROJECT_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from data.ths_adapter import ThsAdapter
 import psycopg2
 from psycopg2.extras import execute_values
 
 # 配置
-CACHE_DIR = Path('/root/.openclaw/workspace/智能体系统/.cache/stock_data')
+CACHE_DIR = PROJECT_ROOT / '.cache/stock_data'
 DB_CONFIG = {
     'host': 'localhost', 'port': 5432, 'database': 'quant_analysis',
     'user': 'quant_user', 'password': 'quant_password'

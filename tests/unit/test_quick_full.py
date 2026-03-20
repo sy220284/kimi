@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 """
 快速全量回测 - 使用已有数据验证最新修复效果
 """
@@ -23,7 +24,7 @@ MIN_SIGNAL_CONFIDENCE = 0.5
 def get_all_stocks():
     conn = psycopg2.connect(
         host='localhost', port=5432, database='quant_analysis',
-        user='quant_user', password='quant_password'
+        user=os.getenv('DB_USER', 'quant_user'), password=os.getenv('DB_PASSWORD', 'quant_password')
     )
     sql = 'SELECT symbol FROM marketdata GROUP BY symbol ORDER BY COUNT(*) DESC'
     df = pd.read_sql(sql, conn)

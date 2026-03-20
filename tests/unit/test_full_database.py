@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 """
 全量数据库回测 - 覆盖所有个股和完整历史周期
 验证修复后的B浪和1浪逻辑
@@ -25,7 +26,7 @@ MIN_SIGNAL_CONFIDENCE = 0.5
 def get_db_connection():
     return psycopg2.connect(
         host='localhost', port=5432, database='quant_analysis',
-        user='quant_user', password='quant_password'
+        user=os.getenv('DB_USER', 'quant_user'), password=os.getenv('DB_PASSWORD', 'quant_password')
     )
 
 def get_all_stocks():

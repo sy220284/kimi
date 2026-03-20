@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 """
 深度分析: B浪和1浪的真实表现 (修复版)
 """
@@ -15,7 +16,7 @@ from analysis.wave.enhanced_detector import enhanced_pivot_detection
 def get_db_connection():
     return psycopg2.connect(
         host='localhost', port=5432, database='quant_analysis',
-        user='quant_user', password='quant_password'
+        user=os.getenv('DB_USER', 'quant_user'), password=os.getenv('DB_PASSWORD', 'quant_password')
     )
 
 def get_stock_data(symbol, start_date, end_date):

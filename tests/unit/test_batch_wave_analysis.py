@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 """
 批量波浪分析回测 - 数据库全量数据
 分析内容:
@@ -25,7 +26,7 @@ MIN_SIGNAL_CONFIDENCE = 0.5
 def get_db_connection():
     return psycopg2.connect(
         host='localhost', port=5432, database='quant_analysis',
-        user='quant_user', password='quant_password'
+        user=os.getenv('DB_USER', 'quant_user'), password=os.getenv('DB_PASSWORD', 'quant_password')
     )
 
 # 获取股票列表

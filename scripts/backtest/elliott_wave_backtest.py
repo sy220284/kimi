@@ -21,7 +21,8 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # 添加路径
-sys.path.insert(0, '/root/.openclaw/workspace/智能体系统')
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 from data import get_db_manager
 
 

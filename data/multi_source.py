@@ -232,17 +232,6 @@ class MultiSourceDataManager:
 
         return df
 
-    def _fetch_from_akshare(
-        self,
-        adapter,
-        symbol: str,
-        start_date: str | None,
-        end_date: str | None,
-        ktype: str
-    ) -> pd.DataFrame:
-        """从AKShare获取数据"""
-        return adapter.get_daily_kline(symbol, start_date, end_date, adjust='qfq')
-
     def _fetch_from_eastmoney(
         self,
         adapter,
