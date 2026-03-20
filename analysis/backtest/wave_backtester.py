@@ -172,6 +172,9 @@ class WaveStrategy:
         use_trailing_stop: bool = True,  # 达到目标后启用移动止盈
         trailing_stop_pct: float = 0.08,  # 移动止盈回撤8%卖出
         trailing_stop_activation: float = 1.0,  # 达到目标价100%时激活移动止盈
+        # E3: 新增出场条件
+        max_holding_days: int = 60,       # 最大持仓天数（时间止损，防止资金锁死）
+        breakeven_pct: float = 0.05,      # 浮盈达到5%后，将止损上移至成本（保本止损）
     ):
         self.initial_capital = initial_capital
         self.position_size = position_size
@@ -197,6 +200,9 @@ class WaveStrategy:
         self.use_trailing_stop = use_trailing_stop
         self.trailing_stop_pct = trailing_stop_pct
         self.trailing_stop_activation = trailing_stop_activation
+        # E3
+        self.max_holding_days = max_holding_days
+        self.breakeven_pct    = breakeven_pct
 
         self.capital = initial_capital
         self.positions: dict[str, Trade] = {}
@@ -416,6 +422,21 @@ class WaveStrategy:
         if holding_days < self.min_holding_days:
             return None
 
+        # E3-a: 时间止损（防止资金长期被套死）
+        if self.max_holding_days > 0 and holding_days >= self.max_holding_days:
+            self.execute_trade(symbol, date, price, TradeAction.CLOSE,
+                               data_idx=data_idx, is_limit_down=is_limit_down,
+                               reason="time_stop")
+            return "time_stop"
+
+        # E3-b: 保本止损（浮盈达标后将止损上移至成本）
+        if self.breakeven_pct > 0 and trade.entry_price and trade.stop_loss:
+            profit_pct = (price - trade.entry_price) / trade.entry_price
+            if profit_pct >= self.breakeven_pct:
+                # 止损未升至成本以上时，上移至成本价
+                if trade.stop_loss < trade.entry_price:
+                    trade.stop_loss = trade.entry_price   # 保本
+
         # 1. 固定止损检查
         if trade.stop_loss and price <= trade.stop_loss:
             self.execute_trade(symbol, date, price, TradeAction.CLOSE, data_idx=data_idx, is_limit_down=is_limit_down, reason="stop_loss")
@@ -616,18 +637,35 @@ class WaveBacktester:
             is_limit_up  = bool(_limit_up[i])
             is_limit_down= bool(_limit_dn[i])
 
-            # 定期重新分析 - 修复前视偏差: 只使用i之前的数据
+            # E6 + 动态重分析：定期重分析，并对持续的旧信号衰减置信度
             if i % reanalyze_every == 0 or len(self._current_signals) == 0:
-                if i >= 30:  # 至少需要30天数据
-                    # 使用最近60天数据进行分析,但不包含当天
-                    lookback_start = max(0, i - 60)
-                    analysis_df = df.iloc[lookback_start:i].copy()  # 修复: 不含当天(i)
+                if i >= 30:
+                    # E4: 动态回溯窗口（根据ATR波动率，高波动用更短窗口）
+                    _atr_recent = float(np.std(_closes[max(0,i-20):i])) if i >= 20 else 1.0
+                    _atr_pct    = _atr_recent / (_closes[i-1] + 1e-10)
+                    _lookback   = 40 if _atr_pct > 0.03 else 60   # 高波动用40天，低波动用60天
+                    lookback_start = max(0, i - _lookback)
+                    analysis_df = df.iloc[lookback_start:i].copy()
 
                     try:
                         self._current_signals = self.analyzer.detect(analysis_df, mode='all')
+                        self._signal_ages = {id(s): 0 for s in self._current_signals}
                     except Exception as e:
-                        print(f"分析失败 at {date}: {e}")
                         self._current_signals = []
+                        self._signal_ages = {}
+            else:
+                # E6: 信号置信度衰减（每个 reanalyze 周期信号未刷新则衰减）
+                if hasattr(self, '_signal_ages'):
+                    alive = []
+                    for s in self._current_signals:
+                        age = self._signal_ages.get(id(s), 0) + 1
+                        self._signal_ages[id(s)] = age
+                        # 每经过一个 reanalyze_every 周期衰减 8%，超过 3 倍周期后丢弃
+                        decay = max(0.0, 1.0 - age * 0.08)
+                        s.confidence = s.confidence * decay
+                        if s.confidence >= 0.20:   # 低于 0.20 视为陈旧信号丢弃
+                            alive.append(s)
+                    self._current_signals = alive
 
             # 生成交易信号
             best_signal = self._get_best_trade_signal(price)

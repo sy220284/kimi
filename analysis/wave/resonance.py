@@ -213,51 +213,109 @@ class RSIAnalyzer:
 
 
 class VolumeAnalyzer:
-    """成交量分析器"""
+    """成交量分析器（E5 升级：OBV + 量比 + 换手率三维量能分析）"""
 
     @staticmethod
     def analyze_signal(df: pd.DataFrame, lookback: int = 20) -> IndicatorSignal:
-        """分析成交量信号"""
+        """
+        量能分析（E5 升级版）
+
+        三个维度：
+        1. 量比（近3日均量 / 20日均量）— 资金活跃度
+        2. OBV 趋势（On-Balance Volume）— 资金净流向
+        3. 换手率趋势（volume / float_shares 近似）— 筹码松动程度
+
+        加权综合得出量能方向和强度。
+        """
         if 'volume' not in df.columns or len(df) < lookback:
             return IndicatorSignal(
-                name="Volume",
-                direction=SignalDirection.NEUTRAL,
-                strength=0.0,
-                description="无成交量数据",
-                confidence=0.0
+                name="Volume", direction=SignalDirection.NEUTRAL,
+                strength=0.0, description="无成交量数据", confidence=0.0
             )
 
-        recent_vol = df['volume'].tail(5).mean()
-        avg_vol = df['volume'].tail(lookback).mean()
+        close  = df['close'].values.astype(float)
+        volume = df['volume'].values.astype(float)
+        n      = len(close)
 
-        price_change = df['close'].iloc[-1] / df['close'].iloc[-5] - 1
+        # ── 1. 量比（近3日 vs 20日均量）─────────────────────────────────
+        avg_vol   = volume[-lookback:].mean()
+        recent3   = volume[-3:].mean()
+        vol_ratio = recent3 / avg_vol if avg_vol > 0 else 1.0
 
-        vol_ratio = recent_vol / avg_vol if avg_vol > 0 else 1.0
+        # ── 2. OBV 趋势（OBV = 累计正/负成交量）──────────────────────────
+        obv  = np.zeros(n)
+        obv[0] = volume[0]
+        for i in range(1, n):
+            if close[i] > close[i-1]:
+                obv[i] = obv[i-1] + volume[i]
+            elif close[i] < close[i-1]:
+                obv[i] = obv[i-1] - volume[i]
+            else:
+                obv[i] = obv[i-1]
+        obv_short = obv[-5:].mean()
+        obv_long  = obv[-lookback:].mean()
+        obv_trend = (obv_short - obv_long) / (abs(obv_long) + 1e-10)  # +上升 -下降
 
+        # ── 3. 换手率趋势（用成交量变化率替代，无流通股数时）────────────
+        # 近5日成交量斜率：斜率>0 = 换手加速（活跃度提升）
+        if n >= 10:
+            vol_slope = float(np.polyfit(np.arange(5), volume[-5:], 1)[0])
+            turnover_accel = vol_slope / (avg_vol + 1e-10)   # 归一化
+        else:
+            turnover_accel = 0.0
+
+        # ── 4. 价格变化 ────────────────────────────────────────────────────
+        price_change5 = (close[-1] - close[-5]) / (close[-5] + 1e-10) if n >= 5 else 0.0
+
+        # ── 5. 综合判断 ────────────────────────────────────────────────────
         direction = SignalDirection.NEUTRAL
-        strength = 0.0
-        description = f"成交量比: {vol_ratio:.1f}x"
+        strength  = 0.0
+        signals_  = []
 
-        # 量价配合
-        if vol_ratio > 1.5 and price_change > 0:
-            direction = SignalDirection.BULLISH
-            strength = min(1.0, (vol_ratio - 1) / 2)
-            description += "，放量上涨"
-        elif vol_ratio > 1.5 and price_change < 0:
-            direction = SignalDirection.BEARISH
-            strength = min(1.0, (vol_ratio - 1) / 2)
-            description += "，放量下跌"
-        elif vol_ratio < 0.7 and abs(price_change) < 0.02:
-            description += "，缩量整理"
-            strength = 0.2
+        # 量比信号
+        if vol_ratio >= 1.5 and price_change5 > 0:
+            signals_.append(('bullish', 0.8, f"量比{vol_ratio:.1f}x 放量上涨"))
+        elif vol_ratio >= 1.5 and price_change5 < 0:
+            signals_.append(('bearish', 0.7, f"量比{vol_ratio:.1f}x 放量下跌"))
+        elif vol_ratio <= 0.6 and abs(price_change5) < 0.02:
+            signals_.append(('bullish', 0.5, f"量比{vol_ratio:.1f}x 缩量整理（抛压衰竭）"))
+        elif vol_ratio <= 0.6 and price_change5 < -0.01:
+            signals_.append(('bearish', 0.4, f"量比{vol_ratio:.1f}x 缩量阴跌"))
+
+        # OBV 信号
+        if obv_trend > 0.05:
+            signals_.append(('bullish', 0.6, f"OBV趋势↑({obv_trend:.2f})"))
+        elif obv_trend < -0.05:
+            signals_.append(('bearish', 0.6, f"OBV趋势↓({obv_trend:.2f})"))
+
+        # 换手加速信号
+        if turnover_accel > 0.1:
+            signals_.append(('bullish', 0.4, "换手加速，资金入场"))
+        elif turnover_accel < -0.1:
+            signals_.append(('bearish', 0.3, "换手萎缩"))
+
+        if signals_:
+            bull_score = sum(s for d,s,_ in signals_ if d=='bullish')
+            bear_score = sum(s for d,s,_ in signals_ if d=='bearish')
+            total = bull_score + bear_score
+            if bull_score > bear_score:
+                direction = SignalDirection.BULLISH
+                strength  = min(1.0, bull_score / max(total, 1.0))
+            elif bear_score > bull_score:
+                direction = SignalDirection.BEARISH
+                strength  = min(1.0, bear_score / max(total, 1.0))
+            desc = "，".join(m for _,_,m in signals_[:2])
+        else:
+            desc = f"量比{vol_ratio:.1f}x，量能中性"
 
         return IndicatorSignal(
             name="Volume",
             direction=direction,
-            strength=strength,
-            description=description,
-            confidence=0.6
+            strength=round(strength, 3),
+            description=desc,
+            confidence=0.65 if signals_ else 0.4
         )
+
 
 
 class KDJAnalyzer:
@@ -426,13 +484,20 @@ class ResonanceAnalyzer:
         bearish_score = 0.0
         total_weight = 0.0
 
-        weights = {
-            'MACD': 1.0,
-            'RSI': 0.8,
-            'KDJ': 1.0,      # A3: A股散户最常用，与MACD并列最高
-            'Volume': 0.6,
-            'ElliottWave': 1.2  # 波浪权重最高
-        }
+        # E2: 市场状态自适应共振权重
+        # 趋势市：MACD动量更可靠；震荡市：RSI超买超卖更精准；高波动：波浪形态+量能优先
+        _market = getattr(wave_signal, 'market_condition', None) if wave_signal else None
+        if _market == 'trending':
+            weights = {'MACD': 1.4, 'RSI': 0.6, 'KDJ': 0.8, 'Volume': 0.7, 'ElliottWave': 1.2}
+        elif _market == 'ranging':
+            weights = {'MACD': 0.7, 'RSI': 1.3, 'KDJ': 1.2, 'Volume': 0.6, 'ElliottWave': 1.0}
+        elif _market == 'volatile':
+            weights = {'MACD': 0.8, 'RSI': 0.8, 'KDJ': 0.9, 'Volume': 1.0, 'ElliottWave': 1.4}
+        elif _market == 'quiet':
+            weights = {'MACD': 1.0, 'RSI': 1.1, 'KDJ': 1.0, 'Volume': 0.5, 'ElliottWave': 1.1}
+        else:
+            # 默认权重（与原来一致，兼容无市场状态的调用）
+            weights = {'MACD': 1.0, 'RSI': 0.8, 'KDJ': 1.0, 'Volume': 0.6, 'ElliottWave': 1.2}
 
         conflicts = []
 

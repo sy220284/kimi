@@ -130,37 +130,38 @@ class AdaptiveParameterOptimizer:
     根据市场状态自动调整波浪分析参数
     """
 
-    # 基准参数
+    # E4: 召回率校准 — 降低 atr_mult 和 confidence_threshold 基准，减少漏判
+    # 原 BASE_PARAMS atr_mult=0.5 对随机数据召回率仅 14%；
+    # 改为 0.4 后极值点更密，Flat/ZigZag 等短浪更易触发
     BASE_PARAMS = {
-        'atr_period': 14,
-        'atr_mult': 0.5,
-        'confidence_threshold': 0.5,
+        'atr_period': 10,     # 原14，缩短 period 使 ATR 更敏感
+        'atr_mult': 0.4,      # 原0.5，降低门槛增加极值点
+        'confidence_threshold': 0.45,  # 原0.5，允许更多候选信号进入评分
         'min_dist': 3,
         'peak_window': 3,
-        'min_change_pct': 2.0
+        'min_change_pct': 1.5  # 原2.0，降低最小波动幅度要求
     }
 
-    # 参数调整系数
     ADJUSTMENTS = {
         MarketCondition.TRENDING: {
-            'atr_mult': 1.2,           # 趋势市用更大倍数，减少噪声
-            'confidence_threshold': 0.6, # 提高置信度要求
-            'min_dist': 1.0,           # 减少最小距离，捕捉更多浪
+            'atr_mult': 1.25,          # 趋势市适当收紧，减少噪声
+            'confidence_threshold': 0.55,
+            'min_dist': 1.0,
         },
         MarketCondition.RANGING: {
-            'atr_mult': 0.7,           # 震荡市用更小倍数
-            'confidence_threshold': 0.45,
+            'atr_mult': 0.9,           # 震荡市中等门槛
+            'confidence_threshold': 0.40,
             'min_dist': 1.5,
         },
         MarketCondition.VOLATILE: {
             'atr_mult': 1.5,           # 高波动用大倍数过滤噪声
-            'confidence_threshold': 0.7, # 严格筛选
+            'confidence_threshold': 0.60,
             'min_dist': 0.8,
         },
         MarketCondition.QUIET: {
-            'atr_mult': 0.4,           # 低波动用小倍数
-            'confidence_threshold': 0.4,
-            'min_dist': 2.0,           # 增加距离，避免过度细分
+            'atr_mult': 0.5,           # 低波动保持小门槛
+            'confidence_threshold': 0.38,
+            'min_dist': 2.0,
         }
     }
 

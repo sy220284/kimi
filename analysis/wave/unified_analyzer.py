@@ -92,7 +92,7 @@ class UnifiedWaveAnalyzer:
     def __init__(self,
                  # 极值点检测参数
                  atr_period: int = 10,
-                 atr_mult: float = 0.5,
+                 atr_mult: float = 0.4,   # E4: 0.5→0.4，提升信号召回率
                  min_pivots: int = 3,
 
                  # 波浪检测参数
