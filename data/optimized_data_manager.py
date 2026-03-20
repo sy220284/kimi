@@ -25,9 +25,23 @@ class OptimizedDataManager:
 
     _instance = None
 
-    # C1: LRU 配置
-    _MAX_SYMBOLS = 1500          # 最多缓存股票数
-    _MAX_MEMORY_MB = 1024        # 内存上限 1GB
+    # C1: LRU 配置（动态适配，由 PerformanceAdaptor 决定）
+    @classmethod
+    def _get_cfg(cls):
+        try:
+            from utils.performance_adaptor import get_adaptor
+            a = get_adaptor()
+            return a.lru_max_symbols, a.lru_max_memory_mb
+        except Exception:
+            return 1500, 1024
+
+    @property
+    def _MAX_SYMBOLS(self):
+        return self._get_cfg()[0]
+
+    @property
+    def _MAX_MEMORY_MB(self):
+        return self._get_cfg()[1]
 
     def __new__(cls):
         if cls._instance is None:

@@ -135,6 +135,17 @@ class IncrementalIndicatorCache:
 # 模块级单例
 _cache_instance: IncrementalIndicatorCache | None = None
 
-def get_indicator_cache(max_symbols: int = 1000) -> IncrementalIndicatorCache:
-    """获取全局 IncrementalIndicatorCache 单例"""
+def get_indicator_cache(max_symbols: int | None = None) -> IncrementalIndicatorCache:
+    """
+    获取全局 IncrementalIndicatorCache 单例。
+
+    Args:
+        max_symbols: 最大缓存只数；None 时从 PerformanceAdaptor 自动获取
+    """
+    if max_symbols is None:
+        try:
+            from utils.performance_adaptor import get_adaptor
+            max_symbols = get_adaptor().indicator_cache_size
+        except Exception:
+            max_symbols = 1000
     return IncrementalIndicatorCache(max_symbols)

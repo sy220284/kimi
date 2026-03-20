@@ -47,9 +47,17 @@ class ConcurrentDatabaseDataManager:
         redis_port: int = 6379,
         enable_cache: bool = True,
         cache_ttl: int = 14400,
-        max_workers: int = 6,       # 并发线程数
-        rate_limit: float = 0.05    # 每线程间隔(秒)
+        max_workers: int | None = None,  # None=自动按设备档位（PerformanceAdaptor）
+        rate_limit: float = 0.05         # 每线程间隔(秒)
     ):
+        # 自动适配并发数
+        if max_workers is None:
+            try:
+                from utils.performance_adaptor import get_adaptor
+                max_workers = get_adaptor().data_fetch_workers
+            except Exception:
+                max_workers = 3
+
         # THS API
         self.ths = ThsAdapter(ths_config or {'enabled': True, 'timeout': 30})
         

@@ -3,14 +3,15 @@
 并发批量波浪信号扫描器 (OPT-4 + OPT-5)
 
 特性:
-  - ThreadPoolExecutor 并发扫描(默认8线程)
-  - 两阶段快速过滤(OPT-5): 快筛(极值点<5跳过)→精筛
-  - 共享 UnifiedWaveAnalyzer 实例(只读,线程安全)
-  - 预计算指标列一次性传给 Resonance(OPT-1联动)
+  - ThreadPoolExecutor 并发扫描（workers 根据设备档位自动适配）
+  - 两阶段快速过滤 (OPT-5)
+  - 共享 UnifiedWaveAnalyzer 实例（只读，线程安全）
+  - 预计算+增量缓存联动 OPT-1/OPT-7
 
 使用:
-    python scripts/analysis/batch_scanner.py --limit 500 --workers 8
+    python scripts/analysis/batch_scanner.py --limit 500
     python scripts/analysis/batch_scanner.py --symbols 600519 000001
+    KIMI_TIER=low python scripts/analysis/batch_scanner.py  # 低配模式
 """
 import argparse, json, sys, time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -90,8 +91,23 @@ def _scan_one(symbol, analyzer, optimizer, ti, days, min_quality):
     }
 
 
-def batch_scan(symbols, max_workers=8, days=250, min_quality=0.35, progress_cb=None):
-    """并发批量扫描. 返回有信号的股票列表(按综合评分降序)."""
+def batch_scan(symbols, max_workers=None, days=None, min_quality=0.35, progress_cb=None):
+    """
+    并发批量扫描。workers/days 默认从性能适配器自动获取（按设备档位）。
+    可通过 KIMI_SCAN_WORKERS / KIMI_SCAN_DAYS 环境变量覆盖。
+
+    Args:
+        symbols:     股票代码列表
+        max_workers: 并发线程数（None=自动，LOW=2 MEDIUM=4 HIGH=8 EXTREME=16）
+        days:        历史天数（None=自动，LOW=120 MEDIUM=200 HIGH=250）
+        min_quality: 最低质量分（0.35=关注及以上）
+        progress_cb: 进度回调 f(done, total, result_or_None)
+    """
+    from utils.performance_adaptor import get_adaptor
+    cfg = get_adaptor()
+    if max_workers is None: max_workers = cfg.scan_workers
+    if days is None:        days        = cfg.scan_days
+
     analyzer  = UnifiedWaveAnalyzer()
     optimizer = WaveEntryOptimizer.from_config()
     ti        = TechnicalIndicators()
@@ -109,7 +125,7 @@ def batch_scan(symbols, max_workers=8, days=250, min_quality=0.35, progress_cb=N
             if progress_cb: progress_cb(done, total, result)
     elapsed = time.perf_counter()-t0
     results.sort(key=lambda r:(r['quality_score']+r['confidence'])/2, reverse=True)
-    print(f"\n扫描完成: {total}只 信号{len(results)}只 耗时{elapsed:.1f}s ({elapsed/total*1000:.1f}ms/股)")
+    print(f"\n扫描完成: {total}只 信号{len(results)}只 耗时{elapsed:.1f}s ({elapsed/total*1000:.1f}ms/股)  [{cfg.tier.value}模式]")
     return results
 
 
