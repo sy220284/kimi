@@ -329,19 +329,28 @@ class UnifiedWaveAnalyzer:
 
         return validated_signals
 
-    def _ensure_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _ensure_indicators(self, df: pd.DataFrame,
+                            symbol: str = '') -> pd.DataFrame:
         """
-        OPT-1: 确保 df 已包含技术指标列。
-        若已存在则直接返回（外部已计算好），否则调用 TechnicalIndicators 计算一次。
-        注意：TechnicalIndicators 输出列名为大写（MACD/RSI14/K/D/J）。
+        OPT-1+7: 确保 df 已包含技术指标列。
+        OPT-7: 若提供 symbol，通过 IncrementalIndicatorCache 缓存结果，
+               相同 symbol 同一天的数据不重复计算。
+        OPT-1: 若 df 已含指标列（外部预计算），直接返回。
         """
-        # 检查 TechnicalIndicators 实际生成的列名
-        _required = {'MACD', 'RSI14', 'K'}
-        if _required.issubset(set(df.columns)):
+        _cols = set(df.columns)
+        # 已有大写列名 (TechnicalIndicators) 或小写列名 (Resonance内)
+        if {'MACD', 'RSI14', 'K'}.issubset(_cols):
             return df
-        # 兼容小写 macd/rsi (Resonance 内部计算结果)
-        if {'macd', 'rsi', 'kdj_k'}.issubset(set(df.columns)):
+        if {'macd', 'rsi', 'kdj_k'}.issubset(_cols):
             return df
+        # OPT-7: 使用增量缓存
+        if symbol:
+            try:
+                from data.incremental_indicator_cache import get_indicator_cache
+                return get_indicator_cache().get(symbol, df)
+            except Exception:
+                pass
+        # 直接计算
         try:
             from analysis.technical.indicators import TechnicalIndicators
             return TechnicalIndicators().calculate_all(df)

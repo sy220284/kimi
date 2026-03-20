@@ -61,7 +61,12 @@ def _scan_one(symbol, analyzer, optimizer, ti, days, min_quality):
     df = _load_stock_data(symbol, days)
     if df.empty or len(df) < 60: return None
     if not _quick_filter(df): return None           # OPT-5 快筛
-    try: df = ti.calculate_all(df)                  # OPT-1 预计算
+    try:                                                # OPT-1+7 预计算+缓存
+        from data.incremental_indicator_cache import get_indicator_cache
+        df = get_indicator_cache().get(symbol, df)
+    except Exception:
+        try: df = ti.calculate_all(df)
+        except Exception: pass
     except Exception: pass
     try: signals = analyzer.detect(df, mode='all')  # OPT-5 精筛
     except Exception: return None
