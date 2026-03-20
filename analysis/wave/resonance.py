@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 
@@ -44,22 +45,16 @@ class MACDAnalyzer:
 
     @staticmethod
     def calculate(df: pd.DataFrame, fast: int = 12, slow: int = 26, signal: int = 9) -> pd.DataFrame:
-        """计算MACD指标"""
+        """计算MACD指标 (OPT-B5: values 计算，延迟 copy)"""
+        c = df['close'].values.astype(float)
+        ema_fast  = pd.Series(c).ewm(span=fast,   adjust=False).mean().values
+        ema_slow  = pd.Series(c).ewm(span=slow,   adjust=False).mean().values
+        macd_vals = ema_fast - ema_slow
+        sig_vals  = pd.Series(macd_vals).ewm(span=signal, adjust=False).mean().values
         df = df.copy()
-
-        # EMA
-        ema_fast = df['close'].ewm(span=fast, adjust=False).mean()
-        ema_slow = df['close'].ewm(span=slow, adjust=False).mean()
-
-        # MACD Line
-        df['macd'] = ema_fast - ema_slow
-
-        # Signal Line
-        df['macd_signal'] = df['macd'].ewm(span=signal, adjust=False).mean()
-
-        # Histogram
-        df['macd_hist'] = df['macd'] - df['macd_signal']
-
+        df['macd']        = macd_vals
+        df['macd_signal'] = sig_vals
+        df['macd_hist']   = macd_vals - sig_vals
         return df
 
     @staticmethod
@@ -147,16 +142,15 @@ class RSIAnalyzer:
 
     @staticmethod
     def calculate(df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
-        """计算RSI指标"""
+        """计算RSI指标 (OPT-B5: numpy diff + rolling)"""
+        c     = df['close'].values.astype(float)
+        delta = np.diff(c, prepend=c[0])
+        gain  = pd.Series(np.where(delta > 0, delta, 0.0)).rolling(period).mean().values
+        loss  = pd.Series(np.where(delta < 0, -delta, 0.0)).rolling(period).mean().values
+        rs    = np.where(loss == 0, 1e10, gain / loss)
+        rsi   = 100.0 - 100.0 / (1.0 + rs)
         df = df.copy()
-
-        delta = df['close'].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-
-        rs = gain / loss
-        df['rsi'] = 100 - (100 / (1 + rs))
-
+        df['rsi'] = rsi
         return df
 
     @staticmethod

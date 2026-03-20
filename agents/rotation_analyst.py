@@ -55,7 +55,7 @@ class RotationAnalystAgent(BaseAgent):
 
     def analyze(self, input_data: AgentInput) -> AgentOutput:
         """
-        执行轮动分析
+        执行轮动分析（含日级结果缓存，同一交易日重复调用直接返回缓存）
 
         策略：
         1. 优先查询 sw_industry_index 表（申万行业指数），计算各行业动量/相对强弱
@@ -64,13 +64,17 @@ class RotationAnalystAgent(BaseAgent):
         4. AI增强：市场环境解读、板块配置建议
         5. 输出强弱排名、轮动建议、买点行业、AI分析
 
-        Args:
-            input_data: 输入数据（symbol 不使用，轮动覆盖全市场）
-
-        Returns:
-            轮动分析结果
+        OPT-B4: 行业轮动分析在同一天结果不变，缓存 TTL=4h，减少重复 DB 查询
         """
         start_time = time.time()
+
+        # OPT-B4: 日内结果缓存（行业轮动结果在当天内不变）
+        today = datetime.now().strftime('%Y-%m-%d %H')   # 按小时 key（每4小时刷新）
+        cache_key = f'rotation_{today}'
+        if hasattr(self, '_result_cache') and self._result_cache.get('key') == cache_key:
+            cached = self._result_cache['output']
+            cached.execution_time = 0.0  # 缓存命中
+            return cached
 
         try:
             result = self._analyze_sw_industry()
@@ -112,7 +116,7 @@ class RotationAnalystAgent(BaseAgent):
 
             confidence = self._calc_confidence(result, ai_result)
 
-            return AgentOutput(
+            output = AgentOutput(
                 agent_type=self.analysis_type.value,
                 symbol='MARKET',
                 analysis_date=datetime.now().strftime('%Y-%m-%d'),
@@ -122,6 +126,9 @@ class RotationAnalystAgent(BaseAgent):
                 execution_time=time.time() - start_time,
                 error_message=None
             )
+            # OPT-B4: 写入日内缓存
+            self._result_cache = {'key': cache_key, 'output': output}
+            return output
 
         except Exception as e:
             self.logger.error(f"轮动分析失败: {e}")

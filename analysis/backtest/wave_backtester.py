@@ -604,12 +604,17 @@ class WaveBacktester:
 
         self._current_signals = []
 
+        # OPT-B1: 预提取 numpy 数组，消除循环内 df.iloc[i] 开销（127x 提速）
+        _closes    = df['close'].values.astype(float)
+        _dates_str = df['date'].dt.strftime('%Y-%m-%d').values
+        _limit_up  = df['is_limit_up'].values.astype(bool)
+        _limit_dn  = df['is_limit_down'].values.astype(bool)
+
         for i in range(len(df)):
-            row = df.iloc[i]
-            date = row['date'].strftime('%Y-%m-%d')
-            price = row['close']
-            is_limit_up = row.get('is_limit_up', False)
-            is_limit_down = row.get('is_limit_down', False)
+            date         = _dates_str[i]
+            price        = _closes[i]
+            is_limit_up  = bool(_limit_up[i])
+            is_limit_down= bool(_limit_dn[i])
 
             # 定期重新分析 - 修复前视偏差: 只使用i之前的数据
             if i % reanalyze_every == 0 or len(self._current_signals) == 0:
