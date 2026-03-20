@@ -125,3 +125,6 @@ Thumbs.db
 # ✅ SYSTEM_OVERVIEW.md - 架构文档
 # ✅ .env.example     - 环境变量模板
 # ✅ .gitignore       - 本文件
+
+# 环境变量模板（含敏感信息占位符，禁止提交）
+.env.example
