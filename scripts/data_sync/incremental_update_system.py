@@ -2,6 +2,9 @@
 """
 系统数据层增量更新脚本
 使用 DataCollector 和 MultiSourceDataManager 进行数据增量更新
+
+注意: 已统一使用同花顺(THS)作为默认数据源
+      AKShare/Tushare 已弃用
 """
 import sys
 from pathlib import Path

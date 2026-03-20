@@ -8,9 +8,9 @@ pymongo==4.16.0
 sqlalchemy==2.0.48
 alembic==1.18.4
 
-# 数据获取
-tushare==1.4.25
-akshare==1.18.40
+# 数据获取 (注意: 已弃用tushare/akshare，统一使用同花顺THS)
+# tushare==1.4.25  # 已弃用 - 数据不复权
+# akshare==1.18.40  # 已弃用 - 网络不稳定
 baostock==0.8.9
 pandas==3.0.1
 numpy==2.4.3

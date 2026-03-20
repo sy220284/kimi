@@ -28,10 +28,13 @@ class DataFetchError(Exception):
 
 class DataSourceType(Enum):
     """数据源类型"""
-    TUSHARE = "tushare"
-    AKSHARE = "akshare"
+    # 已弃用数据源 (保留枚举值供兼容性使用)
+    TUSHARE = "tushare"  # 已弃用 - 数据不复权
+    AKSHARE = "akshare"  # 已弃用 - 网络不稳定
     BAOSTOCK = "baostock"
-    THS = "ths"  # 同花顺
+    
+    # 当前默认数据源
+    THS = "ths"  # 同花顺 - 前复权数据 (默认)
 
 
 class DataSourceAdapter(ABC):
@@ -176,38 +179,21 @@ class DataCollector:
         self._load_adapters()
 
     def _load_adapters(self) -> None:
-        """加载所有启用的数据源适配器"""
-        from .akshare_adapter import AkshareAdapter
+        """加载所有启用的数据源适配器
+        
+        注意: 已统一使用同花顺(THS)作为默认数据源
+        Tushare和AKShare已弃用
+        """
         from .ths_adapter import ThsAdapter
-        from .tushare_adapter import TushareAdapter
 
-        # 加载Tushare
-        tushare_config = self.config.get('data_sources', {}).get('tushare', {})
-        if tushare_config.get('enabled', False):
-            try:
-                adapter = TushareAdapter(tushare_config)
-                self._adapters[DataSourceType.TUSHARE] = adapter
-                self.logger.info("Tushare适配器已加载")
-            except Exception as e:
-                self.logger.error(f"Tushare适配器加载失败: {e}")
-
-        # 加载Akshare
-        akshare_config = self.config.get('data_sources', {}).get('akshare', {})
-        if akshare_config.get('enabled', False):
-            try:
-                adapter = AkshareAdapter(akshare_config)
-                self._adapters[DataSourceType.AKSHARE] = adapter
-                self.logger.info("Akshare适配器已加载")
-            except Exception as e:
-                self.logger.error(f"Akshare适配器加载失败: {e}")
-
-        # 加载同花顺(THS)
+        # 加载同花顺(THS) - 默认数据源
         ths_config = self.config.get('data_sources', {}).get('ths', {})
-        if ths_config.get('enabled', False):
+        # 如果配置中没有明确禁用，则默认启用
+        if ths_config.get('enabled', True):
             try:
                 adapter = ThsAdapter(ths_config)
                 self._adapters[DataSourceType.THS] = adapter
-                self.logger.info("同花顺(THS)适配器已加载")
+                self.logger.info("同花顺(THS)适配器已加载 (默认数据源)")
             except Exception as e:
                 self.logger.error(f"同花顺(THS)适配器加载失败: {e}")
 
@@ -246,7 +232,7 @@ class DataCollector:
         symbol: str,
         start_date: str | None = None,
         end_date: str | None = None,
-        source: DataSourceType = DataSourceType.AKSHARE,
+        source: DataSourceType = DataSourceType.THS,  # 默认改为THS
         **kwargs
     ) -> pd.DataFrame:
         """
@@ -288,7 +274,7 @@ class DataCollector:
         industry_code: str | None = None,
         start_date: str | None = None,
         end_date: str | None = None,
-        source: DataSourceType = DataSourceType.AKSHARE,
+        source: DataSourceType = DataSourceType.THS,  # 默认改为THS
         **kwargs
     ) -> pd.DataFrame:
         """
