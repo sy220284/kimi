@@ -5,8 +5,11 @@
 import time
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
+# 导入两个分析器，保留兼容性
 from analysis.wave.elliott_wave import ElliottWaveAnalyzer
+from analysis.wave.unified_analyzer import UnifiedWaveAnalyzer, UnifiedWaveSignal
 
 from .base_agent import AgentInput, AgentOutput, AgentState, AnalysisType, BaseAgent
 
@@ -16,18 +19,25 @@ class WaveAnalystAgent(BaseAgent):
     波浪分析师智能体
     
     功能:
-    1. 基础波浪分析（ElliottWaveAnalyzer）
+    1. 基础波浪分析（ElliottWaveAnalyzer / UnifiedWaveAnalyzer）
     2. AI推理增强（WaveReasoningAgent）- 提供浪型解读和目标价预测
     
+    使用统一分析器（推荐）:
+        agent = WaveAnalystAgent(use_unified=True)
+        
+    使用基础分析器（兼容旧版）:
+        agent = WaveAnalystAgent(use_unified=False)
+    
     使用AI增强:
-        agent = WaveAnalystAgent(use_ai=True, ai_model="deepseek/deepseek-reasoner")
+        agent = WaveAnalystAgent(use_unified=True, use_ai=True, ai_model="deepseek/deepseek-reasoner")
     """
 
     def __init__(
         self,
         config_path: Path | None = None,
         use_ai: bool = False,
-        ai_model: str = "deepseek/deepseek-reasoner"
+        ai_model: str = "deepseek/deepseek-reasoner",
+        use_unified: bool = True  # 新增: 是否使用统一分析器
     ):
         """
         初始化波浪分析师
@@ -36,6 +46,7 @@ class WaveAnalystAgent(BaseAgent):
             config_path: 配置文件路径
             use_ai: 是否启用AI子代理增强
             ai_model: AI模型选择 (如 "deepseek/deepseek-reasoner" 或 "codeflow/claude-sonnet-4-6")
+            use_unified: 是否使用 UnifiedWaveAnalyzer (含入场优化+共振分析)
         """
         super().__init__(
             agent_name="wave_analyst",
@@ -43,8 +54,14 @@ class WaveAnalystAgent(BaseAgent):
             config_path=config_path
         )
 
-        # 基础分析器
-        self.analyzer = ElliottWaveAnalyzer()
+        # 分析器选择
+        self.use_unified = use_unified
+        if use_unified:
+            self.analyzer = UnifiedWaveAnalyzer()
+            self.logger.info("使用 UnifiedWaveAnalyzer (含入场优化+共振分析)")
+        else:
+            self.analyzer = ElliottWaveAnalyzer()
+            self.logger.info("使用 ElliottWaveAnalyzer (基础波浪分析)")
         
         # AI子代理
         self.use_ai = use_ai
@@ -89,39 +106,89 @@ class WaveAnalystAgent(BaseAgent):
                     agent_type=self.analysis_type.value,
                     symbol=symbol,
                     analysis_date=datetime.now().strftime('%Y-%m-%d'),
-                    result={'patterns': [], 'error': '无数据'},
+                    result={'signals': [], 'error': '无数据'},
                     confidence=0.0,
                     state=AgentState.ERROR,
                     execution_time=time.time() - start_time,
                     error_message='无数据'
                 )
 
-            # 1. 执行基础波浪分析
-            pattern = self.analyzer.detect_wave_pattern(df)
-            patterns = [pattern] if pattern else []
+            # 执行分析
+            if self.use_unified:
+                # 新版分析流程 (UnifiedWaveAnalyzer)
+                signals = self.analyzer.detect(df, mode='all')
+                
+                if not signals:
+                    return AgentOutput(
+                        agent_type=self.analysis_type.value,
+                        symbol=symbol,
+                        analysis_date=datetime.now().strftime('%Y-%m-%d'),
+                        result={'signals': [], 'message': '未检测到波浪信号'},
+                        confidence=0.0,
+                        state=AgentState.COMPLETED,
+                        execution_time=time.time() - start_time
+                    )
+                
+                # 选择最佳信号
+                best_signal = max(signals, key=lambda s: s.confidence)
+                
+                result = {
+                    'signals': [self._signal_to_dict(s) for s in signals],
+                    'best_signal': self._signal_to_dict(best_signal),
+                    'entry_type': best_signal.entry_type.value,
+                    'entry_price': best_signal.entry_price,
+                    'target_price': best_signal.target_price,
+                    'stop_loss': best_signal.stop_loss,
+                    'confidence': best_signal.confidence,
+                    'quality_score': best_signal.quality_score,
+                    'resonance_score': best_signal.resonance_score,
+                    'data_points': len(df),
+                    'latest_price': float(df['close'].iloc[-1]) if not df.empty else 0
+                }
+                base_confidence = best_signal.confidence
+                
+            else:
+                # 旧版分析流程 (ElliottWaveAnalyzer)
+                pattern = self.analyzer.detect_wave_pattern(df)
+                patterns = [pattern] if pattern else []
+                
+                result = {
+                    'patterns': [p.to_dict() if hasattr(p, 'to_dict') else str(p) for p in patterns],
+                    'data_points': len(df),
+                    'latest_price': float(df['close'].iloc[-1]) if not df.empty else 0
+                }
+                base_confidence = pattern.confidence if pattern and hasattr(pattern, 'confidence') else 0.5
             
-            # 准备基础结果
-            base_result = {
-                'patterns': patterns,
-                'data_points': len(df),
-                'latest_price': float(df['close'].iloc[-1]) if not df.empty else 0
-            }
-            
-            # 2. AI推理增强
+            # AI推理增强
             ai_result = None
-            if self.use_ai and self.ai_agent and pattern:
+            if self.use_ai and self.ai_agent:
                 try:
                     from agents.ai_subagents import AIAgentInput
                     
-                    # 构建波浪数据
-                    wave_data = {
-                        'pattern_type': pattern.pattern_type if hasattr(pattern, 'pattern_type') else 'unknown',
-                        'confidence': pattern.confidence if hasattr(pattern, 'confidence') else 0.5,
-                        'current_wave': getattr(pattern, 'current_wave', 'unknown'),
-                        'current_price': base_result['latest_price'],
-                        'pivots': getattr(pattern, 'pivots', []),
-                        'signals': getattr(pattern, 'signals', [])
-                    }
+                    # 构建分析数据
+                    if self.use_unified and signals:
+                        best = signals[0]
+                        wave_data = {
+                            'entry_type': best.entry_type.value,
+                            'entry_price': best.entry_price,
+                            'target_price': best.target_price,
+                            'stop_loss': best.stop_loss,
+                            'confidence': best.confidence,
+                            'quality_score': best.quality_score,
+                            'resonance_score': best.resonance_score,
+                            'current_price': result['latest_price'],
+                        }
+                    elif not self.use_unified and pattern:
+                        wave_data = {
+                            'pattern_type': pattern.pattern_type if hasattr(pattern, 'pattern_type') else 'unknown',
+                            'confidence': pattern.confidence if hasattr(pattern, 'confidence') else 0.5,
+                            'current_wave': getattr(pattern, 'current_wave', 'unknown'),
+                            'current_price': result['latest_price'],
+                            'pivots': getattr(pattern, 'pivots', []),
+                            'signals': getattr(pattern, 'signals', [])
+                        }
+                    else:
+                        wave_data = {}
                     
                     ai_input = AIAgentInput(
                         raw_data=wave_data,
@@ -138,14 +205,13 @@ class WaveAnalystAgent(BaseAgent):
                         'details': ai_output.details
                     }
                     
-                    base_result['ai_analysis'] = ai_result
+                    result['ai_analysis'] = ai_result
                     
                 except Exception as e:
                     self.logger.warning(f"AI分析失败: {e}")
-                    base_result['ai_error'] = str(e)
+                    result['ai_error'] = str(e)
 
             # 计算最终置信度
-            base_confidence = pattern.confidence if pattern and hasattr(pattern, 'confidence') else 0.5
             if ai_result and ai_result.get('confidence'):
                 # 综合技术置信度和AI置信度
                 final_confidence = (base_confidence + ai_result['confidence']) / 2
@@ -156,7 +222,7 @@ class WaveAnalystAgent(BaseAgent):
                 agent_type=self.analysis_type.value,
                 symbol=symbol,
                 analysis_date=datetime.now().strftime('%Y-%m-%d'),
-                result=base_result,
+                result=result,
                 confidence=final_confidence,
                 state=AgentState.COMPLETED,
                 execution_time=time.time() - start_time,
@@ -165,24 +231,44 @@ class WaveAnalystAgent(BaseAgent):
 
         except Exception as e:
             self.logger.error(f"波浪分析失败 {symbol}: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
             return AgentOutput(
                 agent_type=self.analysis_type.value,
                 symbol=symbol,
                 analysis_date=datetime.now().strftime('%Y-%m-%d'),
-                result={'patterns': [], 'error': str(e)},
+                result={'signals': [], 'error': str(e)},
                 confidence=0.0,
                 state=AgentState.ERROR,
                 execution_time=time.time() - start_time,
                 error_message=str(e)
             )
 
+    def _signal_to_dict(self, signal: UnifiedWaveSignal) -> dict[str, Any]:
+        """将 UnifiedWaveSignal 转换为字典"""
+        return {
+            'entry_type': signal.entry_type.value,
+            'entry_price': signal.entry_price,
+            'target_price': signal.target_price,
+            'stop_loss': signal.stop_loss,
+            'confidence': signal.confidence,
+            'quality_score': signal.quality_score,
+            'resonance_score': signal.resonance_score,
+            'direction': signal.direction,
+            'trend_aligned': signal.trend_aligned,
+            'trend_direction': signal.trend_direction,
+            'market_condition': signal.market_condition,
+            'is_valid': signal.is_valid,
+        }
+
 
 def main():
     """测试函数"""
     print("🤖 波浪分析智能体测试")
 
-    # 创建智能体（启用AI增强）
-    agent = WaveAnalystAgent(use_ai=True)
+    # 测试统一分析器（新版）
+    print("\n=== 测试 UnifiedWaveAnalyzer ===")
+    agent = WaveAnalystAgent(use_unified=True, use_ai=False)
 
     # 获取数据
     from data.optimized_data_manager import get_optimized_data_manager
@@ -198,15 +284,34 @@ def main():
         result = agent.analyze(input_data)
         
         if result.state.value == 'completed':
+            signals = result.result.get('signals', [])
+            print(f"  ✅ 发现 {len(signals)} 个波浪信号")
+            
+            best = result.result.get('best_signal')
+            if best:
+                print(f"  📊 最佳信号: {best['entry_type']}")
+                print(f"  💰 入场价: {best['entry_price']:.2f}")
+                print(f"  🎯 目标价: {best['target_price']:.2f}")
+                print(f"  🛡️ 止损价: {best['stop_loss']:.2f}")
+                print(f"  📈 置信度: {best['confidence']:.2f}")
+                print(f"  ⭐ 质量评分: {best['quality_score']:.2f}")
+                print(f"  🔄 共振评分: {best['resonance_score']:.2f}")
+        else:
+            print(f"  ❌ 分析失败: {result.error_message}")
+    
+    # 测试旧版分析器（兼容）
+    print("\n=== 测试 ElliottWaveAnalyzer (兼容模式) ===")
+    agent_old = WaveAnalystAgent(use_unified=False, use_ai=False)
+    
+    for symbol in symbols[:1]:
+        print(f"\n🔍 分析 {symbol}...")
+        
+        input_data = AgentInput(symbol=symbol)
+        result = agent_old.analyze(input_data)
+        
+        if result.state.value == 'completed':
             patterns = result.result.get('patterns', [])
             print(f"  ✅ 发现 {len(patterns)} 个波浪模式")
-            
-            # 显示AI分析结果
-            ai_analysis = result.result.get('ai_analysis')
-            if ai_analysis:
-                print(f"  🤖 AI结论: {ai_analysis.get('conclusion', 'N/A')}")
-                print(f"  📊 AI置信度: {ai_analysis.get('confidence', 0):.2f}")
-                print(f"  💡 建议: {ai_analysis.get('action_suggestion', 'N/A')}")
         else:
             print(f"  ❌ 分析失败: {result.error_message}")
 

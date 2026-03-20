@@ -1,7 +1,6 @@
 """
 数据采集模块 - 统一数据采集接口
 """
-# 导入工具模块
 import sys
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
@@ -11,7 +10,11 @@ from typing import Any
 
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# 添加项目根目录到路径
+_project_root = Path(__file__).parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
 from utils.config_loader import load_config
 from utils.logger import get_logger
 

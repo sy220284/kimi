@@ -2,21 +2,21 @@
 回测框架 - Phase 5 验证层 (集成 UnifiedWaveAnalyzer)
 验证波浪分析策略的历史表现
 """
+import sys
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
 
-# 导入 UnifiedWaveAnalyzer
-try:
-    from ..wave.unified_analyzer import UnifiedWaveAnalyzer, UnifiedWaveSignal
-except ImportError:
-    import sys
-    from pathlib import Path
-    sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-    from analysis.wave.unified_analyzer import UnifiedWaveAnalyzer, UnifiedWaveSignal
+# 添加项目根目录到路径
+_project_root = Path(__file__).parent.parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
+from analysis.wave.unified_analyzer import UnifiedWaveAnalyzer, UnifiedWaveSignal
 
 
 class TradeAction(Enum):

@@ -11,7 +11,10 @@ from typing import Any
 
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# 添加项目根目录到路径
+_project_root = Path(__file__).parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
 
 
 class DataSourcePriority(Enum):

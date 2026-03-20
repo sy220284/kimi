@@ -10,28 +10,23 @@
 4. ATR动态止损 - 替代固定百分比止损
 """
 import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-try:
-    from .adaptive_params import AdaptiveParameterOptimizer, MarketCondition
-    from .elliott_wave import WaveDirection, WaveType
-    from .enhanced_detector import PivotPoint, enhanced_pivot_detection
-    from .entry_optimizer import WaveEntryOptimizer
-    from .resonance import ResonanceAnalyzer, SignalDirection
-except ImportError:
-    from adaptive_params import AdaptiveParameterOptimizer, MarketCondition
-    from elliott_wave import WaveDirection, WaveType
-    from enhanced_detector import PivotPoint, enhanced_pivot_detection
-    from entry_optimizer import WaveEntryOptimizer
-    from resonance import ResonanceAnalyzer, SignalDirection
+# 添加项目根目录到路径
+_project_root = Path(__file__).parent.parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
+from analysis.wave.adaptive_params import AdaptiveParameterOptimizer, MarketCondition
+from analysis.wave.elliott_wave import WaveDirection, WaveType
+from analysis.wave.enhanced_detector import PivotPoint, enhanced_pivot_detection
+from analysis.wave.entry_optimizer import WaveEntryOptimizer
+from analysis.wave.resonance import ResonanceAnalyzer, SignalDirection
 
 
 class WaveEntryType(Enum):
