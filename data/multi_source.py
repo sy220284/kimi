@@ -145,8 +145,9 @@ class MultiSourceDataManager:
         """
         import time
 
-        # 确定查询顺序: THS -> AKShare -> 东财直连 -> 多平台(腾讯/网易/新浪) -> 缓存
-        source_order = ['ths', 'akshare', 'eastmoney', 'multi_platform', 'cache']
+        # 确定查询顺序: THS(主) -> 东财直连 -> 多平台 -> 缓存
+        # akshare/tushare 已弃用（适配器已移除），从路由中删除
+        source_order = ['ths', 'eastmoney', 'multi_platform', 'cache']
         if prefer_source and prefer_source in source_order:
             source_order.remove(prefer_source)
             source_order.insert(0, prefer_source)
@@ -166,8 +167,6 @@ class MultiSourceDataManager:
                 # 调用数据源
                 if source_name == 'ths':
                     df = self._fetch_from_ths(source, symbol, start_date, end_date, ktype)
-                elif source_name == 'akshare':
-                    df = self._fetch_from_akshare(source, symbol, start_date, end_date, ktype)
                 elif source_name == 'eastmoney':
                     df = self._fetch_from_eastmoney(source, symbol, start_date, end_date, ktype)
                 elif source_name == 'multi_platform':
@@ -183,8 +182,8 @@ class MultiSourceDataManager:
                     status.record_success(elapsed)
                     print(f"✅ 从 [{source_name}] 获取 {symbol} 数据成功，共 {len(df)} 条")
 
-                    # 如果是从主源或备源获取，保存到缓存
-                    if source_name in ['ths', 'akshare', 'eastmoney', 'multi_platform'] and 'cache' in self.sources:
+                    # 从网络数据源获取成功后保存到缓存
+                    if source_name in ['ths', 'eastmoney', 'multi_platform'] and 'cache' in self.sources:
                         self.sources['cache'].set(
                             df, symbol,
                             start_date or df['date'].min().strftime('%Y-%m-%d'),

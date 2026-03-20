@@ -183,44 +183,55 @@ class ConcurrentDatabaseDataManager:
         start_year: int,
         end_year: int,
         end_date: str,
-        use_cache: bool
+        use_cache: bool,
+        max_retries: int = 3,
+        base_delay: float = 1.0
     ) -> dict:
-        """同步单只股票（线程安全）"""
-        try:
-            # 1. 检查数据库是否已有完整数据
-            if not use_cache:
-                db_data = self._query_database(symbol, f"{start_year}-01-01", end_date)
-                if not db_data.empty and len(db_data) > 100:  # 粗略判断有数据
-                    return {'symbol': symbol, 'status': 'skipped', 'records': len(db_data)}
-            
-            # 2. 每个线程创建独立的THS实例（线程安全）
-            ths = ThsAdapter({'enabled': True, 'timeout': 30})
-            
-            # 3. 从THS拉取
-            df = ths.get_full_history(symbol, start_year, end_year)
-            
-            if df is None or df.empty:
-                return {'symbol': symbol, 'status': 'no_data', 'records': 0}
-            
-            # 4. 过滤日期
-            df = df[df['date'] <= end_date]
-            
-            # 5. 写入数据库（每个线程独立连接）
-            self._save_to_database(symbol, df)
-            
-            # 6. 限速
-            time.sleep(self.rate_limit)
-            
-            return {
-                'symbol': symbol,
-                'status': 'success',
-                'records': len(df),
-                'start': df['date'].min(),
-                'end': df['date'].max()
-            }
-            
-        except Exception as e:
-            return {'symbol': symbol, 'status': 'error', 'error': str(e), 'records': 0}
+        """同步单只股票（线程安全），含指数退避重试"""
+        # 1. 检查数据库是否已有完整数据
+        if not use_cache:
+            db_data = self._query_database(symbol, f"{start_year}-01-01", end_date)
+            if not db_data.empty and len(db_data) > 100:
+                return {'symbol': symbol, 'status': 'skipped', 'records': len(db_data)}
+
+        # 2. 每个线程创建独立的THS实例（线程安全）
+        ths = ThsAdapter({'enabled': True, 'timeout': 30})
+
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                # 3. 从THS拉取
+                df = ths.get_full_history(symbol, start_year, end_year)
+
+                if df is None or df.empty:
+                    return {'symbol': symbol, 'status': 'no_data', 'records': 0}
+
+                # 4. 过滤日期
+                df = df[df['date'] <= end_date]
+
+                # 5. 写入数据库（每个线程独立连接）
+                self._save_to_database(symbol, df)
+
+                # 6. 限速
+                time.sleep(self.rate_limit)
+
+                return {
+                    'symbol': symbol,
+                    'status': 'success',
+                    'records': len(df),
+                    'start': df['date'].min(),
+                    'end': df['date'].max()
+                }
+
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries - 1:
+                    wait = base_delay * (2 ** attempt)   # 指数退避：1s, 2s, 4s
+                    time.sleep(wait)
+                # 否则循环结束，返回 error
+
+        return {'symbol': symbol, 'status': 'error',
+                'error': str(last_error), 'records': 0}
 
     def _query_database(self, symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
         """从数据库查询（线程安全）"""

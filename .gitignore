@@ -34,3 +34,16 @@ Thumbs.db
 *.pyc
 tests/results/*.csv
 tests/results/*.json
+
+# 密钥与环境变量（绝不提交）
+.env
+.env.*
+!.env.example
+
+# 临时/测试输出文件
+1
+
+# 备份文件
+*.bak
+*.backup
+*.orig
