@@ -451,6 +451,104 @@ def validate_triangle(points):
     return is_valid, [], score
 
 
+def validate_diagonal(points, wave_subtype: str = 'auto') -> tuple:
+    """
+    Diagonal（对角线浪）验证
+
+    对角线浪是推动浪的特殊子类型，出现在趋势末期（Ending Diagonal）
+    或趋势起始（Leading Diagonal）。与标准推动浪的区别：
+    - 浪 4 与浪 1 的价格区间重叠（标准推动浪中不允许）
+    - 每个子浪均为 3 波结构（ZigZag）
+    - 整体呈收敛楔形（通道收窄）
+
+    子类型：
+    - leading_diagonal：出现在1浪或A浪，5浪结构，收敛楔
+    - ending_diagonal：出现在5浪或C浪，预示趋势反转，5浪结构
+
+    Args:
+        points:  5 个 WavePoint（1-2-3-4-5 或 A-B-C-D-E）
+        wave_subtype: 'leading' / 'ending' / 'auto'
+
+    Returns:
+        (is_valid: bool, errors: list[str], score: float)
+    """
+    if len(points) != 5:
+        return False, ["需要5个点(1-2-3-4-5)"], 0.0
+
+    p = [pt.price for pt in points]
+    p0, p1, p2, p3, p4 = p
+
+    # 确定方向
+    is_bull = p4 > p0   # 上升对角线
+
+    errors = []
+    score  = 0.0
+
+    # ── 规则 1：对角线浪中浪3不能短于浪1和浪5中的任意一个（宽松版）──
+    # 注意：对角线浪的子浪都是3波，幅度比标准推动浪小，规则宽松
+    w1 = abs(p1 - p0)
+    w3 = abs(p3 - p2)
+    w5 = abs(p4 - p3)
+    if w3 < w5 * 0.5:   # 仅当浪3小于浪5的50%时才拒绝（宽松）
+        errors.append("浪3极短（不符合对角线浪特征）")
+        return False, errors, 0.0
+
+    # 浪3不得短于浪1的30%（对角线浪宽松要求）
+    if w3 < w1 * 0.3:
+        errors.append("浪3相对浪1过短")
+        return False, errors, 0.0
+
+    # ── 规则 2：浪 4 与浪 1 重叠（对角线浪的特征）──
+    # 浪4 结束于 p4，浪1 结束于 p1；p4 进入浪1的价格区间即为重叠
+    if is_bull:
+        w4_overlaps = p4 < p1   # 上升：浪4低点进入浪1高点以下
+    else:
+        w4_overlaps = p4 > p1   # 下降：浪4高点进入浪1低点以上
+
+    if not w4_overlaps:
+        errors.append("浪4未与浪1重叠（对角线浪特征缺失）")
+        score -= 0.2
+    else:
+        score += 0.30  # 重叠是关键特征
+
+    # ── 规则 3：收敛楔形（通道收窄）──
+    # 上升对角：浪1,3,5高点连线下倾；浪2,4低点连线上倾
+    w2_ret = abs(p2 - p1) / (w1 + 1e-10)  # 浪2回调比例
+    w4_ret = abs(p4 - p3) / (w3 + 1e-10)  # 浪4回调比例（对角线浪4更深）
+
+    # 收敛：浪5 < 浪3 (按绝对幅度)，浪4 > 浪2（回调更深）
+    if w5 < w3:
+        score += 0.20  # 收敛
+    if w4_ret >= w2_ret * 0.8:
+        score += 0.15  # 浪4回调相对更深
+
+    # ── 规则 4：斐波那契比例校验 ──
+    fib_618 = 0.618
+    if 0.5 <= w2_ret <= 0.786:
+        score += 0.15  # 浪2回调 50-78.6%
+    if 0.5 <= w4_ret <= 0.90:
+        score += 0.10  # 浪4回调 50-90%（对角线浪4可更深）
+    if 0.618 <= (w5 / w1 + 1e-10) <= 1.618:
+        score += 0.10  # 浪5与浪1的比例关系
+
+    # ── 规则 5：子类型判断 ──
+    if wave_subtype == 'auto':
+        # Ending Diagonal：浪5创新高/新低（趋势延伸）
+        if is_bull and p4 > p2:
+            detected_type = 'ending_diagonal'
+        elif not is_bull and p4 < p2:
+            detected_type = 'ending_diagonal'
+        else:
+            detected_type = 'leading_diagonal'
+    else:
+        detected_type = wave_subtype
+
+    score = min(score, 1.0)
+    is_valid = score >= 0.45 and not errors  # 对角线浪容错更高
+
+    return is_valid, errors, score
+
+
 # ============================================================================
 # SECTION 4 — Elliott Wave Analyzer (整合版)
 # ============================================================================
@@ -603,6 +701,14 @@ class ElliottWaveAnalyzer:
         for i in range(len(points) - 4):
             window_points = points[i:i+5]
             pattern = self._try_triangle(window_points)
+            if pattern and pattern.confidence > best_confidence:
+                best_confidence = pattern.confidence
+                best_pattern = pattern
+
+        # 尝试5点模式 (Diagonal对角线浪 — 趋势末期/起始)
+        for i in range(len(points) - 4):
+            window_points = points[i:i+5]
+            pattern = self._try_diagonal(window_points)
             if pattern and pattern.confidence > best_confidence:
                 best_confidence = pattern.confidence
                 best_pattern = pattern
@@ -974,6 +1080,62 @@ class ElliottWaveAnalyzer:
             end_date=pE.date,
             target_price=round(target, 4),
             stop_loss=round(stop_loss, 4)
+        )
+
+    def _try_diagonal(self, points: list[WavePoint]) -> WavePattern | None:
+        """
+        尝试识别 Diagonal 对角线浪（P2-A新增）
+
+        对角线浪特征：
+        - 5波结构，浪4与浪1价格区间重叠
+        - 整体呈收敛楔形（通道收窄）
+        - 出现在趋势末期（Ending）或趋势起点（Leading）
+        - 是趋势反转的重要信号
+        """
+        if len(points) < 5:
+            return None
+
+        is_valid, errors, score = validate_diagonal(points[:5])
+        if not is_valid:
+            return None
+
+        p0, p1, p2, p3, p4 = points[:5]
+        is_bull = p4.price > p0.price
+
+        # 判断子类型：浪4进入浪1区域深度决定Ending/Leading
+        if is_bull:
+            overlap_depth = (p1.price - p3.price) / (p1.price - p0.price + 1e-10)
+        else:
+            overlap_depth = (p3.price - p1.price) / (p0.price - p1.price + 1e-10)
+
+        wave_type = (WaveType.ENDING_DIAGONAL if overlap_depth > 0.5
+                     else WaveType.LEADING_DIAGONAL)
+
+        # 目标价：Ending Diagonal 预示反转，目标回到浪4起点
+        if wave_type == WaveType.ENDING_DIAGONAL:
+            target = p3.price          # 反转目标 = 浪4起点
+            stop   = p4.price * (1.02 if not is_bull else 0.98)
+        else:
+            wave1_len = abs(p1.price - p0.price)
+            target = (p4.price + wave1_len * 1.618 if is_bull
+                      else p4.price - wave1_len * 1.618)
+            stop   = p2.price
+
+        labeled = [
+            WavePoint(pt.index, pt.date, pt.price, wave_num=str(i+1))
+            for i, pt in enumerate(points[:5])
+        ]
+
+        direction = WaveDirection.UP if is_bull else WaveDirection.DOWN
+        return WavePattern(
+            wave_type=wave_type,
+            direction=direction,
+            points=labeled,
+            confidence=round(score, 4),
+            start_date=p0.date,
+            end_date=p4.date,
+            target_price=round(target, 4),
+            stop_loss=round(stop, 4)
         )
 
     def _try_impulse_enhanced(self, pivots, df: pd.DataFrame) -> WavePattern | None:

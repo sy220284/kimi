@@ -236,3 +236,18 @@ if __name__ == '__main__':
     print(f"   Wave配置版本: {wave_params.get('_meta', {}).get('version')}")
     
     print("\n✅ 配置管理器测试完成")
+
+
+# ── 向后兼容：让 config_manager 也能提供 load_config() ──────────────────────
+# 目的：消除 config_loader 与 config_manager 双轨，统一入口
+# 用法：from utils.config_manager import load_config
+def load_config(config_path=None) -> dict:
+    """
+    兼容 config_loader.load_config() 的入口。
+
+    新代码建议直接使用：
+        from utils.config_manager import config
+        val = config.get('core.database.postgres.host')
+    """
+    from utils.config_loader import load_config as _load
+    return _load(config_path)

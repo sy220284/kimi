@@ -2,7 +2,9 @@
 AI推理子代理基类模块
 提供统一的LLM调用接口和输出解析
 支持自动重试机制处理超时和限流
+P1-B: 新增 Redis 结果缓存，TTL=86400s（24h），相同分析不重复调用 LLM
 """
+import hashlib
 import json
 import os
 import time
@@ -99,29 +101,96 @@ class BaseAIAgent(ABC):
         """
         pass
 
-    def analyze(self, input_data: AIAgentInput) -> AIAgentOutput:
-        """
-        执行AI分析
+    def _cache_key(self, input_data: 'AIAgentInput') -> str:
+        """生成 Redis 缓存 Key（基于 agent_name + raw_data + context 的哈希）"""
+        payload = json.dumps({
+            "agent": self.agent_name,
+            "model": self.model_id,
+            "data": input_data.raw_data,
+            "ctx": input_data.context,
+        }, sort_keys=True, ensure_ascii=False, default=str)
+        return f"ai_cache:{hashlib.md5(payload.encode()).hexdigest()}"
 
-        Args:
-            input_data: 输入数据
+    def _get_redis(self):
+        """获取 Redis 连接（可选依赖，失败时静默跳过缓存）"""
+        try:
+            from utils.config_manager import config as cfg_mgr
+            redis_cfg = cfg_mgr.get('core.database.redis', {})
+            import redis
+            r = redis.Redis(
+                host=redis_cfg.get('host', 'localhost'),
+                port=redis_cfg.get('port', 6379),
+                db=redis_cfg.get('db', 0),
+                password=redis_cfg.get('password') or None,
+                socket_connect_timeout=1,
+                socket_timeout=1,
+            )
+            r.ping()
+            return r
+        except Exception:
+            return None
 
-        Returns:
-            AI分析结果
+    def analyze(self, input_data: 'AIAgentInput') -> 'AIAgentOutput':
         """
+        执行AI分析（含 Redis 结果缓存，TTL=86400s）
+
+        缓存策略：
+        - Key = md5(agent_name + model + raw_data + context)
+        - 命中缓存时直接返回，不调用 LLM
+        - Redis 不可用时自动降级为直接调用
+        - 缓存 TTL 通过 AI_CACHE_TTL 环境变量配置（默认 86400s）
+        """
+        cache_ttl = int(os.environ.get("AI_CACHE_TTL", "86400"))
+        cache_key = self._cache_key(input_data)
+
+        # 尝试读缓存
+        redis_client = self._get_redis()
+        if redis_client:
+            try:
+                cached = redis_client.get(cache_key)
+                if cached:
+                    data = json.loads(cached)
+                    return AIAgentOutput(
+                        reasoning=data.get("reasoning", ""),
+                        conclusion=data.get("conclusion", ""),
+                        confidence=data.get("confidence", 0.0),
+                        action_suggestion=data.get("action_suggestion"),
+                        details=data.get("details"),
+                    )
+            except Exception:
+                pass  # 缓存读取失败，继续正常调用
+
+        # 调用 LLM
         prompt = self.build_prompt(input_data)
-
         try:
             response = self._call_llm(prompt)
-            return self.parse_response(response)
+            result = self.parse_response(response)
         except Exception as e:
-            # 返回降级输出
             return AIAgentOutput(
                 reasoning=f"AI分析失败: {e}",
                 conclusion="无法提供AI分析结论",
                 confidence=0.0,
                 action_suggestion=None
             )
+
+        # 写缓存
+        if redis_client:
+            try:
+                redis_client.setex(
+                    cache_key,
+                    cache_ttl,
+                    json.dumps({
+                        "reasoning": result.reasoning,
+                        "conclusion": result.conclusion,
+                        "confidence": result.confidence,
+                        "action_suggestion": result.action_suggestion,
+                        "details": result.details,
+                    }, ensure_ascii=False, default=str)
+                )
+            except Exception:
+                pass  # 缓存写入失败不影响结果
+
+        return result
 
     def _call_llm(self, prompt: str) -> str:
         """
