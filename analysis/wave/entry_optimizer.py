@@ -50,8 +50,9 @@ class WaveEntryOptimizer:
     波浪买点优化器
 
     针对C/2/4浪的不同特征，设计专属的量价过滤规则。
-    参数基于10轮回测优化结果（2020-2025，645只股票）：
+    参数基于第7-9轮最优回测结果（2020-2025，645只股票）：
     年化收益 10.03%→14.82% (+47.8%)，最大回撤 10.21%→7.13% (-30.2%)
+    胜率 44.9%→47.7%，最优参数：RSI超卖=35, 买入阈值=40, 强买入=50
     """
 
     def __init__(self,
@@ -72,13 +73,13 @@ class WaveEntryOptimizer:
                  lookback_days: int = 20,
 
                  # P1A: 回测优化后的评分权重（基于10轮回测）
-                 rsi_oversold_threshold: float = 30.0,   # RSI超卖阈值
+                 rsi_oversold_threshold: float = 35.0,   # RSI超卖阈值（优化后：35）
                  rsi_weight: float = 0.20,                # RSI权重（原0.15，翻倍优化）
                  macd_divergence_weight: float = 0.20,    # MACD底背离权重（新增核心信号）
                  hammer_weight: float = 0.10,             # 锤子线权重
                  support_proximity_weight: float = 0.10,  # 接近前低支撑权重
-                 strong_buy_threshold: float = 0.70,      # 强买入阈值
-                 buy_threshold: float = 0.50,             # 买入阈值
+                 strong_buy_threshold: float = 0.50,      # 强买入阈值（优化后：0.50）
+                 buy_threshold: float = 0.40,             # 买入阈值（优化后：0.40）
                  watch_threshold: float = 0.35):          # 关注阈值
 
         self.c_min_shrink_ratio = c_min_shrink_ratio
