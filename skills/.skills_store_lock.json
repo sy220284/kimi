@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "skills": {
+    "mx-search": {
+      "name": "Mx Search",
+      "zip_url": "https://lightmake.site/api/v1/download?slug=mx-search",
+      "source": "skillhub",
+      "version": "1.0.0"
+    },
+    "mx-select-stock": {
+      "name": "Mx Select Stock",
+      "zip_url": "https://lightmake.site/api/v1/download?slug=mx-select-stock",
+      "source": "skillhub",
+      "version": "1.0.0"
+    },
+    "eastmoney-financial-search": {
+      "name": "eastmoney skills",
+      "zip_url": "https://lightmake.site/api/v1/download?slug=eastmoney-financial-search",
+      "source": "skillhub",
+      "version": "1.0.2"
+    }
+  }
+}
