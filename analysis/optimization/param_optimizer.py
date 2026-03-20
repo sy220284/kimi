@@ -414,65 +414,71 @@ class ParameterOptimizer:
         all_window_results = []
         param_oos_scores: dict[str, list[float]] = {}  # param_id -> [oos scores]
 
+        # OPT-6: 并行化窗口计算 — 每个 (symbol, window) 组合独立，无数据依赖
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        def _run_window(symbol: str, df, w: int, window_size: int) -> list[dict]:
+            """单个窗口的训练+OOS验证，可并行执行"""
+            n = len(df)
+            win_start = w * window_size
+            win_end   = win_start + window_size if w < n_windows - 1 else n
+            window_df = df.iloc[win_start:win_end]
+            train_end = int(len(window_df) * train_ratio)
+            train_df  = window_df.iloc[:train_end]
+            oos_df    = window_df.iloc[train_end:]
+            if len(train_df) < 60 or len(oos_df) < 20:
+                return []
+            window_top = []
+            for _ in range(n_iterations):
+                params = self._random_params()
+                res = self._single_backtest(params, symbol, train_df, '', '')
+                if res:
+                    window_top.append(res)
+            if not window_top:
+                return []
+            window_top.sort(key=lambda x: x.composite_score, reverse=True)
+            window_rows = []
+            for cand in window_top[:top_k]:
+                oos_res = self._single_backtest(cand.params, symbol, oos_df, '', '')
+                pid = cand.params.get_id()
+                if oos_res:
+                    window_rows.append({
+                        'symbol':      symbol,
+                        'window':      w + 1,
+                        'param_id':    pid,
+                        'train_score': cand.composite_score,
+                        'oos_score':   oos_res.composite_score,
+                        'degradation': cand.composite_score - oos_res.composite_score,
+                    })
+            return window_rows
+
         for symbol in symbols:
             df = data_loader(symbol)
             if df is None or len(df) < 200:
                 print(f"  {symbol}: 数据不足 (<200条)，跳过")
                 continue
 
-            n = len(df)
+            n           = len(df)
             window_size = n // n_windows
 
-            for w in range(n_windows):
-                # 窗口范围
-                win_start = w * window_size
-                win_end   = win_start + window_size if w < n_windows - 1 else n
-                window_df = df.iloc[win_start:win_end]
-
-                train_end = int(len(window_df) * train_ratio)
-                train_df  = window_df.iloc[:train_end]
-                oos_df    = window_df.iloc[train_end:]
-
-                if len(train_df) < 60 or len(oos_df) < 20:
-                    continue
-
-                period_label = (
-                    f"{str(window_df.index[0]) if hasattr(window_df.index[0], 'date') else w}"
-                    f"~W{w+1}"
-                )
-                print(f"\n  [{symbol}] 窗口 {w+1}/{n_windows} "
-                      f"(训练{len(train_df)}条 / OOS{len(oos_df)}条)")
-
-                # 在训练集上随机搜索
-                window_top: list[OptimizationResult] = []
-                for _ in range(n_iterations):
-                    params = self._random_params()
-                    res = self._single_backtest(params, symbol, train_df, '', '')
-                    if res:
-                        window_top.append(res)
-
-                if not window_top:
-                    continue
-
-                window_top.sort(key=lambda x: x.composite_score, reverse=True)
-                top_candidates = window_top[:top_k]
-
-                # 在样本外集上验证每个候选
-                for cand in top_candidates:
-                    oos_res = self._single_backtest(cand.params, symbol, oos_df, '', '')
-                    pid = cand.params.get_id()
-                    if oos_res:
-                        param_oos_scores.setdefault(pid, []).append(oos_res.composite_score)
-                        all_window_results.append({
-                            'symbol': symbol,
-                            'window': w + 1,
-                            'param_id': pid,
-                            'train_score': cand.composite_score,
-                            'oos_score': oos_res.composite_score,
-                            'degradation': cand.composite_score - oos_res.composite_score,
-                        })
-                        print(f"    参数 {pid[:8]}: 训练={cand.composite_score:.3f} "
-                              f"OOS={oos_res.composite_score:.3f}")
+            # 并行提交所有窗口
+            with ThreadPoolExecutor(max_workers=min(n_windows, 8)) as pool:
+                futs = {pool.submit(_run_window, symbol, df, w, window_size): w
+                        for w in range(n_windows)}
+                for fut in as_completed(futs):
+                    w_idx = futs[fut]
+                    try:
+                        rows = fut.result()
+                        for row in rows:
+                            pid = row['param_id']
+                            param_oos_scores.setdefault(pid, []).append(row['oos_score'])
+                            all_window_results.append(row)
+                        if rows:
+                            best_row = max(rows, key=lambda r: r['oos_score'])
+                            print(f"  [{symbol}] 窗口{w_idx+1} "
+                                  f"最佳OOS={best_row['oos_score']:.3f}")
+                    except Exception as e:
+                        print(f"  [{symbol}] 窗口{w_idx+1} 失败: {e}")
 
         if not param_oos_scores:
             print("\n❌ Walk-Forward 无有效结果")

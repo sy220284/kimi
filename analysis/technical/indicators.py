@@ -552,7 +552,7 @@ class TechnicalIndicators:
         bb_config = bb_params or {}
         result = self.bollinger_bands(result, **bb_config, inplace=True)
 
-        self.logger.info(f"计算完成所有指标，数据行数: {len(result)}")
+        self.logger.debug(f"计算完成所有指标，数据行数: {len(result)}")
 
         return result
 

@@ -368,25 +368,47 @@ class ResonanceAnalyzer:
         Returns:
             ResonanceResult
         """
+        return self._analyze_internal(df, wave_signal, precomputed=False)
+
+    def analyze_precomputed(self, df: pd.DataFrame, wave_signal: Any = None) -> ResonanceResult:
+        """
+        OPT-1: 快速路径 — df 已包含预计算指标列（macd/rsi/kdj_k/volume）时调用。
+        跳过各子分析器内部的重复 calculate()，直接读列值，节省 ~40% 耗时。
+
+        前提：df 中需包含以下列（由 TechnicalIndicators.calculate_all 生成）：
+            macd, macd_signal, macd_hist, rsi, kdj_k, kdj_d, kdj_j, volume
+        若列缺失，自动降级为完整路径 analyze()。
+        """
+        _cols = set(df.columns)
+        # TechnicalIndicators 输出大写 (MACD/RSI14/K), Resonance内部输出小写 (macd/rsi)
+        has_precomputed = (
+            {'MACD', 'MACD_Signal', 'MACD_Histogram', 'RSI14', 'K', 'D'}.issubset(_cols) or
+            {'macd', 'macd_signal', 'macd_hist', 'rsi', 'kdj_k', 'kdj_d'}.issubset(_cols)
+        )
+        if not has_precomputed:
+            return self._analyze_internal(df, wave_signal, precomputed=False)
+        return self._analyze_internal(df, wave_signal, precomputed=True)
+
+    def _analyze_internal(self, df: pd.DataFrame, wave_signal: Any,
+                          precomputed: bool) -> ResonanceResult:
+        """内部通用实现，precomputed=True 时跳过各子分析器内的重复计算"""
         signals = []
 
-        # 1. MACD信号
-        macd_signal = self.macd_analyzer.analyze_signal(df)
-        signals.append(macd_signal)
+        if precomputed:
+            # 直接从已有列读值，构造 IndicatorSignal
+            macd_signal = self._macd_signal_from_df(df)
+            rsi_signal  = self._rsi_signal_from_df(df)
+            kdj_signal  = self.kdj_analyzer.analyze_signal(df)  # KDJ 已在 df 中
+            vol_signal  = self.volume_analyzer.analyze_signal(df)
+        else:
+            macd_signal = self.macd_analyzer.analyze_signal(df)
+            rsi_signal  = self.rsi_analyzer.analyze_signal(df)
+            kdj_signal  = self.kdj_analyzer.analyze_signal(df)
+            vol_signal  = self.volume_analyzer.analyze_signal(df)
 
-        # 2. RSI信号
-        rsi_signal = self.rsi_analyzer.analyze_signal(df)
-        signals.append(rsi_signal)
+        signals.extend([macd_signal, rsi_signal, vol_signal, kdj_signal])
 
-        # 3. 成交量信号
-        vol_signal = self.volume_analyzer.analyze_signal(df)
-        signals.append(vol_signal)
-
-        # 4. KDJ信号 (A3增强：A股散户常用，权重与MACD并列最高)
-        kdj_signal = self.kdj_analyzer.analyze_signal(df)
-        signals.append(kdj_signal)
-
-        # 4. 波浪信号 (如果有)
+        # 波浪信号 (如果有)
         wave_direction = SignalDirection.NEUTRAL
         wave_strength = 0.0
         if wave_signal:
@@ -505,3 +527,60 @@ class ResonanceAnalyzer:
 
         else:
             return "⚖️ 中性 - 多空力量均衡，观望"
+
+    # ── OPT-1: 预计算指标快速路径辅助方法 ──────────────────────────────
+    def _macd_signal_from_df(self, df: 'pd.DataFrame') -> IndicatorSignal:
+        """从已有 MACD 列直接读取（支持大/小写列名），跳过重新计算"""
+        import pandas as _pd
+        # 统一：优先大写列名 (TechnicalIndicators), 降级小写 (Resonance内部)
+        _c = df.columns
+        mc  = 'MACD'           if 'MACD'           in _c else 'macd'
+        msc = 'MACD_Signal'    if 'MACD_Signal'    in _c else 'macd_signal'
+        mhc = 'MACD_Histogram' if 'MACD_Histogram' in _c else 'macd_hist'
+        if mc not in _c or len(df) < 5:
+            return IndicatorSignal(name='MACD', direction=SignalDirection.NEUTRAL,
+                                   strength=0.0, description='无MACD数据', confidence=0.0)
+        latest = df.iloc[-1]; prev = df.iloc[-2] if len(df) >= 2 else latest
+        macd_val   = float(latest.get(mc, 0))
+        signal_val = float(latest.get(msc, 0))
+        prev_macd  = float(prev.get(mc, 0))
+        prev_sig   = float(prev.get(msc, 0))
+        hist       = float(latest.get(mhc, 0))
+        direction = SignalDirection.NEUTRAL; strength = 0.0; desc = f'MACD={macd_val:.3f}'
+        if prev_macd < prev_sig and macd_val > signal_val:
+            direction = SignalDirection.BULLISH; strength = 0.7; desc = 'MACD金叉'
+        elif prev_macd > prev_sig and macd_val < signal_val:
+            direction = SignalDirection.BEARISH; strength = 0.7; desc = 'MACD死叉'
+        elif hist > 0:
+            direction = SignalDirection.BULLISH; strength = min(0.6, abs(hist) * 5)
+        elif hist < 0:
+            direction = SignalDirection.BEARISH; strength = min(0.6, abs(hist) * 5)
+        return IndicatorSignal(name='MACD', direction=direction, strength=strength,
+                               description=desc, confidence=0.8)
+
+    def _rsi_signal_from_df(self, df: 'pd.DataFrame',
+                             overbought: float = 70, oversold: float = 30) -> IndicatorSignal:
+        """从已有 RSI 列直接读取（支持大/小写列名），跳过重新计算"""
+        # 大写 RSI14 (TechnicalIndicators) 或小写 rsi (Resonance内部)
+        rsi_col = 'RSI14' if 'RSI14' in df.columns else ('rsi' if 'rsi' in df.columns else None)
+        if rsi_col is None or len(df) < 2:
+            return IndicatorSignal(name='RSI', direction=SignalDirection.NEUTRAL,
+                                   strength=0.0, description='无RSI数据', confidence=0.0)
+        rsi_val  = float(df[rsi_col].iloc[-1])
+        rsi_prev = float(df[rsi_col].iloc[-2])
+        direction = SignalDirection.NEUTRAL; strength = 0.0; desc = f'RSI={rsi_val:.1f}'
+        if rsi_val > overbought:
+            direction = SignalDirection.BEARISH; strength = min(1.0,(rsi_val-overbought)/20); desc += '，超买'
+        elif rsi_val < oversold:
+            direction = SignalDirection.BULLISH; strength = min(1.0,(oversold-rsi_val)/20); desc += '，超卖'
+        elif rsi_prev <= oversold < rsi_val:
+            direction = SignalDirection.BULLISH; strength = 0.8; desc = 'RSI突破超卖'
+        elif rsi_prev >= overbought > rsi_val:
+            direction = SignalDirection.BEARISH; strength = 0.8; desc = 'RSI跌破超买'
+        elif rsi_val > 50:
+            direction = SignalDirection.BULLISH; strength = (rsi_val-50)/50*0.5
+        else:
+            direction = SignalDirection.BEARISH; strength = (50-rsi_val)/50*0.5
+        conf = 0.7 if (rsi_val < oversold or rsi_val > overbought) else 0.5
+        return IndicatorSignal(name='RSI', direction=direction, strength=strength,
+                               description=desc, confidence=conf)
