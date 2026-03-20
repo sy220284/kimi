@@ -155,7 +155,7 @@ class UnifiedWaveAnalyzer:
         self._resonance_analyzer = ResonanceAnalyzer() if use_resonance else None
 
         # 量价优化器 (新增)
-        self._entry_optimizer = WaveEntryOptimizer()
+        self._entry_optimizer = WaveEntryOptimizer.from_config()
         self.use_quality_filter = True
         self.min_quality_score = 0.55  # 权重合计1.0，门槛0.55有效过滤劣质信号
 
