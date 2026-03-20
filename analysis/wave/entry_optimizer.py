@@ -7,11 +7,22 @@
 1. C浪: 缩量调整+放量反弹确认
 2. 2浪: 缩量回撤+MACD金叉确认
 3. 4浪: 时间比例+波动率收缩确认
+
+参数来源: config/wave_params.json (由回测结果自动生成)
 """
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 
 import pandas as pd
+
+
+# 尝试加载参数管理器
+try:
+    from utils.param_manager import get_entry_optimizer_kwargs
+    PARAM_LOADER_AVAILABLE = True
+except ImportError:
+    PARAM_LOADER_AVAILABLE = False
 
 
 class VolumePattern(Enum):
@@ -100,6 +111,55 @@ class WaveEntryOptimizer:
         self.strong_buy_threshold = strong_buy_threshold
         self.buy_threshold = buy_threshold
         self.watch_threshold = watch_threshold
+
+    @classmethod
+    def from_config(cls, config_path: str | None = None) -> 'WaveEntryOptimizer':
+        """
+        从配置文件创建 WaveEntryOptimizer
+        
+        Args:
+            config_path: 配置文件路径，默认使用 config/wave_params.json
+            
+        Returns:
+            使用配置文件参数的 WaveEntryOptimizer 实例
+        """
+        if PARAM_LOADER_AVAILABLE:
+            kwargs = get_entry_optimizer_kwargs()
+            return cls(**kwargs)
+        
+        # 如果参数管理器不可用，尝试直接读取JSON
+        if config_path is None:
+            config_path = Path(__file__).parent.parent.parent / 'config' / 'wave_params.json'
+        else:
+            config_path = Path(config_path)
+        
+        if config_path.exists():
+            import json
+            with open(config_path, 'r', encoding='utf-8') as f:
+                params = json.load(f)
+            
+            kwargs = {
+                'c_min_shrink_ratio': params['c_wave']['min_shrink_ratio'],
+                'c_confirm_volume_ratio': params['c_wave']['confirm_volume_ratio'],
+                'w2_max_shrink_ratio': params['wave_2']['max_shrink_ratio'],
+                'w2_macd_threshold': params['wave_2']['macd_threshold'],
+                'w4_time_ratio_min': params['wave_4']['time_ratio_min'],
+                'w4_time_ratio_max': params['wave_4']['time_ratio_max'],
+                'w4_volatility_shrink': params['wave_4']['volatility_shrink'],
+                'lookback_days': params['general']['lookback_days'],
+                'rsi_oversold_threshold': params['scoring']['rsi_oversold_threshold'],
+                'rsi_weight': params['scoring']['rsi_weight'],
+                'macd_divergence_weight': params['scoring']['macd_divergence_weight'],
+                'hammer_weight': params['scoring']['hammer_weight'],
+                'support_proximity_weight': params['scoring']['support_proximity_weight'],
+                'strong_buy_threshold': params['thresholds']['strong_buy'],
+                'buy_threshold': params['thresholds']['buy'],
+                'watch_threshold': params['thresholds']['watch']
+            }
+            return cls(**kwargs)
+        
+        # 如果配置文件不存在，返回默认实例
+        return cls()
     
     def optimize_wave_c(self, df: pd.DataFrame,
                         entry_idx: int,
