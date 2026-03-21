@@ -139,14 +139,15 @@ class Logger(logging.Logger):
     def _parse_size(self, size_str: str) -> int:
         """解析文件大小字符串"""
         size_str = size_str.upper()
-        multipliers = {
-            'B': 1,
-            'KB': 1024,
-            'MB': 1024 ** 2,
-            'GB': 1024 ** 3,
-        }
+        # 长后缀优先，避免 'B' 匹配 '100MB' 中的末尾 'B'
+        multipliers = [
+            ('GB', 1024 ** 3),
+            ('MB', 1024 ** 2),
+            ('KB', 1024),
+            ('B',  1),
+        ]
 
-        for suffix, multiplier in multipliers.items():
+        for suffix, multiplier in multipliers:
             if size_str.endswith(suffix):
                 return int(size_str[:-len(suffix)]) * multiplier
 
