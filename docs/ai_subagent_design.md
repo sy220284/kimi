@@ -1,37 +1,40 @@
 # AI推理子代理设计方案
 
-## 当前问题
+## 概述
 
-现有智能体（WaveAnalyst/TechAnalyst/RotationAnalyst）仅调用技术分析模块，无真正的LLM推理能力：
-- WaveAnalyst → 直接调用 ElliottWaveAnalyzer
-- TechAnalyst → 直接调用 TechnicalIndicators  
-- RotationAnalyst → 直接查询数据库计算动量
+AI子代理层为传统技术分析提供LLM增强的推理能力，将"信号"转化为"解读"。
 
-**问题**：智能体只是"调用器"，没有AI推理、解释、决策能力。
+---
 
-## 子代理方案架构
+## 架构设计
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    主智能体 (Coordinator)                     │
-│  - WaveAnalystAgent                                        │
-│  - TechAnalystAgent                                        │
-│  - RotationAnalystAgent                                    │
-└─────────────────────────────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────┐
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │WaveAnalyst  │  │TechAnalyst  │  │RotationAnalyst      │  │
+│  └──────┬──────┘  └──────┬──────┘  └──────────┬──────────┘  │
+│         │                │                    │             │
+│         └────────────────┼────────────────────┘             │
+│                          ▼                                  │
+├─────────────────────────────────────────────────────────────┤
 │                    AI推理子代理层                            │
-├─────────────────────────────────────────────────────────────┤
-│  WaveReasoningAgent    │  PatternInterpreterAgent           │
-│  - 波浪形态推理        │  - 多指标综合解读                    │
-│  - 浪型可能性评估      │  - 买卖信号优先级                    │
-│  - 目标价区间预测      │  - 风险收益比评估                    │
-├─────────────────────────────────────────────────────────────┤
-│  MarketContextAgent    │  StrategyAdvisorAgent              │
-│  - 市场环境分析        │  - 具体操作建议                    │
-│  - 板块轮动解读        │  - 仓位管理建议                    │
-│  - 情绪/资金流向       │  - 止损止盈调整                    │
+│  ┌─────────────────┐  ┌─────────────────┐                  │
+│  │ WaveReasoning   │  │ PatternInterp   │                  │
+│  │ 波浪形态推理    │  │ 指标综合解读    │                  │
+│  ├─────────────────┤  ├─────────────────┤                  │
+│  │ - 浪型可能性    │  │ - 指标共振      │                  │
+│  │ - 目标价区间    │  │ - 背离检测      │                  │
+│  │ - 风险评估      │  │ - 买卖优先级    │                  │
+│  └─────────────────┘  └─────────────────┘                  │
+│  ┌─────────────────┐  ┌─────────────────┐                  │
+│  │ MarketContext   │  │ StrategyAdvisor │                  │
+│  │ 市场环境分析    │  │ 策略顾问        │                  │
+│  ├─────────────────┤  ├─────────────────┤                  │
+│  │ - 市场风格      │  │ - 具体建议      │                  │
+│  │ - 板块轮动      │  │ - 仓位管理      │                  │
+│  │ - 资金流向      │  │ - 止损止盈      │                  │
+│  └─────────────────┘  └─────────────────┘                  │
 └─────────────────────────────────────────────────────────────┘
                             │
                             ▼
@@ -41,38 +44,57 @@
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## 子代理接口设计
+---
+
+## 子代理接口
+
+### 基类设计
 
 ```python
 # agents/ai_subagents/base_ai_agent.py
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Dict, Any
 
 @dataclass
 class AIAgentInput:
-    raw_data: dict          # 技术分析原始输出
-    context: str            # 市场上下文
-    user_query: Optional[str] = None  # 用户具体问题
+    """子代理输入"""
+    raw_data: Dict[str, Any]      # 技术分析原始输出
+    context: str                   # 市场上下文
+    market_state: Optional[str] = None  # 市场状态
+    user_query: Optional[str] = None    # 用户具体问题
 
 @dataclass  
 class AIAgentOutput:
-    reasoning: str          # AI推理过程
-    conclusion: str         # 结论
-    confidence: float       # 置信度
+    """子代理输出"""
+    reasoning: str                # AI推理过程
+    conclusion: str               # 结论
+    confidence: float             # 置信度 (0-1)
     action_suggestion: Optional[str] = None  # 操作建议
+    target_range: Optional[Dict] = None      # 目标区间
+    risk_level: Optional[str] = None         # 风险等级
 
 class BaseAIAgent(ABC):
+    """AI子代理基类"""
+    
     def __init__(self, model: str = "deepseek-reasoner", thinking: str = "high"):
         self.model = model
         self.thinking = thinking
     
     @abstractmethod
     def analyze(self, input_data: AIAgentInput) -> AIAgentOutput:
+        """执行AI分析"""
+        pass
+    
+    def _call_llm(self, prompt: str) -> str:
+        """调用LLM API（带重试和缓存）"""
+        # 实现略...
         pass
 ```
 
-## 具体子代理实现
+---
+
+## 具体子代理
 
 ### 1. WaveReasoningAgent - 波浪形态推理
 
@@ -85,12 +107,20 @@ class WaveReasoningAgent(BaseAIAgent):
     输出：AI推理后的浪型解读、目标价区间、风险评估
     """
     
+    SYSTEM_PROMPT = """你是一位资深的艾略特波浪理论分析师，拥有20年技术分析经验。
+
+分析原则：
+1. 浪型识别要基于斐波那契比例和形态规则
+2. 目标价预测要给出区间而非单点
+3. 风险评估要量化（高/中/低）
+4. 操作建议要明确（买入/观望/卖出）
+
+输出格式必须是JSON，包含reasoning、conclusion、confidence字段。"""
+    
     def analyze(self, input_data: AIAgentInput) -> AIAgentOutput:
         wave_data = input_data.raw_data
         
         prompt = f"""
-你是一位资深的艾略特波浪理论分析师。请基于以下技术数据进行分析：
-
 【原始波浪数据】
 - 检测到的浪型: {wave_data.get('pattern_type', 'unknown')}
 - 置信度: {wave_data.get('confidence', 0)}
@@ -112,17 +142,24 @@ class WaveReasoningAgent(BaseAIAgent):
 {{
     "reasoning": "详细分析过程...",
     "conclusion": "核心结论",
-    "target_range": ["低目标", "高目标"],
-    "key_levels": {{"support": [], "resistance": []}},
-    "risk_reward": "高风险/中风险/低风险",
+    "target_range": {{"low": 110, "high": 120}},
+    "key_levels": {{"support": [105], "resistance": [125]}},
+    "risk_level": "中风险",
     "action": "buy/hold/sell",
     "confidence": 0.85
 }}
 """
-        # 调用LLM API
         response = self._call_llm(prompt)
         return self._parse_response(response)
 ```
+
+**能力**：
+- ✅ 浪型可能性评估
+- ✅ 目标价区间预测
+- ✅ 斐波那契比例验证
+- ✅ 风险收益比计算
+
+---
 
 ### 2. PatternInterpreterAgent - 多指标综合解读
 
@@ -135,29 +172,38 @@ class PatternInterpreterAgent(BaseAIAgent):
     输出：指标共振分析、综合买卖信号
     """
     
+    SYSTEM_PROMPT = """你是一位技术分析专家，擅长多指标综合分析。
+
+分析原则：
+1. 重视指标共振（多个指标同向）
+2. 警惕指标背离（价格与指标反向）
+3. 超买超卖要结合趋势判断
+4. 给出明确的综合评级
+
+输出格式必须是JSON。"""
+    
     def analyze(self, input_data: AIAgentInput) -> AIAgentOutput:
         indicators = input_data.raw_data
         
         prompt = f"""
-作为技术分析专家，请综合解读以下指标信号：
-
-【MACD】
+【技术指标数据】
+MACD:
 - DIF: {indicators.get('macd_dif', 0):.4f}
 - DEA: {indicators.get('macd_dea', 0):.4f}  
 - 柱状图: {indicators.get('macd_hist', 0):.4f}
 - 状态: {indicators.get('macd_state', 'neutral')}
 
-【RSI】
+RSI:
 - RSI6: {indicators.get('rsi6', 50):.2f}
 - RSI12: {indicators.get('rsi12', 50):.2f}
 - RSI24: {indicators.get('rsi24', 50):.2f}
 
-【KDJ】
+KDJ:
 - K: {indicators.get('k', 50):.2f}
 - D: {indicators.get('d', 50):.2f}
 - J: {indicators.get('j', 50):.2f}
 
-【布林带】
+布林带:
 - 上轨: {indicators.get('boll_upper', 0):.2f}
 - 中轨: {indicators.get('boll_mid', 0):.2f}
 - 下轨: {indicators.get('boll_lower', 0):.2f}
@@ -174,6 +220,14 @@ class PatternInterpreterAgent(BaseAIAgent):
         return self._parse_response(response)
 ```
 
+**能力**：
+- ✅ 指标共振检测
+- ✅ 背离识别
+- ✅ 超买超卖判断
+- ✅ 综合信号评级
+
+---
+
 ### 3. MarketContextAgent - 市场环境分析
 
 ```python
@@ -185,19 +239,28 @@ class MarketContextAgent(BaseAIAgent):
     输出：市场环境解读、板块机会分析
     """
     
+    SYSTEM_PROMPT = """你是一位宏观策略分析师，擅长市场风格判断和板块轮动分析。
+
+分析原则：
+1. 基于动量数据判断市场风格
+2. 识别资金流向和板块热点
+3. 判断轮动节奏（适合追涨还是埋伏）
+4. 给出配置建议和预警信号
+
+输出格式必须是JSON。"""
+    
     def analyze(self, input_data: AIAgentInput) -> AIAgentOutput:
         rotation_data = input_data.raw_data
         
         prompt = f"""
-作为宏观策略分析师，请解读以下市场环境：
-
-【强势行业TOP5】
+【市场环境数据】
+强势行业TOP5:
 {rotation_data.get('strong_industries', [])}
 
-【弱势行业TOP5】  
+弱势行业TOP5:  
 {rotation_data.get('weak_industries', [])}
 
-【有买点的行业】
+有买点的行业:
 {rotation_data.get('buy_point_industries', [])}
 
 分析要求：
@@ -211,6 +274,14 @@ class MarketContextAgent(BaseAIAgent):
         return self._parse_response(response)
 ```
 
+**能力**：
+- ✅ 市场风格判断
+- ✅ 板块轮动解读
+- ✅ 资金流向分析
+- ✅ 配置建议
+
+---
+
 ### 4. StrategyAdvisorAgent - 策略顾问
 
 ```python
@@ -222,13 +293,22 @@ class StrategyAdvisorAgent(BaseAIAgent):
     输出：具体操作建议、仓位管理、止损止盈
     """
     
+    SYSTEM_PROMPT = """你是一位量化交易策略师，擅长制定具体的交易计划。
+
+分析原则：
+1. 给出具体的入场价位区间
+2. 明确仓位比例建议
+3. 设置技术和时间双重止损
+4. 制定分批止盈方案
+5. 强调风险管控
+
+输出格式必须是JSON。"""
+    
     def analyze(self, input_data: AIAgentInput) -> AIAgentOutput:
         context = input_data.context  # 整合前面的分析结果
         
         prompt = f"""
-作为量化交易策略师，请基于以下综合分析给出具体操作建议：
-
-【综合背景】
+【综合分析背景】
 {context}
 
 【当前持仓假设】
@@ -260,80 +340,212 @@ class StrategyAdvisorAgent(BaseAIAgent):
         return self._parse_response(response)
 ```
 
-## 主智能体集成方案
+**能力**：
+- ✅ 具体操作建议
+- ✅ 仓位管理建议
+- ✅ 止损止盈设置
+- ✅ 风险管控方案
+
+---
+
+## 主智能体集成
+
+### WaveAnalystAgent 集成示例
 
 ```python
-# agents/wave_analyst.py 改造示例
+# agents/wave_analyst.py
 
 class WaveAnalystAgent(BaseAgent):
-    def __init__(self, config_path=None, use_ai=True):
-        super().__init__(...)
+    def __init__(self, config_path=None, use_ai=True, use_cache=True):
+        super().__init__(config_path)
         self.use_ai = use_ai
+        self.use_cache = use_cache
+        
         # 初始化AI子代理
         if use_ai:
             self.wave_reasoner = WaveReasoningAgent()
             self.strategy_advisor = StrategyAdvisorAgent()
+            
+        # 初始化缓存
+        if use_cache:
+            self.ai_cache = {}  # 简单内存缓存
     
     def analyze(self, input_data: AgentInput) -> AgentOutput:
+        """分析流程"""
         # 1. 技术分析（原有逻辑）
         wave_result = self.wave_analyzer.detect(df)
         
         if not self.use_ai:
             return self._format_basic_output(wave_result)
         
-        # 2. AI推理层
-        ai_input = AIAgentInput(
-            raw_data=wave_result,
-            context=f"分析标的: {input_data.symbol}"
-        )
-        ai_reasoning = self.wave_reasoner.analyze(ai_input)
+        # 2. 检查缓存
+        cache_key = self._make_cache_key(input_data.symbol, wave_result)
+        if self.use_cache and cache_key in self.ai_cache:
+            ai_reasoning = self.ai_cache[cache_key]
+        else:
+            # 3. AI推理层
+            ai_input = AIAgentInput(
+                raw_data=wave_result,
+                context=f"分析标的: {input_data.symbol}",
+                market_state=self._detect_market_state(df)
+            )
+            ai_reasoning = self.wave_reasoner.analyze(ai_input)
+            
+            # 缓存结果
+            if self.use_cache:
+                self.ai_cache[cache_key] = ai_reasoning
         
-        # 3. 策略建议层
+        # 4. 策略建议层
         strategy_input = AIAgentInput(
             raw_data=wave_result,
             context=ai_reasoning.reasoning
         )
         strategy = self.strategy_advisor.analyze(strategy_input)
         
-        # 4. 整合输出
+        # 5. 整合输出
         return AgentOutput(
             result={
                 'technical': wave_result,
                 'ai_reasoning': ai_reasoning,
                 'strategy': strategy
             },
-            ...
+            confidence=ai_reasoning.confidence,
+            metadata={
+                'ai_enabled': True,
+                'cached': cache_key in self.ai_cache if self.use_cache else False
+            }
         )
 ```
 
-## 实施方案
+---
 
-### Phase 1: 基础设施
-1. 创建 `agents/ai_subagents/` 目录
-2. 实现 `BaseAIAgent` 基类
-3. 封装LLM调用（支持CodeFlow/DeepSeek切换）
+## 适配器模式
 
-### Phase 2: 子代理实现
-1. WaveReasoningAgent - 波浪形态推理
-2. PatternInterpreterAgent - 指标综合解读
-3. MarketContextAgent - 市场环境分析
+### AIAdapter - 统一接口
 
-### Phase 3: 主智能体集成
-1. WaveAnalystAgent 集成AI子代理
-2. TechAnalystAgent 集成AI子代理
-3. RotationAnalystAgent 集成AI子代理
+```python
+# agents/ai_subagents/adapter.py
 
-### Phase 4: 测试优化
-1. 对比AI增强 vs 纯技术分析的输出质量
-2. 调整prompt提升推理质量
-3. 添加缓存减少API调用成本
+class AIAdapter:
+    """
+    AI子代理适配器
+    
+    统一接口，简化主智能体调用
+    """
+    
+    def __init__(self, use_ai: bool = True, use_cache: bool = True):
+        self.use_ai = use_ai
+        self.use_cache = use_cache
+        
+        if use_ai:
+            self.agents = {
+                'wave': WaveReasoningAgent(),
+                'pattern': PatternInterpreterAgent(),
+                'market': MarketContextAgent(),
+                'strategy': StrategyAdvisorAgent()
+            }
+            self.cache = {}
+    
+    def enhance_wave_analysis(self, wave_data: dict, symbol: str) -> Optional[dict]:
+        """增强波浪分析"""
+        if not self.use_ai:
+            return None
+            
+        cache_key = f"wave_{symbol}_{hash(str(wave_data))}"
+        if self.use_cache and cache_key in self.cache:
+            return self.cache[cache_key]
+        
+        input_data = AIAgentInput(
+            raw_data=wave_data,
+            context=f"标的: {symbol}"
+        )
+        
+        result = self.agents['wave'].analyze(input_data)
+        
+        if self.use_cache:
+            self.cache[cache_key] = result
+        
+        return {
+            'reasoning': result.reasoning,
+            'conclusion': result.conclusion,
+            'confidence': result.confidence,
+            'target_range': result.target_range,
+            'action': result.action_suggestion
+        }
+    
+    def enhance_rotation_analysis(self, rotation_data: dict) -> Optional[dict]:
+        """增强轮动分析"""
+        if not self.use_ai:
+            return None
+        
+        input_data = AIAgentInput(
+            raw_data=rotation_data,
+            context="全市场行业轮动分析"
+        )
+        
+        result = self.agents['market'].analyze(input_data)
+        
+        return {
+            'market_style': result.conclusion,
+            'confidence': result.confidence,
+            'rotation_rhythm': result.action_suggestion
+        }
+```
 
-## 预期收益
+---
 
-1. **解释性增强**：AI可以提供"为什么是这个浪型"的详细解释
-2. **决策质量提升**：多维度综合分析，减少单一指标误判
-3. **用户体验改善**：自然语言输出，非技术人员也能理解
-4. **灵活性提升**：通过prompt调整即可改变分析风格（保守/激进）
+## 成本与性能优化
+
+### 1. 缓存策略
+
+```python
+class AICache:
+    """AI推理缓存"""
+    
+    def __init__(self, ttl_hours: int = 24):
+        self.cache = {}
+        self.ttl = ttl_hours * 3600
+    
+    def get(self, key: str) -> Optional[AIAgentOutput]:
+        if key not in self.cache:
+            return None
+        
+        entry = self.cache[key]
+        if time.time() - entry['timestamp'] > self.ttl:
+            del self.cache[key]
+            return None
+        
+        return entry['data']
+    
+    def set(self, key: str, value: AIAgentOutput):
+        self.cache[key] = {
+            'data': value,
+            'timestamp': time.time()
+        }
+```
+
+### 2. 异步处理
+
+```python
+async def analyze_async(self, input_data: AIAgentInput) -> AIAgentOutput:
+    """异步分析，避免阻塞"""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        None, self.analyze, input_data
+    )
+```
+
+### 3. 成本预估
+
+| 使用场景 | 单次调用 | 日调用量 | 日成本 |
+|---------|---------|---------|--------|
+| 单股分析 | ¥0.05 | 100次 | ¥5 |
+| 批量分析 | ¥0.03 | 500次 | ¥15 |
+| 行业轮动 | ¥0.08 | 10次 | ¥0.8 |
+
+**优化后（带缓存）**：成本降低60-80%
+
+---
 
 ## 风险提示
 
@@ -341,3 +553,21 @@ class WaveAnalystAgent(BaseAgent):
 2. **延迟增加**：AI推理需要时间，异步处理或缓存必要
 3. **幻觉问题**：LLM可能产生不合理推理，需置信度阈值过滤
 4. **合规性**：投资建议需免责声明，AI建议仅供参考
+
+---
+
+## 实施状态
+
+| 阶段 | 状态 | 说明 |
+|------|------|------|
+| 基础设施 | ✅ 完成 | BaseAIAgent、适配器实现 |
+| WaveReasoningAgent | ✅ 完成 | 波浪形态推理 |
+| PatternInterpreterAgent | 🔄 进行中 | 指标综合解读 |
+| MarketContextAgent | 🔄 进行中 | 市场环境分析 |
+| StrategyAdvisorAgent | ⏳ 待开始 | 策略顾问 |
+| 缓存优化 | ✅ 完成 | 内存缓存实现 |
+| 异步处理 | ⏳ 待开始 | asyncio支持 |
+
+---
+
+*最后更新：2026-03-21*

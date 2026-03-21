@@ -2,15 +2,44 @@
 
 A 股量化分析平台，整合艾略特波浪识别、多指标共振、行业轮动分析与事件驱动回测。
 
+---
+
 ## 🆕 最近更新
 
-### 2026-03-21 - 系统性深度增强 E1~E6
-- **E1** - 买点评分维度扩充（缩量+均线+布林带）
-- **E2** - 共振权重市场状态自适应
-- **E3** - 出场逻辑补全（时间止损+保本止损）
-- **E4** - 信号召回率提升（参数优化）
-- **E5** - VolumeAnalyzer 三维量能升级
-- **E6** - 信号置信度衰减机制
+### 2026-03-21 - 系统性深度增强 E1~E6 ✅
+
+| 增强项 | 内容 | 状态 |
+|--------|------|------|
+| **E1** | 买点评分维度扩充（缩量+均线+布林带） | ✅ 已合并 |
+| **E2** | 共振权重市场状态自适应 | ✅ 已合并 |
+| **E3** | 出场逻辑补全（时间止损+保本止损） | ✅ 已合并 |
+| **E4** | 信号召回率提升（参数优化） | ✅ 已合并 |
+| **E5** | VolumeAnalyzer 三维量能升级 | ✅ 已合并 |
+| **E6** | 信号置信度衰减机制 | ✅ 已合并 |
+
+**数据更新**：
+- 移除3只退市股票（002013/300023/873593）
+- 股票池：588 → **646只**
+- 数据库：267万条记录
+
+### 2026-03-20 - 架构优化与审计修复
+
+**审计报告修复 (N-01 ~ N-07)**：
+- P0: API Key和数据库密码改用环境变量
+- P1: DB连接优化、AI子代理架构、重试机制
+- P2: Triangle调整浪检测
+- P3: FastAPI接口 + 测试套件（96个测试文件）
+- 系统健康度：85/100 → **90/100**
+
+**回测参数回传系统**：
+- 创建 `config/wave_params.json` 参数持久化
+- 创建 `utils/param_manager.py` 参数管理器
+- 解决"报告参数与代码不一致"问题
+
+**申万行业数据恢复**：
+- 清空同花顺数据（仅7个月历史）
+- 恢复申万数据：123个行业，39.4万条记录
+- 时间跨度：1999-2026（26年完整历史）
 
 ---
 
@@ -22,16 +51,20 @@ A 股量化分析平台，整合艾略特波浪识别、多指标共振、行业
 - **🤖 AI增强分析** - LLM推理子代理提供深度解读
 - **🌐 RESTful API** - FastAPI服务层支持外部调用
 
+---
+
 ## 📊 数据管理
 
 - **默认数据源**: 同花顺(THS) 前复权数据
 - **数据流程**: 批量拉取 → 本地缓存 → 导入数据库 → 自动清理
 - **详细策略**: [docs/data_strategy.md](docs/data_strategy.md)
 
+---
+
 ## 📁 项目结构
 
 ```
-kimi/
+智能体系统/
 ├── agents/                  # 智能体层
 │   ├── base_agent.py        # BaseAgent 抽象基类
 │   ├── wave_analyst.py      # 波浪分析智能体
@@ -39,45 +72,59 @@ kimi/
 │   ├── rotation_analyst.py  # 行业轮动智能体
 │   └── ai_subagents/        # AI推理子代理
 │       ├── base_ai_agent.py
-│       ├── wave_reasoning_agent.py
-│       └── __init__.py
+│       └── adapter.py
 │
 ├── analysis/                # 分析引擎
 │   ├── wave/                # 艾略特波浪
 │   │   ├── elliott_wave.py      # 波浪识别算法
-│   │   ├── unified_analyzer.py
-│   │   └── resonance.py
+│   │   ├── unified_analyzer.py  # 统一入口
+│   │   ├── resonance.py         # 多指标共振
+│   │   ├── entry_optimizer.py   # 入场优化
+│   │   └── adaptive_params.py   # 自适应参数
 │   ├── technical/
-│   │   └── indicators.py
-│   └── backtest/
+│   │   └── indicators.py        # 技术指标
+│   ├── backtest/
+│   │   └── wave_backtester.py   # 回测引擎
+│   └── optimization/
+│       └── param_optimizer.py   # 参数优化
 │
 ├── api/                     # FastAPI服务层
-│   ├── __init__.py
 │   └── main.py              # API入口
 │
 ├── data/                    # 数据层
 │   ├── db_manager.py
-│   ├── optimized_data_manager.py
-│   └── mx_data_provider.py  # 妙想金融数据适配器
+│   ├── optimized_data_manager.py  # 内存缓存
+│   └── mx_data_provider.py
 │
 ├── scripts/                 # 运维脚本
-│   └── data_sync/
+│   ├── data_sync/           # 数据同步
+│   ├── backtest/            # 回测执行
+│   ├── analysis/            # 分析工具
+│   └── maintenance/         # 维护工具
 │
 ├── tests/                   # 测试套件
-│   ├── unit/                # 单元测试
-│   ├── integration/         # 集成测试
-│   ├── regression/          # 回归测试
+│   ├── unit/                # 单元测试 (50+)
+│   ├── integration/         # 集成测试 (15+)
+│   ├── regression/          # 回归测试 (3+)
+│   ├── e2e/                 # 端到端测试 (5+)
 │   └── run_all_tests.sh     # 测试运行脚本
 │
 ├── docs/                    # 文档
-│   ├── api.md               # API文档
-│   ├── ai_subagent_design.md
-│   └── testing.md           # 测试文档
+│   ├── api.md
+│   ├── data_strategy.md
+│   ├── testing.md
+│   └── ai_subagent_design.md
 │
-├── config/config.yaml       # 全局配置
+├── config/
+│   ├── config.yaml          # 全局配置
+│   ├── wave_params.json     # 波浪参数
+│   └── wave_params_history/ # 参数历史
+│
 ├── main.py                  # 系统主入口
 └── requirements.txt
 ```
+
+---
 
 ## 🚀 快速开始
 
@@ -134,14 +181,18 @@ python tests/integration/test_audit_fixes.py  # 集成测试
 python tests/regression/test_audit_fixes.py   # 回归测试
 ```
 
+---
+
 ## 📊 数据库状态
 
 | 指标 | 数值 |
 |------|------|
-| 股票数量 | 646 只 |
-| 总记录数 | 1,600,000+ 条 |
+| 股票数量 | **646 只** |
+| 总记录数 | **2,670,000+ 条** |
 | 时间范围 | 1993–2026 |
-| 查询速度 | 0.05 ms / 只（内存缓存） |
+| 查询速度 | **0.05 ms** / 只（内存缓存）|
+
+---
 
 ## 🏗️ 技术栈
 
@@ -154,11 +205,17 @@ python tests/regression/test_audit_fixes.py   # 回归测试
 | AI模型 | DeepSeek-R1 / Claude Sonnet |
 | 数据处理 | pandas 3.0 / numpy 2.4 |
 
+---
+
 ## 📚 文档
 
 - [API使用文档](docs/api.md) - RESTful API详细说明
 - [测试文档](docs/testing.md) - 测试套件使用指南
 - [AI子代理设计](docs/ai_subagent_design.md) - AI架构设计
+- [数据策略](docs/data_strategy.md) - 数据管理策略
+- [架构分析](docs/architecture_review.md) - 系统架构分析
+
+---
 
 ## 🔑 安全提示
 
@@ -166,11 +223,15 @@ python tests/regression/test_audit_fixes.py   # 回归测试
 - 切勿将真实Key提交到版本库
 - 详见 `.env.example` 模板
 
+---
+
 ## 📝 开发规范
 
 - 提交格式：`fix(module):` / `feat(module):` / `test(module):`
 - 提交前运行测试：`./tests/run_all_tests.sh`
 - 代码格式化：`ruff format .`
+
+---
 
 ## 📈 测试覆盖
 
@@ -180,11 +241,18 @@ python tests/regression/test_audit_fixes.py   # 回归测试
 | 集成测试 | 15+ | 模块协作测试 |
 | E2E测试 | 5+ | 端到端测试 |
 | 回归测试 | 3+ | 防回退测试 |
-| **总计** | **70+** | 全面覆盖 |
+| **总计** | **96** | 全面覆盖 |
+
+---
 
 ## 📊 项目统计
 
-- **Python文件**: 174+
-- **代码行数**: 26,000+
+- **Python文件**: 200+
+- **代码行数**: 30,000+
+- **测试文件**: 96
 - **脚本工具**: 59+
-- **文档页数**: 2000+ 行
+- **文档页数**: 3000+ 行
+
+---
+
+*最后更新：2026-03-21*
