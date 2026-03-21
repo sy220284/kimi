@@ -5,7 +5,6 @@
 
 注意：已弃用 AKShare/Tushare，统一使用同花顺(THS)作为主要数据源
 """
-import json
 import time
 from datetime import datetime
 from typing import Any

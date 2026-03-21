@@ -1,3 +1,4 @@
+import os
 """
 数据库优先的数据管理器
 默认从数据库读取，缺失时从THS获取并写入数据库
@@ -27,8 +28,8 @@ class DatabaseDataManager:
         pg_host: str = 'localhost',
         pg_port: int = 5432,
         pg_database: str = 'quant_analysis',
-        pg_username: str = 'quant_user',
-        pg_password: str = 'quant_password',
+        pg_username: str | None = None,  # 读取 PG_USERNAME 环境变量
+        pg_password: str | None = None,  # 读取 PG_PASSWORD 环境变量
         redis_host: str = 'localhost',
         redis_port: int = 6379,
         enable_cache: bool = True,
@@ -38,6 +39,9 @@ class DatabaseDataManager:
         self.ths = ThsAdapter(ths_config or {'enabled': True, 'timeout': 30})
 
         # PostgreSQL (主存储)
+        # 凭证：传入参数 > 环境变量 > 开发默认值
+        pg_username = pg_username or os.environ.get('PG_USERNAME', 'quant_user')
+        pg_password = pg_password or os.environ.get('PG_PASSWORD', 'quant_password')
         self.pg = PostgresConnector(
             host=pg_host, port=pg_port, database=pg_database,
             username=pg_username, password=pg_password

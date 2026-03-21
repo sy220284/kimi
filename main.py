@@ -3,8 +3,6 @@
 智能体量化分析系统 - 主入口 (演示版)
 使用优化数据管理器运行分析
 """
-import sys
-from pathlib import Path
 
 import argparse
 import time

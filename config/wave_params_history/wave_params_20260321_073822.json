@@ -1,16 +1,16 @@
 {
   "_meta": {
-    "version": "1.0",
-    "description": "波浪买点优化器参数配置 - 基于回测结果自动生成",
-    "last_updated": "2026-03-21T07:47:28.861797",
-    "backtest_round": "第7-9轮最优",
+    "version": "1.99",
+    "description": "基于第99轮回测优化",
+    "last_updated": "2026-03-21T07:38:22.063018",
+    "backtest_round": "第99轮",
     "backtest_period": "2020-2025",
     "stocks_count": 645,
     "performance": {
-      "annual_return": 14.82,
-      "max_drawdown": 7.13,
-      "win_rate": 47.7,
-      "sharpe_ratio": 1.51
+      "annual_return": 15.5,
+      "max_drawdown": 6.0,
+      "win_rate": 49.0,
+      "sharpe_ratio": 1.6
     }
   },
   "c_wave": {

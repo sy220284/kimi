@@ -1,3 +1,4 @@
+import sys
 #!/usr/bin/env python3
 """
 完整测试套件运行器

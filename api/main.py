@@ -7,7 +7,6 @@ import time
 from collections import defaultdict
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Security
 from fastapi.middleware.cors import CORSMiddleware
@@ -307,10 +306,21 @@ async def technical_analysis(request: AnalysisRequest, _: str = Depends(verify_a
         if result.state.value == 'error':
             raise HTTPException(status_code=500, detail=result.error_message)
 
+        # TechAgent.result['signals'] 可能是 dict（indicator_name→signal）
+        # TechAnalysisResponse.signals 要求 list[dict]，统一转换
+        raw_signals = result.result.get('signals', [])
+        if isinstance(raw_signals, dict):
+            signals_list = [
+                {'indicator': k, **v} if isinstance(v, dict) else {'indicator': k, 'signal': v}
+                for k, v in raw_signals.items()
+            ]
+        else:
+            signals_list = raw_signals or []
+
         return TechAnalysisResponse(
             symbol=request.symbol,
             status='success',
-            signals=result.result.get('signals', []),
+            signals=signals_list,
             combined_signal=result.result.get('combined_signal', {}),
             confidence=result.confidence,
             ai_analysis=result.result.get('ai_analysis'),

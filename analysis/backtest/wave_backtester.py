@@ -120,18 +120,24 @@ class BacktestResult:
     equity_curve: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
+        """转换为字典（数值字段返回原始浮点数，便于聚合/比较）"""
         return {
             'symbol': self.symbol,
+            'start_date': str(self.start_date) if self.start_date else None,
+            'end_date': str(self.end_date) if self.end_date else None,
             'period': f"{self.start_date} ~ {self.end_date}",
             'total_trades': self.total_trades,
-            'win_rate': f"{self.win_rate:.1%}",
+            'win_rate': self.win_rate,                     # float 0-1
+            'win_rate_pct': f"{self.win_rate:.1%}",        # formatted string
+            'total_return_pct': self.total_return_pct,     # float
             'total_return': f"{self.total_return_pct:.2f}%",
-            'avg_return_per_trade': f"{self.avg_return_per_trade:.2f}%",
+            'avg_return_per_trade': self.avg_return_per_trade,  # float
+            'max_drawdown_pct': self.max_drawdown_pct,     # float
             'max_drawdown': f"{self.max_drawdown_pct:.2f}%",
-            'sharpe_ratio': f"{self.sharpe_ratio:.2f}",
-            'sortino_ratio': f"{self.sortino_ratio:.2f}",
-            'calmar_ratio': f"{self.calmar_ratio:.2f}",
-            'profit_factor': f"{self.profit_factor:.2f}"
+            'sharpe_ratio': self.sharpe_ratio,             # float
+            'sortino_ratio': self.sortino_ratio,           # float
+            'calmar_ratio': self.calmar_ratio,             # float
+            'profit_factor': self.profit_factor,           # float
         }
 
 

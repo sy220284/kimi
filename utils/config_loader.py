@@ -22,6 +22,7 @@ class ConfigLoaderError(Exception):
     pass
 
 
+
 class ConfigLoader:
     """YAML配置加载器，支持环境变量替换"""
 
@@ -40,13 +41,13 @@ class ConfigLoader:
             current_file = Path(__file__).resolve()
             project_root = current_file.parent.parent  # utils -> 项目根目录
             config_path = project_root / "config" / "config.yaml"
-            
+            # 加载.env文件（如果存在）
+            self._load_env_file(project_root)
             # 加载.env文件（如果存在）
             self._load_env_file(project_root)
 
         self.config_path = config_path
         self._config: dict[str, Any] | None = None
-    
     def _load_env_file(self, project_root: Path) -> None:
         """
         加载.env文件到环境变量
@@ -73,29 +74,6 @@ class ConfigLoader:
                             value = value.strip().strip('"\'')
                             if key and key not in os.environ:
                                 os.environ[key] = value
-
-
-class ConfigLoader:
-    """YAML配置加载器，支持环境变量替换"""
-
-    # 环境变量替换模式: ${VAR_NAME} 或 ${VAR_NAME:default_value}
-    ENV_PATTERN = re.compile(r'\$\{([^}]+)\}')
-
-    def __init__(self, config_path: Path | None = None):
-        """
-        初始化配置加载器
-
-        Args:
-            config_path: 配置文件路径，默认为项目根目录下的config/config.yaml
-        """
-        if config_path is None:
-            # 从当前文件位置推断项目根目录
-            current_file = Path(__file__).resolve()
-            project_root = current_file.parent.parent  # utils -> 项目根目录
-            config_path = project_root / "config" / "config.yaml"
-
-        self.config_path = config_path
-        self._config: dict[str, Any] | None = None
 
     def _replace_env_vars(self, value: Any) -> Any:
         """

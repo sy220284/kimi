@@ -2,7 +2,6 @@
 东方财富直连适配器
 直接调用东财API，不通过 akshare 中间层
 """
-import json
 import time
 from datetime import datetime
 from typing import Any

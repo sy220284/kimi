@@ -24,10 +24,9 @@
     })
 """
 import json
-import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 # 参数文件路径
 PARAMS_FILE = Path(__file__).parent.parent / 'config' / 'wave_params.json'

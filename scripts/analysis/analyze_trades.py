@@ -1,3 +1,4 @@
+import sys
 #!/usr/bin/env python3
 """
 买卖点准确率分析

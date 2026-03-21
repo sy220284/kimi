@@ -590,8 +590,7 @@ class ResonanceAnalyzer:
     # ── OPT-1: 预计算指标快速路径辅助方法 ──────────────────────────────
     def _macd_signal_from_df(self, df: 'pd.DataFrame') -> IndicatorSignal:
         """从已有 MACD 列直接读取（支持大/小写列名），跳过重新计算"""
-        import pandas as _pd
-        # 统一：优先大写列名 (TechnicalIndicators), 降级小写 (Resonance内部)
+                # 统一：优先大写列名 (TechnicalIndicators), 降级小写 (Resonance内部)
         _c = df.columns
         mc  = 'MACD'           if 'MACD'           in _c else 'macd'
         msc = 'MACD_Signal'    if 'MACD_Signal'    in _c else 'macd_signal'

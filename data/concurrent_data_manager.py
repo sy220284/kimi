@@ -41,8 +41,8 @@ class ConcurrentDatabaseDataManager:
         pg_host: str = 'localhost',
         pg_port: int = 5432,
         pg_database: str = 'quant_analysis',
-        pg_username: str = 'quant_user',
-        pg_password: str = 'quant_password',
+        pg_username: str | None = None,  # 读取 PG_USERNAME 环境变量
+        pg_password: str | None = None,  # 读取 PG_PASSWORD 环境变量
         redis_host: str = 'localhost',
         redis_port: int = 6379,
         enable_cache: bool = True,
