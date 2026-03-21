@@ -2,21 +2,15 @@
 统一数据接口 - 整合缓存、多源、质量监控
 简化调用，一行代码获取高质量数据
 """
-import sys
-from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
 # 添加项目根目录到路径
-_project_root = Path(__file__).parent.parent
-if str(_project_root) not in sys.path:
-    sys.path.insert(0, str(_project_root))
 
 from data.cache import get_cache
 from data.db_manager import get_db_manager
 from data.quality_monitor import DataQualityMonitor
-
 
 class DataAPI:
     """
@@ -123,7 +117,6 @@ class DataAPI:
     def clear_cache(self):
         """清理缓存"""
         self.cache.clear_expired()
-
 
 # 便捷函数
 def get_stock_data(

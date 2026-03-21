@@ -3,26 +3,19 @@
 实现MACD、RSI、KDJ、Bollinger Bands、MA均线
 使用pandas和numpy实现，返回DataFrame格式
 """
-import sys
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
 
 # 添加项目根目录到路径
-_project_root = Path(__file__).parent.parent.parent
-if str(_project_root) not in sys.path:
-    sys.path.insert(0, str(_project_root))
 
 from utils.logger import get_logger
-
 
 class IndicatorError(Exception):
     """指标计算错误"""
     pass
-
 
 @dataclass
 class IndicatorValue:
@@ -40,7 +33,6 @@ class IndicatorValue:
             'timestamp': self.timestamp,
             'signal': self.signal
         }
-
 
 class TechnicalIndicators:
     """技术指标计算器（单例模式 — 无状态，多次 TechnicalIndicators() 返回同一实例）"""

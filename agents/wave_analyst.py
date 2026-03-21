@@ -37,16 +37,27 @@ class WaveAnalystAgent(BaseAgent):
         config_path: Path | None = None,
         use_ai: bool = False,
         ai_model: str = "deepseek/deepseek-reasoner",
-        use_unified: bool = True  # 新增: 是否使用统一分析器
+        use_unified: bool = True  # 是否使用统一分析器
     ):
         """
         初始化波浪分析师
 
         Args:
-            config_path: 配置文件路径
-            use_ai: 是否启用AI子代理增强
-            ai_model: AI模型选择 (如 "deepseek/deepseek-reasoner" 或 "codeflow/claude-sonnet-4-6")
-            use_unified: 是否使用 UnifiedWaveAnalyzer (含入场优化+共振分析)
+            config_path:  配置文件路径
+            use_ai:       是否启用 AI 子代理增强（默认 False）
+                          设为 True 前需先配置 API Key：
+                            DeepSeek:  export DEEPSEEK_API_KEY=<your_key>
+                            CodeFlow:  export CODEFLOW_API_KEY=<your_key>
+                          未配置时会自动降级回 use_ai=False，不会报错。
+                          AI 分析使用 Redis 缓存（TTL 24h），相同输入不重复计费。
+            ai_model:     AI 模型标识符，格式 "provider/model_id"
+                          支持: "deepseek/deepseek-reasoner"（推荐，慢思考）
+                                "deepseek/deepseek-chat"（快，适合批量）
+                                "codeflow/claude-sonnet-4-6"（CodeFlow接入）
+            use_unified:  是否使用 UnifiedWaveAnalyzer（默认 True，推荐）
+                          True  → UnifiedWaveAnalyzer（含 C/2/4 浪专项检测、
+                                  多指标共振分析、入场质量评分）
+                          False → ElliottWaveAnalyzer（基础波浪识别，向后兼容）
         """
         super().__init__(
             agent_name="wave_analyst",

@@ -1,33 +1,26 @@
 """
 数据采集模块 - 统一数据采集接口
 """
-import sys
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from enum import Enum
-from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
 # 添加项目根目录到路径
-_project_root = Path(__file__).parent.parent
-if str(_project_root) not in sys.path:
-    sys.path.insert(0, str(_project_root))
 
 from utils.config_loader import load_config
 from utils.logger import get_logger
-
+from pathlib import Path
 
 class DataSourceError(Exception):
     """数据源错误"""
     pass
 
-
 class DataFetchError(Exception):
     """数据获取错误"""
     pass
-
 
 class DataSourceType(Enum):
     """数据源类型"""
@@ -38,7 +31,6 @@ class DataSourceType(Enum):
     
     # 当前默认数据源
     THS = "ths"  # 同花顺 - 前复权数据 (默认)
-
 
 class DataSourceAdapter(ABC):
     """数据源适配器抽象基类"""
@@ -164,7 +156,6 @@ class DataSourceAdapter(ABC):
             df['volume'] = pd.to_numeric(df['volume'], errors='coerce').astype('int64')
 
         return df
-
 
 class DataCollector:
     """统一数据采集器"""

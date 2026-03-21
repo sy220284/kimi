@@ -9,18 +9,13 @@
 3. 趋势过滤后置 - 买入前检查趋势方向
 4. ATR动态止损 - 替代固定百分比止损
 """
-import sys
 from dataclasses import dataclass
 from enum import Enum
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 # 添加项目根目录到路径
-_project_root = Path(__file__).parent.parent.parent
-if str(_project_root) not in sys.path:
-    sys.path.insert(0, str(_project_root))
 
 from analysis.wave.adaptive_params import AdaptiveParameterOptimizer, MarketCondition
 from analysis.wave.elliott_wave import WaveDirection, WaveType
@@ -28,14 +23,12 @@ from analysis.wave.enhanced_detector import PivotPoint, enhanced_pivot_detection
 from analysis.wave.entry_optimizer import WaveEntryOptimizer
 from analysis.wave.resonance import ResonanceAnalyzer, SignalDirection
 
-
 class WaveEntryType(Enum):
     """波浪买入类型"""
     WAVE_C = "C"
     WAVE_2 = "2"
     WAVE_4 = "4"
     UNKNOWN = "unknown"
-
 
 @dataclass
 class UnifiedWaveSignal:
@@ -74,7 +67,6 @@ class UnifiedWaveSignal:
 
     def __repr__(self):
         return f"WaveSignal({self.entry_type.value}, ¥{self.entry_price:.2f}, conf={self.confidence:.2f}, res={self.resonance_score:.2f}, quality={self.quality_score:.2f})"
-
 
 class UnifiedWaveAnalyzer:
     """
@@ -1190,20 +1182,17 @@ class UnifiedWaveAnalyzer:
         resampled['date'] = resampled['date'].dt.strftime('%Y-%m-%d')
         return resampled
 
-
 # 便捷函数
 def detect_waves(df: pd.DataFrame, **kwargs) -> list[UnifiedWaveSignal]:
     """检测所有波浪信号"""
     analyzer = UnifiedWaveAnalyzer(**kwargs)
     return analyzer.detect(df, mode='all')
 
-
 def detect_wave_by_type(df: pd.DataFrame, wave_type: str, **kwargs) -> UnifiedWaveSignal | None:
     """检测特定类型波浪"""
     analyzer = UnifiedWaveAnalyzer(**kwargs)
     signals = analyzer.detect(df, mode=wave_type)
     return signals[0] if signals else None
-
 
 if __name__ == "__main__":
     from data import get_stock_data

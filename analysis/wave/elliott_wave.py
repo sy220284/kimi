@@ -9,19 +9,14 @@
 - 斐波那契目标价计算
 - 子波浪嵌套结构
 """
-import sys
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
 
 # 添加项目根目录到路径
-_project_root = Path(__file__).parent.parent.parent
-if str(_project_root) not in sys.path:
-    sys.path.insert(0, str(_project_root))
 
 from utils.logger import get_logger
 
@@ -42,13 +37,11 @@ class WaveType(Enum):
     TRIANGLE = "triangle"
     UNKNOWN = "unknown"
 
-
 class WaveDirection(Enum):
     """波浪方向"""
     UP = "up"
     DOWN = "down"
     UNKNOWN = "unknown"
-
 
 @dataclass
 class WavePoint:
@@ -66,7 +59,6 @@ class WavePoint:
     def __repr__(self) -> str:
         return f"WavePoint({self.wave_num or '?'} {self.date} ¥{self.price:.2f})"
 
-
 @dataclass
 class WaveValidation:
     """波浪验证结果"""
@@ -74,7 +66,6 @@ class WaveValidation:
     passed: bool
     score: float
     details: str
-
 
 @dataclass
 class WavePattern:
@@ -115,7 +106,6 @@ class WavePattern:
             'points': [{'date': p.date, 'price': p.price, 'wave_num': p.wave_num} for p in self.points]
         }
 
-
 # ============================================================================
 # SECTION 2 — ATR Adaptive Pivot Detection (专业版核心)
 # ============================================================================
@@ -146,7 +136,6 @@ def calculate_atr(high: np.ndarray, low: np.ndarray, close: np.ndarray, period: 
         atr[i] = _prev
     atr[:seed - 1] = atr[seed - 1]
     return atr
-
 
 def zigzag_atr(high, low, close, atr, atr_mult=0.5, min_dist=3):
     """ATR自适应ZigZag - 根据波动率动态调整阈值"""
@@ -194,7 +183,6 @@ def zigzag_atr(high, low, close, atr, atr_mult=0.5, min_dist=3):
 
     return idxs, prices, types
 
-
 # ============================================================================
 # SECTION 3 — Impulse Wave Rules (严格规则验证)
 # ============================================================================
@@ -228,7 +216,6 @@ class ImpulseMetrics:
             w1=w1, w2=w2, w3=w3, w4=w4, w5=w5,
             w2_retrace=w2/(w1+1e-12), w4_retrace=w4/(w3+1e-12)
         )
-
 
 def validate_impulse_rules(points):
     """推动浪硬规则验证 + 指导原则评分"""
@@ -274,7 +261,6 @@ def validate_impulse_rules(points):
 
     return True, [], earned/(total+1e-12), scores
 
-
 def validate_zigzag(points):
     """ZigZag验证"""
     if len(points) != 4:
@@ -297,7 +283,6 @@ def validate_zigzag(points):
     ])
 
     return True, [], score
-
 
 def validate_flat(points):
     """
@@ -370,7 +355,6 @@ def validate_flat(points):
     score = min(score, 1.0)
 
     return True, [], score
-
 
 def validate_triangle(points):
     """
@@ -456,7 +440,6 @@ def validate_triangle(points):
     is_valid = score >= 0.50 or converging
     
     return is_valid, [], score
-
 
 def validate_diagonal(points, wave_subtype: str = 'auto') -> tuple:
     """
@@ -554,7 +537,6 @@ def validate_diagonal(points, wave_subtype: str = 'auto') -> tuple:
     is_valid = score >= 0.45 and not errors  # 对角线浪容错更高
 
     return is_valid, errors, score
-
 
 # ============================================================================
 # SECTION 4 — Elliott Wave Analyzer (整合版)
@@ -1324,7 +1306,6 @@ class ElliottWaveAnalyzer:
             result['stop_loss'] = pattern.stop_loss
 
         return result
-
 
 # 保持向后兼容的别名
 WaveAnalyzer = ElliottWaveAnalyzer

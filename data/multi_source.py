@@ -3,26 +3,19 @@
 主源: THS (同花顺)
 备源: AKShare / Tushare / 本地缓存
 """
-import sys
 from datetime import datetime
 from enum import Enum
-from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
 # 添加项目根目录到路径
-_project_root = Path(__file__).parent.parent
-if str(_project_root) not in sys.path:
-    sys.path.insert(0, str(_project_root))
-
 
 class DataSourcePriority(Enum):
     """数据源优先级"""
     PRIMARY = 1    # 主源
     SECONDARY = 2  # 备源
     FALLBACK = 3   # 最后备选
-
 
 class DataSourceStatus:
     """数据源状态"""
@@ -60,7 +53,6 @@ class DataSourceStatus:
             'fail_count': self.fail_count,
             'avg_response_time_ms': round(self.avg_response_time * 1000, 2)
         }
-
 
 class MultiSourceDataManager:
     """多源数据管理器"""
@@ -295,11 +287,9 @@ class MultiSourceDataManager:
         available.sort(key=score, reverse=True)
         return available[0][0]
 
-
 class DataFetchError(Exception):
     """数据获取异常"""
     pass
-
 
 # 全局实例
 _global_manager = None

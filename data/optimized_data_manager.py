@@ -3,9 +3,7 @@
 修复版 - 简化groupby操作避免列丢失
 C1增强: LRU缓存淘汰策略，支持内存上限控制
 """
-import sys
 from collections import OrderedDict
-from pathlib import Path
 
 import time
 
@@ -13,12 +11,8 @@ import numpy as np
 import pandas as pd
 
 # 添加项目根目录到路径
-_project_root = Path(__file__).parent.parent
-if str(_project_root) not in sys.path:
-    sys.path.insert(0, str(_project_root))
 
 from data.db_manager import get_db_manager
-
 
 class OptimizedDataManager:
     """组合优化数据管理器 - 单例模式 + LRU缓存淘汰"""
@@ -323,7 +317,6 @@ class OptimizedDataManager:
         print(f"✅ 完成: {elapsed*1000:.2f}ms")
         return df
 
-
 # ============== 单例和便捷函数 ==============
 
 _data_manager: OptimizedDataManager | None = None
@@ -334,18 +327,14 @@ def get_optimized_data_manager() -> OptimizedDataManager:
         _data_manager = OptimizedDataManager()
     return _data_manager
 
-
 def load_all_data() -> pd.DataFrame:
     return get_optimized_data_manager().load_all_data()
-
 
 def get_stock(symbol: str) -> pd.DataFrame | None:
     return get_optimized_data_manager().get_stock_data(symbol)
 
-
 def get_stocks(symbols: list[str]) -> pd.DataFrame:
     return get_optimized_data_manager().get_stocks_data(symbols)
-
 
 # ============== 性能测试 ==============
 
@@ -393,7 +382,6 @@ def benchmark():
     print("\n" + "="*80)
     print("✅ 测试通过")
     print("="*80)
-
 
 if __name__ == '__main__':
     benchmark()
