@@ -78,18 +78,18 @@ class TestValidateTriangle(unittest.TestCase):
         self.assertIn('E浪超出', errors[0])
     
     def test_perfect_convergence(self):
-        """测试完美收敛三角形"""
-        # 理想斐波那契比例收缩
+        """测试完美收敛三角形（黄金比例0.618收缩）"""
+        # BC/AB=0.786, CD/BC=0.727, DE/CD=0.75 均在[0.5,0.85]黄金区间
         points = [
             WavePoint(0, '2024-01-01', 100, 1000, is_peak=True),
-            WavePoint(1, '2024-01-05', 90, 1100, is_trough=True),   # AB = 10
-            WavePoint(2, '2024-01-10', 94, 1050, is_peak=True),     # BC = 4 (0.4)
-            WavePoint(3, '2024-01-15', 92, 1080, is_trough=True),   # CD = 2 (0.5)
-            WavePoint(4, '2024-01-20', 93, 1060, is_peak=True),     # DE = 1 (0.5)
+            WavePoint(1, '2024-01-05', 86, 1100, is_trough=True),   # AB = 14
+            WavePoint(2, '2024-01-10', 97, 1050, is_peak=True),     # BC = 11 (bc_ab=0.786)
+            WavePoint(3, '2024-01-15', 89, 1080, is_trough=True),   # CD = 8  (cd_bc=0.727)
+            WavePoint(4, '2024-01-20', 95, 1060, is_peak=True),     # DE = 6  (de_cd=0.75)
         ]
-        
+
         valid, errors, score = validate_triangle(points)
-        
+
         self.assertTrue(valid)
         self.assertGreater(score, 0.7)
 

@@ -18,8 +18,8 @@ from utils.config_loader import get_config_loader, load_config
 
 # 辅助函数：获取测试用的配置加载器
 def get_testconfig():
-    """获取测试配置"""
-    project_root = Path(__file__).parent.parent
+    """获取测试配置（使用项目根目录的真实配置）"""
+    project_root = Path(__file__).parent.parent.parent  # kimi/ 根目录
     config_path = project_root / "config" / "config.yaml"
     config_loader = get_config_loader(config_path)
     return config_loader.load()
