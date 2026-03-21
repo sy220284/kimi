@@ -9,7 +9,7 @@ import pandas as pd
 
 from utils.db_connector import PostgresConnector, RedisConnector
 
-from .ths_adapter import ThsAdapter
+# ThsAdapter removed - using direct DB access only
 
 
 class DatabaseDataManager:
@@ -36,7 +36,7 @@ class DatabaseDataManager:
         cache_ttl: int = 14400  # 4小时
     ):
         # THS API (备用源)
-        self.ths = ThsAdapter(ths_config or {'enabled': True, 'timeout': 30})
+        self.ths = None  # THS adapter removed; use direct DB access
 
         # PostgreSQL (主存储)
         # 凭证：传入参数 > 环境变量 > 开发默认值
@@ -106,7 +106,7 @@ class DatabaseDataManager:
             # 计算年份
             start_year = datetime.strptime(start_date, '%Y-%m-%d').year
             end_year = datetime.strptime(end_date, '%Y-%m-%d').year
-            api_data = self.ths.get_full_history(symbol, start_year, end_year)
+            api_data = None  # THS adapter removed
 
             # 过滤日期范围
             if not api_data.empty:
@@ -214,7 +214,7 @@ class DatabaseDataManager:
 
         print(f"同步 {symbol} {start_year}-{end_year} 数据...")
 
-        df = self.ths.get_full_history(symbol, start_year, end_year)
+        df = None  # THS adapter removed
 
         if not df.empty:
             self._save_to_database(symbol, df)
