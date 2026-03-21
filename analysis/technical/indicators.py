@@ -9,7 +9,6 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-# 添加项目根目录到路径
 
 from utils.logger import get_logger
 
@@ -498,52 +497,60 @@ class TechnicalIndicators:
     def calculate_all(
         self,
         df: pd.DataFrame,
-        ma_periods: list[int] = None,
+        ma_periods: list[int] | None = None,
         macd_params: dict | None = None,
         rsi_period: int = 14,
         kdj_params: dict | None = None,
-        bb_params: dict | None = None
+        bb_params: dict | None = None,
     ) -> pd.DataFrame:
         """
-        计算所有技术指标
+        计算所有技术指标（新系统适配版）
 
-        Args:
-            df: 价格数据
-            ma_periods: MA周期列表
-            macd_params: MACD参数字典
-            rsi_period: RSI周期
-            kdj_params: KDJ参数字典
-            bb_params: 布林带参数字典
+        除原有 MA/MACD/RSI/KDJ/BB 外，新增：
+          - ATR14     平均真实波幅（策略止损用）
+          - VolMA20   20日成交量均值（多因子换手率趋势用）
 
         Returns:
-            包含所有指标的DataFrame
+            含全部指标的 DataFrame（不修改原始数据）
         """
         if ma_periods is None:
-            ma_periods = [5, 10, 20, 60]
+            ma_periods = [5, 20, 60, 120]   # 适配多因子需要的均线
         self.validate_dataframe(df)
 
         result = df.copy()
 
-        # MA
+        # MA 均线组
         result = self.multi_ma(result, periods=ma_periods)
 
         # MACD
-        macd_config = macd_params or {}
-        result = self.macd(result, **macd_config, inplace=True)
+        result = self.macd(result, **(macd_params or {}), inplace=True)
 
         # RSI
         result = self.rsi(result, period=rsi_period, inplace=True)
 
         # KDJ
-        kdj_config = kdj_params or {}
-        result = self.kdj(result, **kdj_config, inplace=True)
+        result = self.kdj(result, **(kdj_params or {}), inplace=True)
 
-        # Bollinger Bands
-        bb_config = bb_params or {}
-        result = self.bollinger_bands(result, **bb_config, inplace=True)
+        # 布林带
+        result = self.bollinger_bands(result, **(bb_params or {}), inplace=True)
 
-        self.logger.debug(f"计算完成所有指标，数据行数: {len(result)}")
+        # ATR（14日，用于动态止损计算）
+        import numpy as np
+        h = result["high"].values.astype(float)
+        l = result["low"].values.astype(float)
+        c = result["close"].values.astype(float)
+        tr = np.empty(len(c))
+        tr[0] = h[0] - l[0]
+        tr[1:] = np.maximum(h[1:]-l[1:],
+                 np.maximum(np.abs(h[1:]-c[:-1]), np.abs(l[1:]-c[:-1])))
+        result["ATR14"] = (
+            pd.Series(tr, index=result.index).ewm(span=14, adjust=False).mean()
+        )
 
+        # 成交量20日均线（换手率趋势因子）
+        result["VolMA20"] = result["volume"].rolling(20).mean()
+
+        self.logger.debug(f"指标计算完成，行数={len(result)}")
         return result
 
     def get_all_signals(self, df: pd.DataFrame) -> dict[str, str]:

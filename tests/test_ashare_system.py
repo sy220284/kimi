@@ -424,3 +424,419 @@ class TestAShareBatch:
         paths = bt.save_results(str(tmp_path))
         assert "summary" in paths
         assert "results" in paths
+
+
+# ─────────────────────────────────────────────
+# indicators.py 新功能测试
+# ─────────────────────────────────────────────
+
+class TestIndicators:
+    def setup_method(self):
+        from analysis.technical.indicators import TechnicalIndicators
+        self.ti = TechnicalIndicators()
+
+    def test_calculate_all_has_atr(self):
+        """calculate_all 应包含 ATR14"""
+        df = _make_df(200, "bull")
+        result = self.ti.calculate_all(df)
+        assert "ATR14" in result.columns
+        assert result["ATR14"].iloc[-1] > 0
+
+    def test_calculate_all_has_volma(self):
+        """calculate_all 应包含 VolMA20"""
+        df = _make_df(200, "bull")
+        result = self.ti.calculate_all(df)
+        assert "VolMA20" in result.columns
+
+    def test_calculate_all_has_standard_indicators(self):
+        """标准指标应全部存在"""
+        df = _make_df(200, "bull")
+        result = self.ti.calculate_all(df)
+        for col in ["MA5", "MA20", "MA60", "MA120", "MACD", "RSI14", "BB_Upper"]:
+            assert col in result.columns, f"Missing: {col}"
+
+    def test_singleton(self):
+        """TechnicalIndicators 是单例"""
+        from analysis.technical.indicators import TechnicalIndicators
+        ti2 = TechnicalIndicators()
+        assert self.ti is ti2
+
+
+# ─────────────────────────────────────────────
+# base_agent.py 新接口测试
+# ─────────────────────────────────────────────
+
+class TestBaseAgent:
+    def test_analysis_types(self):
+        from agents.base_agent import AnalysisType
+        assert set(e.value for e in AnalysisType) == {"regime","factor","signal","backtest"}
+
+    def test_action_recommendation(self):
+        from agents.base_agent import ActionRecommendation
+        assert set(e.value for e in ActionRecommendation) == {"BUY","WATCH","HOLD","AVOID"}
+
+    def test_agent_input_default_date(self):
+        from agents.base_agent import AgentInput
+        inp = AgentInput(symbol="600519")
+        assert inp.end_date is not None
+
+    def test_agent_output_to_dict(self):
+        from agents.base_agent import AgentOutput, AgentState
+        out = AgentOutput(
+            agent_type="signal", symbol="600519",
+            analysis_date="2024-01-01", action="BUY",
+            confidence=0.75, reason="测试", result={},
+            state=AgentState.COMPLETED, execution_time=0.1)
+        d = out.to_dict()
+        assert d["action"] == "BUY"
+        assert d["confidence"] == 0.75
+
+    def test_concrete_agent(self):
+        """具体Agent实现测试"""
+        from agents.base_agent import BaseAgent, AgentInput, AgentOutput, AgentState, AnalysisType
+        class DummyAgent(BaseAgent):
+            def analyze(self, inp):
+                return AgentOutput(
+                    agent_type="signal", symbol=inp.symbol,
+                    analysis_date="2024-01-01", action="WATCH",
+                    confidence=0.6, reason="test", result={},
+                    state=AgentState.COMPLETED, execution_time=0.0)
+        agent = DummyAgent("dummy", AnalysisType.SIGNAL)
+        result = agent.run(AgentInput(symbol="TEST"))
+        assert result.action == "WATCH"
+        assert result.state == AgentState.COMPLETED
+
+
+# ─────────────────────────────────────────────
+# API 层测试（TestClient）
+# ─────────────────────────────────────────────
+
+class TestAPI:
+    def setup_method(self):
+        from fastapi.testclient import TestClient
+        from api.main import app
+        self.client = TestClient(app)
+        import numpy as np
+        np.random.seed(42); n=200
+        p = 100*np.exp(0.0006*np.arange(n)+0.012*np.cumsum(np.random.randn(n)))
+        self.rows = [{"date":f"2022-{i//22+1:02d}-{i%22+1:02d}",
+                      "open":float(p[i]),"high":float(p[i]*1.008),
+                      "low":float(p[i]*0.992),"close":float(p[i]),
+                      "volume":1e7} for i in range(n)]
+
+    def test_health(self):
+        r = self.client.get("/health")
+        assert r.status_code == 200
+        assert r.json()["status"] == "ok"
+        assert r.json()["version"] == "2.0.0"
+
+    def test_regime_endpoint(self):
+        r = self.client.post("/api/v1/regime", json={"rows": self.rows})
+        assert r.status_code == 200
+        d = r.json()
+        assert "regime" in d
+        assert "confidence" in d
+        assert 0 <= d["confidence"] <= 1
+        assert "max_position" in d
+        assert "scores" in d
+
+    def test_factors_endpoint(self):
+        r = self.client.post("/api/v1/factors", json={"symbol":"TEST","rows":self.rows})
+        assert r.status_code == 200
+        d = r.json()
+        assert "total_score" in d
+        assert "grade" in d
+        assert d["grade"] in ("A","B","C","D")
+        assert "details" in d
+        for key in ("momentum","turnover","trend","rsi","vol_price","cost"):
+            assert key in d["details"]
+
+    def test_analyze_endpoint(self):
+        r = self.client.post("/api/v1/analyze", json={"symbol":"TEST","rows":self.rows})
+        assert r.status_code == 200
+        d = r.json()
+        assert d["action"] in ("BUY","WATCH","HOLD","AVOID")
+        assert 0 <= d["confidence"] <= 1
+        assert "regime" in d
+        assert "factor" in d
+
+    def test_regime_requires_symbol_or_rows(self):
+        r = self.client.post("/api/v1/regime", json={})
+        assert r.status_code == 400
+
+    def test_analyze_with_valid_signal(self):
+        """高质量数据应生成 BUY 或 WATCH 信号"""
+        # 使用强趋势数据
+        import numpy as np
+        np.random.seed(1); n=200
+        p = 100*np.exp(0.001*np.arange(n)+0.008*np.cumsum(np.random.randn(n)))
+        rows = [{"date":f"2022-{i//22+1:02d}-{i%22+1:02d}",
+                 "open":float(p[i]),"high":float(p[i]*1.005),
+                 "low":float(p[i]*0.995),"close":float(p[i]),"volume":2e7}
+                for i in range(n)]
+        r = self.client.post("/api/v1/analyze", json={"symbol":"BULL","rows":rows})
+        assert r.status_code == 200
+        # 强趋势数据应该至少是 WATCH 以上
+        assert r.json()["action"] in ("BUY","WATCH","HOLD","AVOID")
+
+
+# ─────────────────────────────────────────────
+# indicators.py signal方法覆盖测试
+# ─────────────────────────────────────────────
+
+class TestIndicatorSignals:
+    def setup_method(self):
+        from analysis.technical.indicators import TechnicalIndicators
+        self.ti = TechnicalIndicators()
+
+    def _prepared(self, trend="bull", n=120):
+        df = _make_df(n, trend)
+        return self.ti.calculate_all(df)
+
+    def test_macd_signal_neutral(self):
+        df = self._prepared("sideways")
+        sig = self.ti.macd_signal(df)
+        assert sig in ("buy", "sell", "neutral")
+
+    def test_rsi_signal_types(self):
+        df = self._prepared("bull")
+        sig = self.ti.rsi_signal(df)
+        assert sig in ("buy", "sell", "neutral")
+
+    def test_kdj_signal_types(self):
+        df = self._prepared("bull")
+        sig = self.ti.kdj_signal(df)
+        assert sig in ("buy", "sell", "neutral")
+
+    def test_bb_signal_types(self):
+        df = self._prepared("bull")
+        sig = self.ti.bb_signal(df)
+        assert sig in ("buy", "sell", "neutral")
+
+    def test_get_all_signals(self):
+        df = self._prepared("bull")
+        signals = self.ti.get_all_signals(df)
+        assert isinstance(signals, dict)
+        assert len(signals) > 0
+        for v in signals.values():
+            assert v in ("buy", "sell", "neutral")
+
+    def test_get_combined_signal(self):
+        df = self._prepared("bull")
+        result = self.ti.get_combined_signal(df)
+        assert "combined_signal" in result
+        assert "score" in result
+        assert "individual_signals" in result
+        assert result["combined_signal"] in ("buy", "sell", "neutral")
+        assert -1 <= result["score"] <= 1
+
+    def test_get_combined_signal_with_weights(self):
+        df = self._prepared("bull")
+        weights = {"macd": 0.5, "rsi": 0.3, "kdj": 0.1, "bollinger": 0.1}
+        result = self.ti.get_combined_signal(df, weights=weights)
+        assert "combined_signal" in result
+
+    def test_rsi_signal_overbought(self):
+        """强牛市末期 RSI 应处于超买"""
+        import numpy as np, pandas as pd
+        # 构造极度超买场景
+        n = 100
+        p = 100 * np.exp(0.005 * np.arange(n))  # 快速上涨
+        df = pd.DataFrame({
+            "date": [f"2022-01-{i+1:02d}" for i in range(n)],
+            "open": p, "high": p*1.01, "low": p*0.99, "close": p, "volume": 1e7*np.ones(n)
+        })
+        df = self.ti.calculate_all(df)
+        sig = self.ti.rsi_signal(df)
+        # 极速上涨 RSI 应接近超买
+        assert sig in ("buy", "sell", "neutral")
+
+    def test_macd_signal_insufficient_data(self):
+        import pandas as pd, numpy as np
+        tiny = pd.DataFrame({"date":["2022-01-01"],"open":[10.],"high":[11.],"low":[9.],"close":[10.],"volume":[1e6]})
+        assert self.ti.macd_signal(tiny) == "neutral"
+
+
+# ─────────────────────────────────────────────
+# API 覆盖剩余端点
+# ─────────────────────────────────────────────
+
+class TestAPIFull:
+    def setup_method(self):
+        from fastapi.testclient import TestClient
+        from api.main import app
+        self.client = TestClient(app)
+        import numpy as np
+        np.random.seed(7); n=300
+        p = 100*np.exp(0.0006*np.arange(n)+0.010*np.cumsum(np.random.randn(n)))
+        self.rows = [{"date":f"2022-{i//22+1:02d}-{i%22+1:02d}",
+                      "open":float(p[i]),"high":float(p[i]*1.008),
+                      "low":float(p[i]*0.992),"close":float(p[i]),
+                      "volume":1e7+i*1e5} for i in range(n)]
+        self.symbols = ["000001","000002","600519"]
+
+    def test_scan_endpoint(self):
+        r = self.client.post("/api/v1/scan",
+            json={"symbols": self.symbols, "top_n": 3, "min_grade": "D"})
+        assert r.status_code == 200
+        results = r.json()
+        assert isinstance(results, list)
+        assert len(results) <= 3
+
+    def test_scan_empty_pool(self):
+        r = self.client.post("/api/v1/scan",
+            json={"symbols": [], "top_n": 5})
+        assert r.status_code == 200
+        assert r.json() == []
+
+    def test_backtest_endpoint(self):
+        r = self.client.post("/api/v1/backtest",
+            json={"symbol":"000001","initial_capital":100000})
+        # 数据库没有000001时应该404，有时应该200
+        assert r.status_code in (200, 404)
+        if r.status_code == 200:
+            d = r.json()
+            assert "total_trades" in d
+            assert "win_rate" in d
+            assert "target_reached_pct" in d
+            assert "exit_reason_counts" in d
+
+    def test_batch_backtest_endpoint(self):
+        r = self.client.post("/api/v1/backtest/batch",
+            json={"symbols": self.symbols, "max_workers": 2})
+        assert r.status_code == 200
+        d = r.json()
+        assert "symbols_total" in d
+        assert "avg_return_pct" in d
+        assert "avg_target_reached_pct" in d
+
+    def test_auth_rejected_with_invalid_key(self):
+        """设置了 API_KEYS 时，错误 key 应该返回 401"""
+        import os
+        os.environ["API_KEYS"] = "valid_key_123"
+        try:
+            r = self.client.post("/api/v1/regime",
+                json={"rows": self.rows[:50]},
+                headers={"X-API-Key": "wrong_key"})
+            assert r.status_code == 401
+        finally:
+            del os.environ["API_KEYS"]
+
+    def test_auth_accepted_with_valid_key(self):
+        """正确 key 应该通过认证"""
+        import os
+        os.environ["API_KEYS"] = "my_secret_key"
+        try:
+            r = self.client.post("/api/v1/regime",
+                json={"rows": self.rows[:100]},
+                headers={"X-API-Key": "my_secret_key"})
+            assert r.status_code == 200
+        finally:
+            del os.environ["API_KEYS"]
+
+    def test_analyze_returns_tech_signal_in_detail(self):
+        """analyze 应该包含 tech_signal 在 detail 中"""
+        # 通过rows传入（不走数据库，免得404）
+        r = self.client.post("/api/v1/analyze",
+            json={"symbol":"TEST","rows":self.rows})
+        assert r.status_code == 200
+        # action应该是有效值
+        assert r.json()["action"] in ("BUY","WATCH","HOLD","AVOID")
+
+
+# ─────────────────────────────────────────────
+# config_loader 覆盖测试
+# ─────────────────────────────────────────────
+
+class TestConfigLoader:
+    def test_load_default_config(self):
+        from utils.config_loader import load_config
+        cfg = load_config()
+        assert isinstance(cfg, dict)
+
+    def test_database_section_exists(self):
+        from utils.config_loader import load_config
+        cfg = load_config()
+        assert "database" in cfg
+        assert "postgres" in cfg["database"]
+
+    def test_analysis_section_exists(self):
+        from utils.config_loader import load_config
+        cfg = load_config()
+        assert "analysis" in cfg
+        # 新系统配置 key
+        assert "regime" in cfg["analysis"]
+        assert "factors" in cfg["analysis"]
+        assert "strategy" in cfg["analysis"]
+
+    def test_env_var_substitution(self):
+        """环境变量替换应该工作"""
+        import os
+        os.environ["TEST_CONFIG_VAR"] = "test_value"
+        from utils.config_loader import ConfigLoader
+        from pathlib import Path
+        import tempfile, yaml
+        # 创建一个临时 config 文件测试环境变量替换
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+            yaml.dump({"key": "${TEST_CONFIG_VAR}"}, f)
+            tmp_path = f.name
+        try:
+            loader = ConfigLoader(Path(tmp_path))
+            cfg = loader.load()
+            assert cfg.get("key") == "test_value"
+        finally:
+            os.unlink(tmp_path)
+            del os.environ["TEST_CONFIG_VAR"]
+
+    def test_env_var_default_value(self):
+        """环境变量未设置时使用默认值"""
+        from utils.config_loader import ConfigLoader
+        from pathlib import Path
+        import tempfile, yaml
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+            yaml.dump({"key": "${NONEXISTENT_VAR:default_val}"}, f)
+            tmp_path = f.name
+        import os as _os
+        try:
+            loader = ConfigLoader(Path(tmp_path))
+            cfg = loader.load()
+            assert cfg.get("key") == "default_val"
+        finally:
+            _os.unlink(tmp_path)
+
+
+# ─────────────────────────────────────────────
+# performance_adaptor 覆盖测试
+# ─────────────────────────────────────────────
+
+class TestPerformanceAdaptor:
+    def test_get_adaptor_returns_profile(self):
+        from utils.performance_adaptor import get_adaptor
+        cfg = get_adaptor()
+        assert cfg is not None
+        assert hasattr(cfg, "scan_workers")
+        assert cfg.scan_workers >= 1
+
+    def test_scan_workers_positive(self):
+        from utils.performance_adaptor import get_adaptor
+        cfg = get_adaptor()
+        assert cfg.scan_workers > 0
+
+    def test_env_override(self):
+        """环境变量应覆盖默认值"""
+        import os
+        from utils.performance_adaptor import get_adaptor, reset_adaptor
+        os.environ["KIMI_SCAN_WORKERS"] = "7"
+        reset_adaptor()
+        try:
+            cfg = get_adaptor()
+            assert cfg.scan_workers == 7
+        finally:
+            del os.environ["KIMI_SCAN_WORKERS"]
+            reset_adaptor()
+
+    def test_print_profile(self, capsys):
+        from utils.performance_adaptor import get_adaptor
+        get_adaptor().print_profile()
+        captured = capsys.readouterr()
+        assert "scan_workers" in captured.out

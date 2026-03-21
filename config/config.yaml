@@ -1,179 +1,86 @@
-# 智能体量化分析系统配置
-# ⚠️ 安全警告: 不要将API Key直接写入此文件！
-# 请通过环境变量设置: export CODEFLOW_API_KEY=xxx
-# 或创建 .env 文件 (已提供 .env.example 模板)
+# A股量化分析系统配置 v2.0
+# ⚠️ 安全：不要将 Key 写入此文件，请用环境变量或 .env 文件
 
-# 模型配置
-models:
-  # CodeFlow AI 模型 (Claude系列)
-  codeflow:
-    enabled: true
-    base_url: https://codeflow.asia
-    api_key: ${CODEFLOW_API_KEY}  # 从环境变量读取
-    timeout: 120
-    models:
-      - id: claude-haiku-4-5-20251001
-        alias: haiku
-        description: Claude Haiku 轻量级模型
-        max_tokens: 4096
-      - id: claude-sonnet-4-5-20250929
-        alias: sonnet
-        description: Claude Sonnet 平衡模型
-        max_tokens: 8192
-      - id: claude-sonnet-4-6
-        alias: sonnet-4-6
-        description: Claude Sonnet 4.6版本
-        max_tokens: 8192
-      - id: claude-opus-4-5-20251101
-        alias: opus
-        description: Claude Opus 高性能模型
-        max_tokens: 8192
-      - id: claude-opus-4-6
-        alias: opus-4-6
-        description: Claude Opus 4.6版本
-        max_tokens: 8192
-    default_model: claude-sonnet-4-6
-    
-  # DeepSeek 模型
-  deepseek:
-    enabled: true
-    base_url: https://api.deepseek.com
-    api_key: ${DEEPSEEK_API_KEY}  # 从环境变量读取
-    models:
-      - name: deepseek-reasoner
-        alias: r1
-        description: DeepSeek R1 推理模型
-      - name: deepseek-chat
-        alias: v3
-        description: DeepSeek V3 对话模型
-
-# 数据库配置
+# ─── 数据库 ───────────────────────────────────────
 database:
   postgres:
     host: localhost
     port: 5432
     database: quant_analysis
     username: quant_user
-    password: ${POSTGRES_PASSWORD}  # 从环境变量读取
+    password: ${POSTGRES_PASSWORD:-quant_password}
     pool_size: 10
-  
   redis:
     host: localhost
     port: 6379
     db: 0
-    password: ${REDIS_PASSWORD}  # 从环境变量读取
-  
-  mongodb:
-    host: localhost
-    port: 27017
-    database: quant_data
+    password: ${REDIS_PASSWORD:-}
 
-# 数据源配置
+# ─── 数据源 ───────────────────────────────────────
 data_sources:
-  tushare:
-    token: ${TUSHARE_TOKEN}  # 从环境变量读取
-    enabled: false  # 已替换为同花顺接口
-  
-  akshare:
-    enabled: false  # 已替换为同花顺接口
-  
-  baostock:
-    enabled: false  # 已替换为同花顺接口
-  
-  ths:  # 同花顺网页版API
+  ths:                          # 同花顺（主要来源）
     enabled: true
     timeout: 30
-    headers:
-      # 可在此自定义请求头
-    # K线类型映射: 01-日线, 11-周线, 12-月线
-    default_ktype: "01"
-  
-  sw_industry:
-    enabled: true
-    update_frequency: daily
+    default_ktype: "01"         # 01=日线
+  akshare:                      # 备用
+    enabled: false
+  tushare:
+    enabled: false
+    token: ${TUSHARE_TOKEN:-}
 
-# 分析配置
+# ─── 新系统分析参数 ───────────────────────────────
 analysis:
-  wave_analyst:
-    enabled: true
-    min_wave_length: 5
-    max_wave_length: 100
-    confidence_threshold: 0.7
-  
-  technical_analyst:
-    enabled: true
-    indicators:
-      - name: MACD
-        fast_period: 12
-        slow_period: 26
-        signal_period: 9
-      
-      - name: RSI
-        period: 14
-        overbought: 70
-        oversold: 30
-      
-      - name: Bollinger_Bands
-        period: 20
-        std_dev: 2
-      
-      - name: KDJ
-        k_period: 9
-        d_period: 3
-        j_period: 3
-  
-  rotation_analyst:
-    enabled: true
-    lookback_period: 60  # 60个交易日
-    momentum_period: 20
-    rebalance_frequency: monthly
+  # Layer 2: 市场状态识别
+  regime:
+    trend_ma_short:  20
+    trend_ma_medium: 60
+    trend_ma_long:   120
+    vol_lookback:    20
+    crash_pct:       0.08      # 20日跌幅>8%触发系统性风险
+    rally_pct:       0.15      # 20日涨幅>15%认为是政策底反弹
 
-# 智能体配置
-agents:
-  wave_analyst:
-    model: deepseek/deepseek-reasoner
-    thinking: high
-    timeout_seconds: 300
-    use_ai: true  # 是否启用AI增强
-  
-  technical_analyst:
-    model: deepseek/deepseek-chat
-    thinking: medium
-    timeout_seconds: 180
-    use_ai: true  # 是否启用AI增强
-  
-  rotation_analyst:
-    model: deepseek/deepseek-reasoner
-    thinking: high
-    timeout_seconds: 300
-    use_ai: true  # 是否启用AI增强
+  # Layer 3: 多因子
+  factors:
+    weights:
+      momentum:  35
+      turnover:  20
+      trend:     20
+      rsi:       10
+      vol_price: 10
+      cost:       5
+    min_score:   55.0          # 信号生成最低因子分
+    rsi_overbought: 82         # A股适配（放宽至82）
 
-# 调度配置
-scheduler:
-  data_collection:
-    frequency: "0 16 * * *"  # 每天16:00
-    enabled: true
-  
-  wave_analysis:
-    frequency: "0 17 * * *"  # 每天17:00
-    enabled: true
-  
-  technical_analysis:
-    frequency: "0 17 * * *"  # 每天17:00
-    enabled: true
-  
-  rotation_analysis:
-    frequency: "0 18 * * 5"  # 每周五18:00
-    enabled: true
+  # Layer 4: 交易策略
+  strategy:
+    initial_capital:    100000
+    atr_stop_mult:       2.0   # 止损 = 入场 - N×ATR
+    min_stop_pct:        0.04
+    max_stop_pct:        0.09
+    target_lookback:     30    # 前N日高点作为目标价
+    target_buffer:       0.02  # 目标价较前高留2%缓冲
+    min_rr_ratio:        1.3
+    max_holding_days:    20    # 匹配行业轮动周期
+    trail_activation:    0.06  # 浮盈6%启用移动止盈
+    trail_pct:           0.04  # 移动止盈回撤4%
+    breakeven_pct:       0.04  # 浮盈4%后保本
 
-# 日志配置
-logging:
-  level: INFO
-  file: /var/log/quant_agent_system.log
-  max_size: 100MB
-  backup_count: 10
+  # 技术指标
+  technical:
+    ma_periods: [5, 20, 60, 120]
+    rsi_period: 14
+    macd:
+      fast_period:   12
+      slow_period:   26
+      signal_period:  9
+    kdj:
+      k_period: 9
+      d_period: 3
+    bollinger_bands:
+      period:  20
+      std_dev:  2
 
-# API配置
+# ─── API 服务 ──────────────────────────────────────
 api:
   host: 0.0.0.0
   port: 8000
@@ -181,3 +88,17 @@ api:
   cors_origins:
     - "http://localhost:3000"
     - "http://127.0.0.1:3000"
+  rate_limit_per_minute: 60
+
+# ─── 调度（数据同步） ─────────────────────────────
+scheduler:
+  data_sync:
+    frequency: "0 16 * * *"    # 每天16:00（收盘后同步）
+    enabled: true
+
+# ─── 日志 ─────────────────────────────────────────
+logging:
+  level: INFO
+  file: /var/log/kimi.log
+  max_size: 100MB
+  backup_count: 10

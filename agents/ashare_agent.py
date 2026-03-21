@@ -137,8 +137,15 @@ class AShareAgent:
         if fscore.passed_filter and regime.is_tradeable:
             signal = self.strategy.generate_signal(symbol, df, fscore, regime)
 
-        # 综合决策
-        action, reason, conf = self._decide(regime, fscore, signal)
+        # 技术指标综合信号（辅助决策，不作为主要判据）
+        tech_signal = {}
+        try:
+            tech_signal = self._ti.get_combined_signal(df)
+        except Exception:
+            pass
+
+        # 综合决策（含技术信号辅助）
+        action, reason, conf = self._decide(regime, fscore, signal, tech_signal)
 
         return AShareAnalysis(
             symbol=symbol, date=date, price=price,
@@ -147,6 +154,7 @@ class AShareAgent:
             detail={
                 "regime_signals":  regime.signals,
                 "factor_signals":  fscore.signals,
+                "tech_signal":     tech_signal,
             },
         )
 
@@ -197,8 +205,9 @@ class AShareAgent:
         regime: RegimeResult,
         fscore: FactorScore,
         signal: AShareSignal | None,
+        tech_signal: dict | None = None,
     ) -> tuple[str, str, float]:
-        """将三层分析合成最终动作建议"""
+        """将三层分析 + 技术信号合成最终动作建议"""
 
         # 系统性风险：无论个股多好，空仓
         if regime.regime == MarketRegime.SYSTEMIC_RISK:
@@ -208,23 +217,32 @@ class AShareAgent:
         if not fscore.passed_filter:
             return "AVOID", f"多因子过滤: {fscore.filter_reason}", 0.8
 
+        # 技术信号辅助：buy=+0.03，sell=-0.03（微调，不主导）
+        tech_adj = 0.0
+        if tech_signal:
+            ts = tech_signal.get("combined_signal", "neutral")
+            tech_adj = 0.03 if ts == "buy" else (-0.03 if ts == "sell" else 0.0)
+
         # 有有效交易信号
         if signal and signal.is_valid:
+            conf = min(0.95, signal.confidence + tech_adj)
+            ts_str = f" | 技术{tech_signal.get('combined_signal','neutral')}" if tech_signal else ""
             reason = (
                 f"因子{fscore.total_score:.0f}分[{fscore.grade}] "
                 f"+ {regime.label} "
                 f"+ {signal.signal_type.value} "
-                f"盈亏比{signal.rr_ratio:.1f}x"
+                f"盈亏比{signal.rr_ratio:.1f}x{ts_str}"
             )
-            return "BUY", reason, signal.confidence
+            return "BUY", reason, conf
 
         # 因子分不错但无信号（等待时机）
         if fscore.total_score >= self.min_factor_score and regime.is_tradeable:
+            conf = min(0.75, 0.55 + tech_adj)
             reason = (
                 f"因子{fscore.total_score:.0f}分[{fscore.grade}] "
                 f"市场{regime.label}，等待入场时机"
             )
-            return "WATCH", reason, 0.55
+            return "WATCH", reason, conf
 
         # 因子分中等
         if fscore.total_score >= 45:

@@ -17,7 +17,7 @@
     workers  = cfg.scan_workers          # 批量扫描并发数
     max_sym  = cfg.lru_max_symbols       # LRU 缓存只数
     max_mem  = cfg.lru_max_memory_mb     # LRU 内存上限
-    ic_size  = cfg.indicator_cache_size  # 指标缓存只数
+    max_workers = cfg.scan_workers        # 批量回测并发数
 
     # 环境变量覆盖（优先级最高）
     KIMI_SCAN_WORKERS=4 python batch_scanner.py
@@ -54,7 +54,7 @@ class PerfProfile:
     # ── 内存 / 缓存 ────────────────────────────────────────────────────────
     lru_max_symbols: int        # OptimizedDataManager LRU 上限（只数）
     lru_max_memory_mb: int      # OptimizedDataManager 内存上限（MB）
-    indicator_cache_size: int   # IncrementalIndicatorCache 缓存只数
+    # indicator_cache_size 已移除（IncrementalIndicatorCache 已删除）
 
     # ── 批量大小 ──────────────────────────────────────────────────────────
     batch_chunk_size: int       # 单次处理股票数（分批避免 OOM）
@@ -84,7 +84,7 @@ class PerfProfile:
         print(f"  内存配置:")
         print(f"    lru_max_symbols:        {self.lru_max_symbols}")
         print(f"    lru_max_memory_mb:      {self.lru_max_memory_mb} MB")
-        print(f"    indicator_cache_size:   {self.indicator_cache_size}")
+        # indicator_cache_size removed
         print(f"  批量配置:")
         print(f"    batch_chunk_size:       {self.batch_chunk_size}")
         print(f"    backtest_max_stocks:    {self.backtest_max_stocks}")
@@ -101,7 +101,6 @@ _PROFILES: dict[DeviceTier, dict] = {
         walk_forward_workers  = 2,
         lru_max_symbols       = 200,
         lru_max_memory_mb     = 256,
-        indicator_cache_size  = 200,
         batch_chunk_size      = 50,
         backtest_max_stocks   = 100,
         scan_days             = 120,
@@ -113,7 +112,6 @@ _PROFILES: dict[DeviceTier, dict] = {
         walk_forward_workers  = 4,
         lru_max_symbols       = 800,
         lru_max_memory_mb     = 512,
-        indicator_cache_size  = 600,
         batch_chunk_size      = 200,
         backtest_max_stocks   = 500,
         scan_days             = 200,
@@ -125,7 +123,6 @@ _PROFILES: dict[DeviceTier, dict] = {
         walk_forward_workers  = 5,
         lru_max_symbols       = 1500,
         lru_max_memory_mb     = 1024,
-        indicator_cache_size  = 1200,
         batch_chunk_size      = 500,
         backtest_max_stocks   = 2000,
         scan_days             = 250,
@@ -137,7 +134,6 @@ _PROFILES: dict[DeviceTier, dict] = {
         walk_forward_workers  = 8,
         lru_max_symbols       = 5500,
         lru_max_memory_mb     = 4096,
-        indicator_cache_size  = 4000,
         batch_chunk_size      = 1000,
         backtest_max_stocks   = 5500,
         scan_days             = 250,
