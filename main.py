@@ -1,158 +1,143 @@
 #!/usr/bin/env python3
 """
-智能体量化分析系统 - 主入口 (演示版)
-使用优化数据管理器运行分析
-"""
+main.py — A股量化分析系统 主入口
 
+用法：
+  python main.py --mode scan    --symbols 600519 000858 000001
+  python main.py --mode analyze --symbol  600519
+  python main.py --mode backtest --symbol 600519
+  python main.py --mode regime  --symbol  000001
+"""
 import argparse
-import time
+import sys
 from datetime import datetime
 
 from data.optimized_data_manager import get_optimized_data_manager
+from agents.ashare_agent import AShareAgent
+from analysis.strategy.ashare_backtester import AShareBacktester
+from analysis.strategy.ashare_batch import AShareBatchBacktester
+from analysis.strategy.ashare_strategy import AShareStrategy
+from analysis.regime.market_regime import AShareMarketRegime
 
 
 def print_banner():
-    """打印系统横幅"""
-    print("="*80)
-    print("🤖 智能体量化分析系统")
-    print("="*80)
-    print(f"启动时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("="*80)
+    print("=" * 70)
+    print("  📊 A股量化分析系统 v2.0")
+    print(f"  启动: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("=" * 70)
     print()
 
 
-def run_data_analysis(symbols):
-    """运行数据分析"""
-    print("📊 运行数据分析...")
-    print("-"*60)
-
-    data_mgr = get_optimized_data_manager()
-
-    for symbol in symbols:
-        print(f"\n🔍 分析 {symbol}...")
-        try:
-            df = data_mgr.get_stock_data(symbol)
-
-            if df is None or df.empty:
-                print("  ⚠️ 无数据")
-                continue
-
-            # 基础统计
-            print(f"  ✅ 数据条数: {len(df)}")
-            print(f"  📅 时间范围: {df['date'].min()} ~ {df['date'].max()}")
-            print(f"  📈 价格范围: {df['close'].min():.2f} ~ {df['close'].max():.2f}")
-            print(f"  📊 平均成交量: {df['volume'].mean():.0f}")
-
-        except Exception as e:
-            print(f"  ❌ 分析失败: {e}")
+def mode_analyze(symbol: str, dm):
+    """单股完整分析"""
+    df = dm.get_stock_data(symbol)
+    if df is None:
+        print(f"❌ 无数据: {symbol}")
+        return
+    agent = AShareAgent()
+    r = agent.analyze(symbol, df)
+    print(f"\n{'='*55}")
+    print(r.summary)
+    print(f"  市场状态: {r.regime.label}  置信度={r.regime.confidence:.2f}")
+    print(f"  多因子:  {r.factor_score.total_score:.1f}分[{r.factor_score.grade}]  ", end="")
+    print(f"动量={r.factor_score.momentum_score:.0f} 趋势={r.factor_score.trend_score:.0f}")
+    if r.signal and r.signal.is_valid:
+        s = r.signal
+        print(f"  信号: {s.signal_type.value}  盈亏比={s.rr_ratio:.1f}x  仓位={s.position_pct:.0%}")
+        print(f"    入场¥{s.entry_price:.2f} → 目标¥{s.target_price:.2f}  止损¥{s.stop_loss:.2f}")
+    print(f"{'='*55}")
 
 
-def run_indicator_analysis(symbols):
-    """运行指标分析"""
-    print("\n📈 运行技术指标分析...")
-    print("-"*60)
-
-    data_mgr = get_optimized_data_manager()
-
-    for symbol in symbols:
-        print(f"\n🔍 分析 {symbol}...")
-        try:
-            df = data_mgr.get_stock_data(symbol)
-
-            if df is None or df.empty:
-                print("  ⚠️ 无数据")
-                continue
-
-            # 计算指标
-            print("  📊 计算技术指标...")
-            df = data_mgr.calculate_ma(df, 20)
-            df = data_mgr.calculate_ma(df, 60)
-            df = data_mgr.calculate_returns(df)
-            df = data_mgr.calculate_rsi(df, 14)
-
-            latest = df.iloc[-1]
-            print("  ✅ 最新数据:")
-            print(f"     日期: {latest['date']}")
-            print(f"     收盘价: {latest['close']:.2f}")
-            print(f"     MA20: {latest.get('ma20', 'N/A')}")
-            print(f"     MA60: {latest.get('ma60', 'N/A')}")
-            print(f"     RSI14: {latest.get('rsi14', 'N/A')}")
-
-        except Exception as e:
-            print(f"  ❌ 分析失败: {e}")
+def mode_scan(symbols: list[str], dm):
+    """批量扫描选股"""
+    agent = AShareAgent()
+    sdfs = {s: df for s in symbols if (df := dm.get_stock_data(s)) is not None}
+    results = agent.scan(sdfs, top_n=10)
+    print(agent.report(results))
 
 
-def run_batch_analysis():
-    """运行批量分析"""
-    print("\n🔄 运行批量统计分析...")
-    print("-"*60)
+def mode_regime(symbol: str, dm):
+    """市场状态"""
+    df = dm.get_stock_data(symbol)
+    if df is None:
+        print(f"❌ 无数据: {symbol}"); return
+    r = AShareMarketRegime().detect(df)
+    print(f"\n{symbol} 市场状态: {r.label}")
+    print(f"  置信度: {r.confidence:.2f}  最大仓位: {r.max_position:.0%}")
+    print(f"  描述: {r.description}")
+    print(f"  得分: 趋势={r.trend_score:.2f} 量能={r.volume_score:.2f} "
+          f"动量={r.momentum_score:.2f} 风险={r.risk_score:.2f}")
 
-    data_mgr = get_optimized_data_manager()
-    df_all = data_mgr.load_all_data()
 
-    # 统计
-    symbols = df_all['symbol'].unique()
-    print(f"  📊 股票总数: {len(symbols)}")
-    print(f"  📈 总记录数: {len(df_all):,}")
-    print(f"  📅 时间跨度: {df_all['date'].min()} ~ {df_all['date'].max()}")
+def mode_backtest(symbol: str, dm):
+    """单股回测"""
+    df = dm.get_stock_data(symbol)
+    if df is None:
+        print(f"❌ 无数据: {symbol}"); return
+    bt = AShareBacktester()
+    r = bt.run(symbol, df)
+    d = r.to_dict()
+    print(f"\n{symbol} 回测结果:")
+    print(f"  交易次数: {r.total_trades}   胜率: {r.win_rate:.1%}")
+    print(f"  总收益: {r.total_return_pct:+.2f}%   最大回撤: {r.max_drawdown_pct:.2f}%")
+    print(f"  Sharpe: {r.sharpe_ratio:.2f}   Calmar: {r.calmar_ratio:.2f}")
+    ex = r.exit_reason_counts; total = r.total_trades or 1
+    print(f"  目标止盈: {ex.get('target_reached',0)/total:.0%}  "
+          f"止损: {ex.get('stop_loss',0)/total:.0%}  "
+          f"时间止损: {ex.get('time_stop',0)/total:.0%}")
 
-    # 按板块统计
-    print("\n  📊 板块分布:")
-    sectors = {
-        '科创板': df_all[df_all['symbol'].str.startswith('688', na=False)]['symbol'].nunique(),
-        '创业板': df_all[df_all['symbol'].str.startswith('300', na=False)]['symbol'].nunique(),
-        '上海主板': df_all[df_all['symbol'].str.startswith('60', na=False)]['symbol'].nunique(),
-        '深圳主板': df_all[df_all['symbol'].str.startswith('00', na=False)]['symbol'].nunique(),
-    }
-    for sector, count in sectors.items():
-        if count > 0:
-            print(f"     {sector}: {count}只")
+
+def mode_batch(symbols: list[str], dm):
+    """批量回测"""
+    def prog(d, t, s): print(f"\r  [{d}/{t}] {s:<10}", end="", flush=True)
+    bt = AShareBatchBacktester(max_workers=4, progress_callback=prog)
+    summary, results = bt.run(symbols, data_loader=dm.get_stock_data)
+    print()
+    print(bt.report())
+    print(bt.report_detail(top_n=20))
 
 
 def main():
-    """主函数"""
-    parser = argparse.ArgumentParser(description='智能体量化分析系统')
-    parser.add_argument('--mode', type=str, default='demo',
-                       choices=['demo', 'data', 'tech', 'batch', 'full'],
-                       help='运行模式')
-    parser.add_argument('--symbols', type=str, nargs='+',
-                       default=['000001', '600519', '000858', '002594'],
-                       help='股票代码列表')
-
+    print_banner()
+    parser = argparse.ArgumentParser(description="A股量化分析系统")
+    parser.add_argument("--mode", choices=["analyze","scan","regime","backtest","batch"],
+                        default="scan")
+    parser.add_argument("--symbol", help="单只股票代码")
+    parser.add_argument("--symbols", nargs="+", help="多只股票代码")
     args = parser.parse_args()
 
-    # 打印横幅
-    print_banner()
+    dm = get_optimized_data_manager()
+    dm.load_all_data()
+    all_symbols = [s for s in (args.symbols or []) if s]
+    if not all_symbols and args.symbol:
+        all_symbols = [args.symbol]
+    if not all_symbols:
+        # 默认取数据库所有股票
+        from utils.db_connector import PostgresConnector
+        import os
+        try:
+            pg = PostgresConnector(host="localhost", port=5432,
+                database=os.environ.get("PG_DATABASE","quant_analysis"),
+                username=os.environ.get("PG_USERNAME","quant_user"),
+                password=os.environ.get("PG_PASSWORD","quant_password"))
+            pg.connect()
+            all_symbols = [r["symbol"] for r in pg.execute(
+                "SELECT DISTINCT symbol FROM market_data ORDER BY symbol", fetch=True)]
+            pg.disconnect()
+        except Exception:
+            print("❌ 无法连接数据库，请指定 --symbol 或 --symbols"); sys.exit(1)
 
-    # 预加载数据
-    print("📦 预加载数据到内存...")
-    start_time = time.time()
-    data_mgr = get_optimized_data_manager()
-    data_mgr.load_all_data()
-    load_time = time.time() - start_time
-    print(f"⏱️  数据加载耗时: {load_time:.2f}s\n")
-
-    # 根据模式运行
-    if args.mode in ['demo', 'data', 'full']:
-        run_data_analysis(args.symbols)
-
-    if args.mode in ['demo', 'tech', 'full']:
-        run_indicator_analysis(args.symbols)
-
-    if args.mode in ['demo', 'batch', 'full']:
-        run_batch_analysis()
-
-    # 总结
-    total_time = time.time() - start_time
-    print("\n" + "="*80)
-    print("📊 运行总结")
-    print("="*80)
-    print(f"总耗时: {total_time:.2f}s")
-    print(f"分析股票: {len(args.symbols)} 只")
-    print(f"运行模式: {args.mode}")
-    print("="*80)
-    print("\n✅ 智能体系统运行完成!")
+    if args.mode == "analyze":
+        mode_analyze(all_symbols[0], dm)
+    elif args.mode == "scan":
+        mode_scan(all_symbols, dm)
+    elif args.mode == "regime":
+        mode_regime(all_symbols[0], dm)
+    elif args.mode == "backtest":
+        mode_backtest(all_symbols[0], dm)
+    elif args.mode == "batch":
+        mode_batch(all_symbols, dm)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
