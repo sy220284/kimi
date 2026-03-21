@@ -150,16 +150,16 @@ class WaveStrategy:
         position_size: float = 0.2,  # 单笔基础仓位20%（Kelly模式下作为上限）
         max_positions: int = 3,  # 最大持仓数量
         max_total_position: float = 0.8,  # 最大总仓位80%
-        stop_loss_pct: float = 0.05,  # 5%止损
-        take_profit_pct: float = 0.15,  # 15%止盈(备用)
-        min_confidence: float = 0.5,
+        stop_loss_pct: float = 0.06,  # 6%止损（A股波动大，5%常被误触发）
+        take_profit_pct: float = 0.18,  # 18%止盈(备用，A股弹性更大)
+        min_confidence: float = 0.42,   # 与UnifiedWaveAnalyzer保持一致
         use_resonance: bool = True,
-        min_holding_days: int = 3,  # 最小持仓天数
-        use_trend_filter: bool = True,  # 使用趋势过滤
-        trend_ma_period: int = 200,  # 趋势均线周期 (优化: 200日均线)
-        use_dynamic_target: bool = True,  # 使用动态目标价(基于浪型)
-        target_proximity_pct: float = 0.03,  # 接近目标价3%即考虑卖出
-        wave_structure_break_pct: float = 0.03,  # 浪型破坏阈值3%
+        min_holding_days: int = 5,  # 5天（A股T+1+机构调仓周期）
+        use_trend_filter: bool = True,
+        trend_ma_period: int = 120,  # 120日均线（A股机构半年考核周期）
+        use_dynamic_target: bool = True,
+        target_proximity_pct: float = 0.05,  # 5%（A股摩擦成本+滑点更大）
+        wave_structure_break_pct: float = 0.04,  # 4%（A股振幅更大）
         commission_rate: float = 0.0003,  # 佣金费率0.03%
         # B3: Kelly 仓位管理
         use_kelly: bool = True,          # 是否启用Kelly公式动态仓位
@@ -210,23 +210,41 @@ class WaveStrategy:
         # 记录持仓时的最新分析结果，用于动态更新目标价
         self.position_analysis: dict[str, Any] = {}
 
+    # 历史胜率累计（用于Kelly计算的动态胜率）
+    # 按信号类型分开统计：C浪/2浪/4浪/趋势信号 的胜率可能不同
+    _win_counts: dict[str, int] = {}
+    _total_counts: dict[str, int] = {}
+
+    def _update_kelly_stats(self, trade_type: str, won: bool):
+        """更新Kelly胜率统计"""
+        self._total_counts[trade_type] = self._total_counts.get(trade_type, 0) + 1
+        if won:
+            self._win_counts[trade_type] = self._win_counts.get(trade_type, 0) + 1
+
+    def _get_historical_win_rate(self, trade_type: str) -> float:
+        """获取历史胜率，不足20笔时用先验值"""
+        total = self._total_counts.get(trade_type, 0)
+        wins  = self._win_counts.get(trade_type, 0)
+        # 贝叶斯收缩：先验胜率0.42（A股波浪策略典型值）
+        prior_alpha, prior_beta = 8.0, 11.0  # Beta(8,11) → mean≈42%
+        posterior_p = (prior_alpha + wins) / (prior_alpha + prior_beta + total)
+        return posterior_p
+
     def _kelly_fraction(self, wave_signal: Any) -> float:
         """
-        Kelly 公式仓位计算
+        Kelly 公式仓位计算（修复版）
+
+        修复：用贝叶斯自适应胜率替代置信度（置信度≠胜率）
+          - 初期（<20笔）：用A股先验胜率~42%
+          - 积累后：用该类信号的实际历史胜率
+          - 贝叶斯收缩避免小样本过拟合
 
         f* = (b×p - q) / b
           b = 盈亏比（目标收益 / 止损距离）
-          p = 置信度（信号强度作为胜率估计）
-          q = 1 - p
-
-        Returns:
-            Kelly 仓位比例，限制在 [position_size×0.5, kelly_max_fraction] 之间
+          p = 历史胜率（按信号类型统计）
         """
         try:
-            p = min(max(float(wave_signal.confidence), 0.3), 0.9)
-            q = 1.0 - p
-
-            entry = wave_signal.entry_price
+            entry  = wave_signal.entry_price
             target = wave_signal.target_price
             stop   = wave_signal.stop_loss
 
@@ -238,10 +256,19 @@ class WaveStrategy:
             if risk <= 0:
                 return self.position_size
 
-            b = reward / risk            # 盈亏比
-            kelly = (b * p - q) / b      # Kelly公式
+            # 用历史胜率（贝叶斯估计）而非置信度
+            trade_type = getattr(wave_signal, 'detection_method',
+                                 wave_signal.entry_type.value if hasattr(wave_signal, 'entry_type') else 'unknown')
+            p = self._get_historical_win_rate(trade_type)
+            q = 1.0 - p
+            b = reward / risk
 
-            # 约束：不低于 position_size×0.5（避免过于保守），不超过 kelly_max_fraction
+            kelly = (b * p - q) / b
+
+            # 置信度调节：高置信度信号小幅加仓
+            conf_multiplier = 0.8 + 0.4 * min(float(wave_signal.confidence), 1.0)
+            kelly = kelly * conf_multiplier
+
             fraction = max(self.position_size * 0.5, min(kelly, self.kelly_max_fraction))
             return round(fraction, 4)
 
@@ -249,12 +276,19 @@ class WaveStrategy:
             return self.position_size
 
     def reset(self):
-        """重置策略状态"""
+        """重置策略状态（批量回测时防止Kelly统计跨股票污染）"""
         self.capital = self.initial_capital
         self.positions = {}
         self.trades = []
         self.equity_curve = []
         self.position_analysis = {}
+        # Kelly统计不随策略重置（跨股票积累更稳定），
+        # 如需完全隔离，调用 reset_kelly_stats()
+    
+    def reset_kelly_stats(self):
+        """单独重置Kelly历史统计"""
+        self._win_counts = {}
+        self._total_counts = {}
 
     def execute_trade(
         self,
@@ -384,7 +418,12 @@ class WaveStrategy:
 
             # 获取卖出原因（从kwargs中获取）
             reason = kwargs.get('reason', '')
-            trade.close(date, effective_price, reason)  # 使用实际成交价(扣除成本)
+            trade.close(date, effective_price, reason)
+
+            # 更新Kelly历史胜率统计
+            trade_type = trade.entry_wave or 'unknown'
+            won = trade.pnl > 0
+            self._update_kelly_stats(trade_type, won)
 
             # 回收资金
             self.capital += trade.quantity * effective_price

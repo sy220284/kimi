@@ -138,19 +138,32 @@ def calculate_atr(high: np.ndarray, low: np.ndarray, close: np.ndarray, period: 
     return atr
 
 def zigzag_atr(high, low, close, atr, atr_mult=0.5, min_dist=3):
-    """ATR自适应ZigZag - 根据波动率动态调整阈值"""
+    """ATR自适应ZigZag - 根据波动率动态调整阈值
+
+    起始方向修复：看前5根K线的趋势决定从高点还是低点开始
+    避免硬编码 direction=1 但记录 low[0] 的矛盾。
+    """
     n = len(close)
     idxs, prices, types = [], [], []
 
     if n < 5:
         return idxs, prices, types
 
-    direction = 1  # +1找高点
-    extreme_idx, extreme_price = 0, high[0]
-
-    idxs.append(0)
-    prices.append(low[0])
-    types.append("L")
+    # A股适配：根据前5根K线判断初始方向
+    # 前段上涨 → 先找低点（等回调）；前段下跌 → 先找高点（等反弹）
+    lookfwd = min(5, n - 1)
+    if close[lookfwd] >= close[0]:  # 初始趋势向上，从低点开始
+        direction = 1  # 接下来找高点
+        extreme_idx, extreme_price = 0, high[0]
+        idxs.append(0)
+        prices.append(low[0])
+        types.append("L")
+    else:  # 初始趋势向下，从高点开始
+        direction = -1  # 接下来找低点
+        extreme_idx, extreme_price = 0, low[0]
+        idxs.append(0)
+        prices.append(high[0])
+        types.append("H")
 
     for i in range(1, n):
         threshold = atr_mult * atr[i]
@@ -238,21 +251,43 @@ def validate_impulse_rules(points):
         violations.append("浪3最短")
 
     p0, p1, _, _, p4, _ = m.prices
-    if m.is_bullish and p4 <= p1 or not m.is_bullish and p4 >= p1:
+    # A股适配：允许浪4轻微进入浪1区域（≤5%浪1幅度）
+    # A股涨停板、融资盘强平等特殊情形常造成轻微重叠，但结构依然有效
+    _w1_amp = abs(m.prices[1] - m.prices[0])
+    _tolerance = _w1_amp * 0.05  # 5%容忍
+    if m.is_bullish and p4 <= p1 - _tolerance:
+        violations.append("浪4与浪1重叠")
+    elif not m.is_bullish and p4 >= p1 + _tolerance:
         violations.append("浪4与浪1重叠")
 
     if violations:
         return False, violations, 0.0, {}
 
-    # 指导原则评分
+    # 指导原则评分（A股适配版）
+    # A股特点：浪3可宽泛（政策市推动），浪2浅（护盘），浪4允许轻微重叠
+    w3_ratio = m.w3 / (m.w1 + 1e-12)
+    w5_ratio = m.w5 / (m.w1 + 1e-12)
     checks = [
-        ("浪2黄金分割", 0.15, 0.382 <= m.w2_retrace <= 0.618),
-        ("浪3延伸1.618", 0.20, 1.50 <= m.w3/(m.w1+1e-12) <= 1.80),
-        ("浪3最长", 0.15, m.w3 >= m.w1 and m.w3 >= m.w5),
-        ("浪4浅回撤", 0.15, 0.236 <= m.w4_retrace <= 0.500),
-        ("浪5等于浪1", 0.10, 0.85 <= m.w5/(m.w1+1e-12) <= 1.15),
-        ("浪5新极点", 0.10, (m.prices[5]>m.prices[3]) if m.is_bullish else (m.prices[5]<m.prices[3])),
-        ("浪2浪4交替", 0.15, (m.w2_retrace>=0.50) != (m.w4_retrace>=0.50)),
+        # 浪2回调：A股常见浅回调（20-80%均可接受，38-62%加分）
+        ("浪2回调合理", 0.15,
+         0.20 <= m.w2_retrace <= 0.80),
+        ("浪2黄金分割", 0.10,
+         0.382 <= m.w2_retrace <= 0.618),
+        # 浪3：A股可以很长（政策催化），放宽为0.9-3.0倍
+        ("浪3不短于浪1", 0.20,
+         w3_ratio >= 0.90),
+        ("浪3超过浪5", 0.10,
+         m.w3 >= m.w5),
+        ("浪3延伸（加分）", 0.05,
+         1.20 <= w3_ratio <= 2.50),
+        # 浪4回调：A股涨停板文化，浪4可较浅
+        ("浪4回调合理", 0.15,
+         0.15 <= m.w4_retrace <= 0.65),
+        # 浪5：A股经常截断（failed 5th），放宽验证
+        ("浪5方向正确", 0.10,
+         (m.prices[5] > m.prices[3]) if m.is_bullish else (m.prices[5] < m.prices[3])),
+        ("浪2浪4交替", 0.15,
+         abs(m.w2_retrace - m.w4_retrace) > 0.10),
     ]
 
     total = sum(w for _, w, _ in checks)
@@ -781,8 +816,12 @@ class ElliottWaveAnalyzer:
                 elif prices[i] == min_price:
                     p.wave_num = '2'  # 2浪低点
                 else:
-                    # 交替标注
-                    p.wave_num = str((i % 5) + 1)
+                    # 基于极值点高低关系标注，而非位置
+                    # 高点→奇数浪（推动），低点→偶数浪（调整）
+                    if p.is_peak:
+                        p.wave_num = '3' if prices[i] > max(prices[:i] + [0]) * 0.99 else '1'
+                    else:
+                        p.wave_num = '4' if i > n // 2 else '2' 
         else:
             # 下降趋势: A-B-C
             for i, p in enumerate(labeled_points):

@@ -487,17 +487,25 @@ class ResonanceAnalyzer:
         # E2: 市场状态自适应共振权重
         # 趋势市：MACD动量更可靠；震荡市：RSI超买超卖更精准；高波动：波浪形态+量能优先
         _market = getattr(wave_signal, 'market_condition', None) if wave_signal else None
+        # 权重设计：各指标的相对重要性（不需要归一化，scoring时用总weight做分母）
+        # 归一化修复：权重之和统一为5.0，确保不同市场状态下满分可比
         if _market == 'trending':
-            weights = {'MACD': 1.4, 'RSI': 0.6, 'KDJ': 0.8, 'Volume': 0.7, 'ElliottWave': 1.2}
+            # 趋势市：MACD动量优先，RSI超买超卖权重降低
+            _raw = {'MACD': 1.4, 'RSI': 0.6, 'KDJ': 0.8, 'Volume': 0.7, 'ElliottWave': 1.2}
         elif _market == 'ranging':
-            weights = {'MACD': 0.7, 'RSI': 1.3, 'KDJ': 1.2, 'Volume': 0.6, 'ElliottWave': 1.0}
+            # 震荡市：RSI/KDJ超买超卖更精准
+            _raw = {'MACD': 0.7, 'RSI': 1.3, 'KDJ': 1.2, 'Volume': 0.6, 'ElliottWave': 1.0}
         elif _market == 'volatile':
-            weights = {'MACD': 0.8, 'RSI': 0.8, 'KDJ': 0.9, 'Volume': 1.0, 'ElliottWave': 1.4}
+            # 高波动：波浪形态+量能最可靠
+            _raw = {'MACD': 0.8, 'RSI': 0.8, 'KDJ': 0.9, 'Volume': 1.0, 'ElliottWave': 1.4}
         elif _market == 'quiet':
-            weights = {'MACD': 1.0, 'RSI': 1.1, 'KDJ': 1.0, 'Volume': 0.5, 'ElliottWave': 1.1}
+            # 低波动：各指标均衡
+            _raw = {'MACD': 1.0, 'RSI': 1.1, 'KDJ': 1.0, 'Volume': 0.5, 'ElliottWave': 1.1}
         else:
-            # 默认权重（与原来一致，兼容无市场状态的调用）
-            weights = {'MACD': 1.0, 'RSI': 0.8, 'KDJ': 1.0, 'Volume': 0.6, 'ElliottWave': 1.2}
+            _raw = {'MACD': 1.0, 'RSI': 0.8, 'KDJ': 1.0, 'Volume': 0.6, 'ElliottWave': 1.2}
+        # 归一化到5.0，确保跨状态置信度可比
+        _total_raw = sum(_raw.values())
+        weights = {k: v / _total_raw * 5.0 for k, v in _raw.items()}
 
         conflicts = []
 
