@@ -543,16 +543,18 @@ class WaveBacktester:
         self,
         analyzer: UnifiedWaveAnalyzer | None = None,
         strategy: WaveStrategy | None = None,
+        use_trend_follower: bool = True,
     ):
         """
         Args:
-            analyzer: 波浪分析器实例（默认 UnifiedWaveAnalyzer）
-            strategy: 交易策略实例（默认 WaveStrategy()）
+            analyzer:           波浪分析器实例（默认 UnifiedWaveAnalyzer）
+            strategy:           交易策略实例（默认 WaveStrategy()）
+            use_trend_follower: 是否启用趋势跟踪补充（默认 True）
+                                解决"单边牛市波浪信号=0"问题：
+                                  - 牛市中启用 MA回调/放量突破/均线金叉 信号
+                                  - 震荡市仍以波浪信号为主
 
-        注意：第一个参数历史上曾被误用于传入 WaveStrategy，
-              现已同时支持两种调用方式以保持向后兼容：
-                WaveBacktester(my_strategy)   # 兼容旧写法
-                WaveBacktester(strategy=my_strategy)  # 推荐写法
+        向后兼容：第一个参数若为 WaveStrategy，自动识别。
         """
         # 向后兼容：如果第一个参数是 WaveStrategy，自动识别
         if isinstance(analyzer, WaveStrategy):
@@ -561,6 +563,7 @@ class WaveBacktester:
 
         self.analyzer = analyzer if analyzer is not None else UnifiedWaveAnalyzer()
         self.strategy = strategy if strategy is not None else WaveStrategy()
+        self.use_trend_follower = use_trend_follower
         self._current_signals: list[UnifiedWaveSignal] = []
         self._signal_ages: dict[int, int] = {}
         self._signal_decay: dict[int, float] = {}
@@ -644,6 +647,12 @@ class WaveBacktester:
         self._signal_ages = {}
         self._signal_decay = {}
 
+        # 趋势跟踪补充模块：解决单边牛市信号=0问题
+        _trend_follower = None
+        if self.use_trend_follower:
+            from analysis.wave.trend_follower import TrendFollower, detect_bull_regime
+            _trend_follower = TrendFollower()
+
         # OPT-B1: 预提取 numpy 数组，消除循环内 df.iloc[i] 开销（127x 提速）
         _closes    = df['close'].values.astype(float)
         _dates_str = df['date'].dt.strftime('%Y-%m-%d').values
@@ -694,6 +703,20 @@ class WaveBacktester:
             # 生成交易信号
             best_signal = self._get_best_trade_signal(price)
 
+            # ── 趋势跟踪补充：牛市中波浪信号=0时启用 ──────────────
+            if best_signal is None and _trend_follower is not None and i >= 200:
+                if i % reanalyze_every == 0:
+                    _regime_df = df.iloc[max(0, i-300):i+1]
+                    from analysis.wave.trend_follower import detect_bull_regime
+                    _regime = detect_bull_regime(_regime_df)
+                    self._is_bull_market = _regime['is_bull']
+                if getattr(self, '_is_bull_market', False):
+                    _trend_df = df.iloc[max(0, i-300):i+1].copy()
+                    _trend_sigs = _trend_follower.detect(_trend_df)
+                    if _trend_sigs:
+                        best_signal = _trend_sigs[0].to_wave_signal()
+            # ──────────────────────────────────────────────────────
+
             # 买入信号 - 在这里进行趋势过滤
             if best_signal and best_signal.direction == 'up':
                 # 趋势过滤: 价格低于200日均线2%则不买入
@@ -706,8 +729,7 @@ class WaveBacktester:
                 if can_buy:
                     target = best_signal.target_price
                     stop = best_signal.stop_loss
-                    # 传入历史数据用于计算波动率
-                    historical_df = df.iloc[:i].copy()  # 修复: 不含当天
+                    historical_df = df.iloc[:i].copy()
                     self.strategy.execute_trade(
                         symbol, date, price, TradeAction.BUY,
                         target, stop, data_idx=i,

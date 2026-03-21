@@ -37,11 +37,14 @@ class Wave2Detector:
                  min_wave_pct: float = 0.015,
                  min_retrace: float = 0.30,
                  max_retrace: float = 0.618,
-                 lookback: int = 30):
+                 lookback: int = 30,
+                 bull_market_mode: bool = False):
         self.min_wave_pct = min_wave_pct
-        self.min_retrace = min_retrace
-        self.max_retrace = max_retrace
+        # 牛市模式：接受更浅的回调（15-50%），因为牛市浅回调是主流
+        self.min_retrace = 0.15 if bull_market_mode else min_retrace
+        self.max_retrace = 0.50 if bull_market_mode else max_retrace
         self.lookback = lookback
+        self.bull_market_mode = bull_market_mode
 
     def detect(self, df: pd.DataFrame) -> Wave2Signal | None:
         """检测当前是否处于2浪买入点"""

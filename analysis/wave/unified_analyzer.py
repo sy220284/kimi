@@ -180,6 +180,20 @@ class UnifiedWaveAnalyzer:
         # 检测市场状态
         self._current_market_condition = self._detect_market_condition(df)
 
+        # 牛市检测：强趋势中放宽波浪回调要求（解决单边牛市信号=0）
+        try:
+            from analysis.wave.trend_follower import detect_bull_regime
+            _regime = detect_bull_regime(df)
+            _is_bull = _regime.get('is_bull', False)
+        except Exception:
+            _is_bull = False
+        # 动态调整：牛市用更宽松的回调阈值
+        _saved_min_retrace = self.min_retrace
+        _saved_max_w2 = self.max_wave2_retrace
+        if _is_bull:
+            self.min_retrace = 0.15        # 牛市：接受15%回调（vs 默认38.2%）
+            self.max_wave2_retrace = 0.50  # 牛市：上限仍50%
+
         signals = []
 
         # 步骤2: 极值点检测
@@ -237,6 +251,10 @@ class UnifiedWaveAnalyzer:
         # 添加市场状态信息
         for sig in signals:
             sig.market_condition = self._current_market_condition.value
+
+        # 恢复原始参数（避免单例污染）
+        self.min_retrace = _saved_min_retrace
+        self.max_wave2_retrace = _saved_max_w2
 
         signals.sort(key=lambda x: (x.confidence + x.resonance_score) / 2, reverse=True)
         return signals
