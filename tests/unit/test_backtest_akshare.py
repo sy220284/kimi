@@ -1,5 +1,6 @@
 """
 使用akshare获取实时数据进行回测
+（akshare 已弃用，本文件已被标记为 skip）
 """
 import sys
 from pathlib import Path
@@ -7,10 +8,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from pathlib import Path
 
+import pytest
+
+# akshare 已弃用，模块未安装时跳过整个文件
+ak = pytest.importorskip("akshare", reason="akshare 未安装（已弃用数据源），跳过")
 
 from datetime import datetime
 
-import akshare as ak
 import pandas as pd
 
 from analysis.backtest.wave_backtester import WaveBacktester, WaveStrategy
