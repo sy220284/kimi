@@ -82,9 +82,9 @@ def to_agent_output(
     if analysis_date is None:
         analysis_date = datetime.now().strftime('%Y-%m-%d')
     
-    # 确定状态
-    state = AgentState.COMPLETED if ai_output.success else AgentState.ERROR
-    
+    # 确定状态：置信度>0 视为成功（AIAgentOutput 无 success/error_message 字段）
+    state = AgentState.COMPLETED if ai_output.confidence > 0 else AgentState.ERROR
+
     # 构建结果字典
     result = {
         'ai_reasoning': ai_output.reasoning,
@@ -93,7 +93,7 @@ def to_agent_output(
         'ai_action_suggestion': ai_output.action_suggestion,
         'ai_details': ai_output.details,
     }
-    
+
     return AgentOutput(
         agent_type=agent_type,
         symbol=symbol,
@@ -102,7 +102,7 @@ def to_agent_output(
         confidence=ai_output.confidence,
         state=state,
         execution_time=execution_time,
-        error_message=ai_output.error_message
+        error_message=None
     )
 
 
@@ -142,8 +142,8 @@ def merge_with_ai_result(
     if include_raw:
         merged['ai_raw'] = {
             'details': ai_output.details,
-            'success': ai_output.success,
-            'error_message': ai_output.error_message,
+            'success': ai_output.confidence > 0,
+            'error_message': None,
         }
     
     return merged
