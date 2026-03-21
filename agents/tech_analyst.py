@@ -79,11 +79,13 @@ class TechAnalystAgent(BaseAgent):
             data_mgr = get_optimized_data_manager()
             df = data_mgr.get_stock_data(symbol)
 
-            # 应用日期过滤
-            if input_data.start_date and df is not None and not df.empty:
-                df = df[df['date'] >= input_data.start_date].copy()
-            if input_data.end_date and df is not None and not df.empty:
-                df = df[df['date'] <= input_data.end_date].copy()
+            # 应用日期过滤 (统一转为字符串比较)
+            if df is not None and not df.empty:
+                df['date'] = df['date'].astype(str)
+                if input_data.start_date:
+                    df = df[df['date'] >= str(input_data.start_date)].copy()
+                if input_data.end_date:
+                    df = df[df['date'] <= str(input_data.end_date)].copy()
 
             if df is None or df.empty:
                 return AgentOutput(

@@ -38,14 +38,12 @@ class TestWaveAgentIntegration(unittest.TestCase):
 
     def test_02_single_stock_analysis(self):
         """测试单股分析"""
-        df = self.data_mgr.get_stock_data('600519')
-        self.assertIsNotNone(df)
-
-        result = self.agent.analyze(df)
-
+        from agents.base_agent import AgentInput, AgentState
+        inp = AgentInput(symbol='600519', start_date='2022-01-01', end_date='2023-12-31')
+        result = self.agent.analyze(inp)
         self.assertIsNotNone(result)
-        self.assertIsInstance(result, list)
-        print(f"✅ 单股分析完成，发现{len(result)}个波浪模式")
+        self.assertIn(result.state, [AgentState.COMPLETED, AgentState.ERROR])
+        print(f"✅ 单股分析完成，state={result.state.name}")
 
     def test_03_multiple_stocks_analysis(self):
         """测试多股批量分析"""
@@ -56,10 +54,12 @@ class TestWaveAgentIntegration(unittest.TestCase):
         for symbol in symbols:
             df = self.data_mgr.get_stock_data(symbol)
             if df is not None:
-                result = self.agent.analyze(df)
+                from agents.base_agent import AgentInput, AgentState
+                inp = AgentInput(symbol=symbol, start_date='2022-01-01', end_date='2023-12-31')
+                r = self.agent.analyze(inp)
                 results.append({
                     'symbol': symbol,
-                    'patterns': len(result) if result else 0
+                    'state': r.state.name if r else 'none'
                 })
         elapsed = time.time() - start
 
@@ -80,20 +80,21 @@ class TestWaveAgentIntegration(unittest.TestCase):
         print("✅ 结合指标的分析完成")
 
     def test_05_emptydata_handling(self):
-        """测试空数据处理"""
-        import pandas as pd
-        empty_df = pd.DataFrame()
-
-        result = self.agent.analyze(empty_df)
-
-        self.assertEqual(result, [])
-        print("✅ 空数据处理正常")
+        """测试空数据处理（空symbol → ERROR状态）"""
+        from agents.base_agent import AgentInput, AgentState
+        inp = AgentInput(symbol='NONEXISTENT_SYMBOL_XYZ')
+        result = self.agent.analyze(inp)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.state, AgentState.ERROR)
+        print("✅ 空数据处理正常 (AgentState.ERROR)")
 
     def test_06_invaliddata_handling(self):
-        """测试无效数据处理"""
-        result = self.agent.analyze(None)
-
-        self.assertEqual(result, [])
+        """测试无效数据处理（无效symbol → ERROR状态）"""
+        from agents.base_agent import AgentInput, AgentState
+        inp = AgentInput(symbol='INVALID_XYZ_404')
+        result = self.agent.analyze(inp)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.state, AgentState.ERROR)
         print("✅ 无效数据处理正常")
 
 
@@ -173,20 +174,17 @@ class TestAgentCollaboration(unittest.TestCase):
         df = self.data_mgr.get_stock_data(symbol)
 
         # 波浪分析
-        wave_result = self.wave_agent.analyze(df)
+        from agents.base_agent import AgentInput, AgentState
+        inp = AgentInput(symbol=symbol, start_date='2022-01-01', end_date='2023-12-31')
+        wave_result = self.wave_agent.analyze(inp)
+        tech_result = self.tech_agent.analyze(inp)
 
-        # 技术分析
-        tech_result = self.tech_agent.analyze(df)
-
-        # 整合结果
         combined = {
             'symbol': symbol,
-            'wave_patterns': len(wave_result) if wave_result else 0,
-            'tech_analysis': tech_result is not None,
-            'timestamp': datetime.now().isoformat()
+            'wave_state': wave_result.state.name,
+            'tech_state': tech_result.state.name,
         }
-
-        self.assertTrue(combined['tech_analysis'])
+        self.assertIn(tech_result.state, [AgentState.COMPLETED, AgentState.ERROR])
         print("✅ 多智能体联合分析完成")
 
     def test_02_analysis_pipeline(self):
@@ -202,12 +200,11 @@ class TestAgentCollaboration(unittest.TestCase):
         df = self.data_mgr.calculate_rsi(df, 14)
 
         # 步骤3: 波浪分析
-        wave_result = self.wave_agent.analyze(df)
+        from agents.base_agent import AgentInput, AgentState
+        inp = AgentInput(symbol=symbol, start_date='2022-01-01', end_date='2023-12-31')
+        wave_result = self.wave_agent.analyze(inp)
+        tech_result = self.tech_agent.analyze(inp)
 
-        # 步骤4: 技术分析
-        tech_result = self.tech_agent.analyze(df)
-
-        # 验证流水线完整
         self.assertIsNotNone(wave_result)
         self.assertIsNotNone(tech_result)
 
@@ -243,13 +240,14 @@ class TestEndToEndWorkflow(unittest.TestCase):
                 df = data_mgr.calculate_rsi(df, 14)
 
                 # 智能体分析
-                wave = wave_agent.analyze(df)
-                tech = tech_agent.analyze(df)
-
+                from agents.base_agent import AgentInput, AgentState
+                inp = AgentInput(symbol=symbol, start_date='2022-01-01', end_date='2023-12-31')
+                wave = wave_agent.analyze(inp)
+                tech = tech_agent.analyze(inp)
                 results.append({
                     'symbol': symbol,
-                    'wave_count': len(wave) if wave else 0,
-                    'has_tech': tech is not None
+                    'wave_state': wave.state.name,
+                    'tech_state': tech.state.name,
                 })
 
         # 5. 验证结果

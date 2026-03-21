@@ -73,6 +73,15 @@ class OptimizedDataManager:
 
         self._cache = pd.DataFrame(result)
 
+        # PostgreSQL DECIMAL 类型 → float（避免 decimal.Decimal * float 运算错误）
+        for col in ['open', 'high', 'low', 'close', 'amount']:
+            if col in self._cache.columns:
+                self._cache[col] = self._cache[col].astype(float)
+        if 'volume' in self._cache.columns:
+            self._cache['volume'] = self._cache['volume'].astype(float)
+        if 'date' in self._cache.columns:
+            self._cache['date'] = self._cache['date'].astype(str)
+
         # 构建按股票索引的缓存（LRU OrderedDict）
         print("🗂️  构建索引...")
         for symbol, group in self._cache.groupby('symbol'):

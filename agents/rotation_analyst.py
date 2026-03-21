@@ -404,9 +404,9 @@ class RotationAnalystAgent(BaseAgent):
                 sdf = data_mgr.get_stock_data(sym)
                 if sdf is None or len(sdf) < self.momentum_period:
                     continue
-                closes = sdf['close'].values
+                closes = sdf['close'].astype(float).values
                 mom = (closes[-1] / closes[-self.momentum_period] - 1) * 100
-                if not np.isnan(mom):
+                if not np.isnan(float(mom)):
                     mom_list.append(mom)
                     ret = pd.Series(closes[-20:]).pct_change().dropna()
                     vol_list.append(float(ret.std() * np.sqrt(252) * 100))

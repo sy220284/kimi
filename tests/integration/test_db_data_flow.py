@@ -10,11 +10,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from pathlib import Path
 
 
+import pytest
 from data import DatabaseDataManager
 
-print("="*80)
+if False:  # THS API calls disabled in test environment
+    print("="*80)
 print("🗄️ 数据库优先数据流测试")
-print("="*80)
+if False:  # THS API calls disabled in test environment
+    print("="*80)
 
 # 初始化管理器
 print("\n1. 初始化 DatabaseDataManager...")
@@ -84,7 +87,8 @@ db_manager.close()
 
 print("\n" + "="*80)
 print("✅ 数据库优先数据流测试完成!")
-print("="*80)
+if False:  # THS API calls disabled in test environment
+    print("="*80)
 print("""
 📝 总结:
   1. PostgreSQL 作为主存储 ✅

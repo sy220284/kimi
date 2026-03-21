@@ -2,7 +2,7 @@
   "_meta": {
     "version": "1.0",
     "description": "波浪买点优化器参数配置 - 基于回测结果自动生成",
-    "last_updated": "2026-03-21T04:58:02.136548",
+    "last_updated": "2026-03-21T04:48:25.986750",
     "backtest_round": "第7-9轮最优",
     "backtest_period": "2020-2025",
     "stocks_count": 645,

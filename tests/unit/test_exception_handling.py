@@ -144,15 +144,19 @@ class TestAgentExceptionHandling(unittest.TestCase):
         cls.tech_agent = TechAnalystAgent()
 
     def test_01_wave_agent_emptydata(self):
-        """测试波浪分析空数据"""
-        result = self.wave_agent.analyze(pd.DataFrame())
-        self.assertEqual(result, [])
+        """测试波浪分析空数据（空symbol→ERROR状态）"""
+        from agents.base_agent import AgentInput, AgentState
+        result = self.wave_agent.analyze(AgentInput(symbol=""))
+        self.assertIsNotNone(result)
+        self.assertEqual(result.state, AgentState.ERROR)
         print("✅ 波浪分析空数据处理正常")
 
     def test_02_wave_agent_nonedata(self):
-        """测试波浪分析None数据"""
-        result = self.wave_agent.analyze(None)
-        self.assertEqual(result, [])
+        """测试波浪分析None数据（invalid symbol→ERROR状态）"""
+        from agents.base_agent import AgentInput, AgentState
+        result = self.wave_agent.analyze(AgentInput(symbol="NONE_XYZ_404"))
+        self.assertIsNotNone(result)
+        self.assertEqual(result.state, AgentState.ERROR)
         print("✅ 波浪分析None数据处理正常")
 
     def test_03_wave_agent_missing_columns(self):
@@ -170,14 +174,19 @@ class TestAgentExceptionHandling(unittest.TestCase):
             print(f"⚠️ 波浪分析缺少列抛出异常: {type(e).__name__}")
 
     def test_04_tech_agent_emptydata(self):
-        """测试技术分析空数据"""
-        result = self.tech_agent.analyze(pd.DataFrame())
-        # 应该返回空结果或默认值
+        """测试技术分析空数据（空symbol→ERROR状态）"""
+        from agents.base_agent import AgentInput, AgentState
+        result = self.tech_agent.analyze(AgentInput(symbol=""))
+        self.assertIsNotNone(result)
+        self.assertEqual(result.state, AgentState.ERROR)
         print("✅ 技术分析空数据处理正常")
 
     def test_05_tech_agent_nonedata(self):
-        """测试技术分析None数据"""
-        result = self.tech_agent.analyze(None)
+        """测试技术分析None数据（invalid symbol→ERROR状态）"""
+        from agents.base_agent import AgentInput, AgentState
+        result = self.tech_agent.analyze(AgentInput(symbol="NONE_XYZ_404"))
+        self.assertIsNotNone(result)
+        self.assertEqual(result.state, AgentState.ERROR)
         print("✅ 技术分析None数据处理正常")
 
 

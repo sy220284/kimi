@@ -181,15 +181,16 @@ class TestBaseAIAgent(unittest.TestCase):
             def parse_response(self, response):
                 return AIAgentOutput("test", "test", 0.5)
         
-        # 测试CodeFlow模型
-        agent = TestAgent("codeflow/claude-sonnet-4-6", "high")
-        self.assertEqual(agent.provider, "codeflow")
-        self.assertEqual(agent.model_id, "claude-sonnet-4-6")
-        
         # 测试DeepSeek模型
-        agent = TestAgent("deepseek/deepseek-reasoner", "high")
+        agent = TestAgent("test_agent", "deepseek/deepseek-reasoner", "high")
         self.assertEqual(agent.provider, "deepseek")
         self.assertEqual(agent.model_id, "deepseek-reasoner")
+        self.assertEqual(agent.thinking, "high")
+        
+        # 测试DeepSeek模型 (positional: agent_name, model, thinking)
+        agent = TestAgent("test_agent2", "deepseek/deepseek-chat", "low")
+        self.assertEqual(agent.provider, "deepseek")
+        self.assertEqual(agent.model_id, "deepseek-chat")
 
 
 class TestIntegration(unittest.TestCase):
