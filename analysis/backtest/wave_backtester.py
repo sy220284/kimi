@@ -129,7 +129,8 @@ class BacktestResult:
             'sharpe_ratio': self.sharpe_ratio,             # float
             'sortino_ratio': self.sortino_ratio,           # float
             'calmar_ratio': self.calmar_ratio,             # float
-            'profit_factor': self.profit_factor,           # float
+            # profit_factor=inf 时 JSON 序列化不合规，上限 999.99
+            'profit_factor': min(self.profit_factor, 999.99) if self.profit_factor != float('inf') else 999.99,
         }
 
 class WaveStrategy:
@@ -538,11 +539,31 @@ class WaveBacktester:
     - 直接使用 detect() 方法获取信号
     """
 
-    def __init__(self, analyzer: UnifiedWaveAnalyzer | None = None):
-        # 默认创建 UnifiedWaveAnalyzer 实例
-        self.analyzer = analyzer or UnifiedWaveAnalyzer()
-        self.strategy = WaveStrategy()
+    def __init__(
+        self,
+        analyzer: UnifiedWaveAnalyzer | None = None,
+        strategy: WaveStrategy | None = None,
+    ):
+        """
+        Args:
+            analyzer: 波浪分析器实例（默认 UnifiedWaveAnalyzer）
+            strategy: 交易策略实例（默认 WaveStrategy()）
+
+        注意：第一个参数历史上曾被误用于传入 WaveStrategy，
+              现已同时支持两种调用方式以保持向后兼容：
+                WaveBacktester(my_strategy)   # 兼容旧写法
+                WaveBacktester(strategy=my_strategy)  # 推荐写法
+        """
+        # 向后兼容：如果第一个参数是 WaveStrategy，自动识别
+        if isinstance(analyzer, WaveStrategy):
+            strategy = analyzer
+            analyzer = None
+
+        self.analyzer = analyzer if analyzer is not None else UnifiedWaveAnalyzer()
+        self.strategy = strategy if strategy is not None else WaveStrategy()
         self._current_signals: list[UnifiedWaveSignal] = []
+        self._signal_ages: dict[int, int] = {}
+        self._signal_decay: dict[int, float] = {}
 
     def run(
         self,
@@ -620,6 +641,8 @@ class WaveBacktester:
             df['ma_trend'] = df['close'].rolling(window=self.strategy.trend_ma_period).mean()
 
         self._current_signals = []
+        self._signal_ages = {}
+        self._signal_decay = {}
 
         # OPT-B1: 预提取 numpy 数组，消除循环内 df.iloc[i] 开销（127x 提速）
         _closes    = df['close'].values.astype(float)
@@ -646,6 +669,7 @@ class WaveBacktester:
                     try:
                         self._current_signals = self.analyzer.detect(analysis_df, mode='all')
                         self._signal_ages = {id(s): 0 for s in self._current_signals}
+                        self._signal_decay = {id(s): 1.0 for s in self._current_signals}
                     except Exception as e:
                         self._current_signals = []
                         self._signal_ages = {}
@@ -656,10 +680,14 @@ class WaveBacktester:
                     for s in self._current_signals:
                         age = self._signal_ages.get(id(s), 0) + 1
                         self._signal_ages[id(s)] = age
-                        # 每经过一个 reanalyze_every 周期衰减 8%，超过 3 倍周期后丢弃
+                        # 每经过一个 reanalyze_every 周期衰减 8%
                         decay = max(0.0, 1.0 - age * 0.08)
-                        s.confidence = s.confidence * decay
-                        if s.confidence >= 0.20:   # 低于 0.20 视为陈旧信号丢弃
+                        # Bug 3 修复：不原地修改信号对象 confidence，
+                        # 而是用 _signal_decay 字典记录衰减系数，
+                        # _get_best_trade_signal 读取时应用衰减
+                        effective_conf = s.confidence * decay
+                        self._signal_decay[id(s)] = decay
+                        if effective_conf >= 0.20:   # 低于 0.20 视为陈旧信号丢弃
                             alive.append(s)
                     self._current_signals = alive
 
@@ -708,10 +736,11 @@ class WaveBacktester:
         if not self._current_signals:
             return None
 
-        # 过滤有效信号
+        # 过滤有效信号（应用衰减因子，不修改原始 confidence）
+        decay_map = getattr(self, '_signal_decay', {})
         valid_signals = [
             s for s in self._current_signals
-            if s.is_valid and s.confidence >= 0.5
+            if s.is_valid and (s.confidence * decay_map.get(id(s), 1.0)) >= 0.5
         ]
 
         if not valid_signals:
@@ -789,7 +818,10 @@ class WaveBacktester:
             # 资金加权收益率 = (期末权益 - 期初资金) / 期初资金 * 100
             total_return_pct = (final_equity - self.strategy.initial_capital) / self.strategy.initial_capital * 100
 
-            # 计算每日收益率用于Sharpe/Sortino（扣除无风险利率，A股年化3%≈日化0.0119%）
+            # 计算每日权益收益率用于Sharpe/Sortino
+            # 注：包含空仓日（return≈0），会稀释波动率使Sharpe偏高
+            # 这是组合回测的常规做法（Portfolio Sharpe）
+            # 无风险利率：A股年化3% ≈ 日化0.0119%
             daily_returns = pd.Series(equity_values).pct_change().dropna()
             rf_daily = 0.03 / 252
             if len(daily_returns) > 1 and daily_returns.std() > 0:
@@ -824,10 +856,11 @@ class WaveBacktester:
                     max_dd_pct = dd_pct
 
         # Calmar：年化收益率 / 最大回撤（衡量单位风险的回报）
+        # 使用复利年化：(1 + total_return)^(252/n_days) - 1
         if equity_values and len(equity_values) >= 2:
             n_days = len(equity_values)
-            annual_return = total_return_pct / 100 * (252 / max(n_days, 1))
-            calmar = (annual_return / (max_dd_pct / 100)) if max_dd_pct > 0 else 0.0
+            compound_annual = (1 + total_return_pct / 100) ** (252 / max(n_days, 1)) - 1
+            calmar = (compound_annual / (max_dd_pct / 100)) if max_dd_pct > 0 else 0.0
         else:
             calmar = 0.0
 
