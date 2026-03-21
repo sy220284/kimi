@@ -674,8 +674,8 @@ class WaveBacktester:
             if best_signal and best_signal.direction == 'up':
                 # 趋势过滤: 价格低于200日均线2%则不买入
                 can_buy = True
-                if self.strategy.use_trend_filter and 'ma_trend' in row:
-                    ma_trend = row['ma_trend']
+                if self.strategy.use_trend_filter:
+                    ma_trend = df['ma_trend'].iloc[i]
                     if pd.notna(ma_trend) and price < ma_trend * 0.98:
                         can_buy = False
 
