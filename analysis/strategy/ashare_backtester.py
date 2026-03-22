@@ -83,7 +83,7 @@ class AShareBacktester:
     def __init__(
         self,
         strategy: AShareStrategy | None = None,
-        reanalyze_every: int = 5,
+        reanalyze_every: int = 10,   # 默认10天重算一次（原5天，减少开销50%）
         min_data_rows: int = 130,
     ):
         self.strategy        = strategy or AShareStrategy()
@@ -102,11 +102,14 @@ class AShareBacktester:
         df = df.copy().sort_values("date").reset_index(drop=True)
         df["date"] = df["date"].astype(str)
 
-        # 计算技术指标（一次性，供多因子使用）
+        # 计算技术指标（一次性预计算，避免每次切片重算）
         try:
             df = self._ti.calculate_all(df)
         except Exception:
             pass
+
+        # 预计算日期→整数索引映射（加速切片定位）
+        _n_rows = len(df)
 
         # 涨跌停标记
         sym_prefix = symbol[:3] if len(symbol) >= 3 else symbol

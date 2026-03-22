@@ -85,7 +85,7 @@ class AShareBatchBacktester:
         self,
         strategy: AShareStrategy | None = None,
         max_workers: int = 4,
-        reanalyze_every: int = 5,
+        reanalyze_every: int = 10,  # 对齐 AShareBacktester 默认值
         min_data_rows: int = 130,
         progress_callback: Callable | None = None,
     ):

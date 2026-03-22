@@ -1286,3 +1286,238 @@ class TestOptimizedDataManagerMock:
                 while len(dm._cache_by_symbol) > 2:
                     dm._cache_by_symbol.popitem(last=False)
             assert len(dm._cache_by_symbol) <= 2
+
+
+# ─────────────────────────────────────────────
+# 批量处理能力专项测试
+# ─────────────────────────────────────────────
+
+class TestBatchCapabilities:
+    def setup_method(self):
+        import numpy as np, pandas as pd
+        from collections import OrderedDict
+        from unittest.mock import MagicMock
+        from data.optimized_data_manager import OptimizedDataManager
+        dm = OptimizedDataManager.__new__(OptimizedDataManager)
+        dm._initialized = True
+        dm.db = MagicMock()
+        cache = OrderedDict()
+        for sym, seed in [("000001",1),("600519",2),("000858",3),("601318",4),("600887",5)]:
+            np.random.seed(seed); n=300
+            p = 100*np.exp(0.0006*np.arange(n)+0.01*np.cumsum(np.random.randn(n)))
+            cache[sym] = pd.DataFrame({
+                "symbol": sym,
+                "date": pd.date_range("2022-01-01",periods=n,freq="B").strftime("%Y-%m-%d"),
+                "open":p,"high":p*1.008,"low":p*0.992,"close":p,
+                "volume":1e7*np.ones(n),"amount":1e8*np.ones(n)})
+        dm._cache = pd.concat(list(cache.values()), ignore_index=True)
+        dm._cache_by_symbol = cache
+        self.dm = dm
+        self.syms = list(cache.keys())
+        self.sdfs = {s: cache[s] for s in self.syms}
+
+    # ── AShareBatchBacktester ──
+    def test_batch_run_all_symbols(self):
+        from analysis.strategy.ashare_batch import AShareBatchBacktester
+        bt = AShareBatchBacktester(max_workers=2)
+        s, results = bt.run(self.syms, data_loader=self.dm.get_stock_data)
+        assert s.symbols_total == len(self.syms)
+        assert s.symbols_ok > 0
+
+    def test_batch_workers_consistent_results(self):
+        """不同并发数结果应一致（deepcopy隔离）"""
+        from analysis.strategy.ashare_batch import AShareBatchBacktester
+        bt1 = AShareBatchBacktester(max_workers=1)
+        bt4 = AShareBatchBacktester(max_workers=4)
+        s1, _ = bt1.run(self.syms, data_loader=self.dm.get_stock_data)
+        s4, _ = bt4.run(self.syms, data_loader=self.dm.get_stock_data)
+        # 相同输入不同并发，交易数应该一致
+        assert s1.total_trades == s4.total_trades
+
+    def test_batch_progress_callback(self):
+        """进度回调被正确调用"""
+        from analysis.strategy.ashare_batch import AShareBatchBacktester
+        calls = []
+        def _prog(done, total, sym):
+            calls.append((done, total))
+        bt = AShareBatchBacktester(max_workers=2, progress_callback=_prog)
+        bt.run(self.syms, data_loader=self.dm.get_stock_data)
+        assert len(calls) > 0
+        assert calls[-1][0] == calls[-1][1]  # 最后一次 done==total
+
+    def test_batch_report_not_empty(self):
+        from analysis.strategy.ashare_batch import AShareBatchBacktester
+        bt = AShareBatchBacktester(max_workers=1)
+        bt.run(self.syms, data_loader=self.dm.get_stock_data)
+        assert "A股新策略" in bt.report()
+        detail = bt.report_detail(top_n=5)
+        assert "代码" in detail
+
+    def test_batch_save_results(self, tmp_path):
+        from analysis.strategy.ashare_batch import AShareBatchBacktester
+        bt = AShareBatchBacktester(max_workers=1)
+        bt.run(self.syms, data_loader=self.dm.get_stock_data)
+        paths = bt.save_results(str(tmp_path))
+        import os
+        assert "summary" in paths and os.path.exists(paths["summary"])
+        assert "results" in paths and os.path.exists(paths["results"])
+        assert "trades"  in paths and os.path.exists(paths["trades"])
+
+    def test_batch_error_isolation(self):
+        """单只失败不影响其他"""
+        from analysis.strategy.ashare_batch import AShareBatchBacktester
+        def bad_loader(sym):
+            if sym == "000001": return None  # 强制失败
+            return self.dm.get_stock_data(sym)
+        bt = AShareBatchBacktester(max_workers=2)
+        s, results = bt.run(self.syms, data_loader=bad_loader)
+        skip_or_err = [r for r in results if r.status in ("skip","error")]
+        assert any(r.symbol == "000001" for r in skip_or_err)
+        ok = [r for r in results if r.status == "ok"]
+        assert len(ok) == len(self.syms) - 1
+
+    # ── 多因子批量评分 ──
+    def test_factor_score_batch(self):
+        from analysis.factors.multi_factor import AShareMultiFactor
+        engine = AShareMultiFactor()
+        scores = engine.score_batch(self.sdfs)
+        assert len(scores) <= len(self.syms)
+        # 验证降序排列
+        for i in range(len(scores)-1):
+            assert scores[i].total_score >= scores[i+1].total_score
+
+    def test_factor_select_top_grade_ordering(self):
+        """select_top grade过滤方向正确"""
+        from analysis.factors.multi_factor import AShareMultiFactor
+        engine = AShareMultiFactor()
+        scores = engine.score_batch(self.sdfs)
+        top_d = engine.select_top(scores, n=10, min_grade="D")
+        top_b = engine.select_top(scores, n=10, min_grade="B")
+        assert len(top_d) >= len(top_b)  # D级阈值更宽松
+
+    # ── Agent批量扫描 ──
+    def test_agent_scan_grade_filter(self):
+        from agents.ashare_agent import AShareAgent
+        agent = AShareAgent()
+        sd = agent.scan(self.sdfs, min_grade="D", top_n=20)
+        sb = agent.scan(self.sdfs, min_grade="B", top_n=20)
+        assert len(sd) >= len(sb)
+
+    def test_agent_scan_top_n_limit(self):
+        from agents.ashare_agent import AShareAgent
+        agent = AShareAgent()
+        results = agent.scan(self.sdfs, min_grade="D", top_n=2)
+        assert len(results) <= 2
+
+    def test_agent_scan_sorted_by_confidence(self):
+        from agents.ashare_agent import AShareAgent
+        agent = AShareAgent()
+        results = agent.scan(self.sdfs, min_grade="D", top_n=10)
+        for i in range(len(results)-1):
+            s1 = results[i].signal.confidence if results[i].signal else 0
+            s2 = results[i+1].signal.confidence if results[i+1].signal else 0
+            f1 = results[i].factor_score.total_score
+            f2 = results[i+1].factor_score.total_score
+            # 排序键是 (confidence, factor_score)，前者大等于后者
+            assert (s1, f1) >= (s2, f2)
+
+    # ── API批量端点 ──
+    def test_api_analyze_batch(self):
+        from fastapi.testclient import TestClient
+        from api.main import app
+        client = TestClient(app)
+        r = client.post("/api/v1/analyze/batch",
+                        json={"symbols": self.syms, "min_grade": "D", "include_avoid": True})
+        assert r.status_code == 200
+        d = r.json()
+        assert "total" in d and "results" in d and "elapsed_sec" in d
+        assert d["total"] == len(d["results"])
+
+    def test_api_analyze_batch_exclude_avoid(self):
+        from fastapi.testclient import TestClient
+        from api.main import app
+        client = TestClient(app)
+        r = client.post("/api/v1/analyze/batch",
+                        json={"symbols": self.syms, "min_grade": "D", "include_avoid": False})
+        assert r.status_code == 200
+        results = r.json()["results"]
+        for res in results:
+            assert res["action"] != "AVOID"
+
+    def test_api_analyze_batch_limit(self):
+        from fastapi.testclient import TestClient
+        from api.main import app
+        client = TestClient(app)
+        r = client.post("/api/v1/analyze/batch",
+                        json={"symbols": ["A"]*201, "min_grade": "D"})
+        assert r.status_code == 400
+
+    def test_api_async_batch_backtest(self):
+        """异步批量回测：提交→轮询→结果"""
+        import time
+        from fastapi.testclient import TestClient
+        from api.main import app
+        client = TestClient(app)
+
+        # 提交任务
+        r = client.post("/api/v1/backtest/batch/async",
+                        json={"symbols": self.syms, "max_workers": 2})
+        assert r.status_code == 200
+        job_id = r.json()["job_id"]
+        assert r.json()["status"] == "pending"
+
+        # 轮询直到完成（最多10秒）
+        for _ in range(40):
+            time.sleep(0.25)
+            r2 = client.get(f"/api/v1/jobs/{job_id}")
+            assert r2.status_code == 200
+            if r2.json()["status"] in ("done", "error"):
+                break
+
+        assert r2.json()["status"] == "done"
+        assert r2.json()["progress"] == 100
+
+        # 获取结果
+        r3 = client.get(f"/api/v1/jobs/{job_id}/result")
+        assert r3.status_code == 200
+        result = r3.json()["result"]
+        assert "avg_return_pct" in result
+        assert "symbols_ok" in result
+
+    def test_api_job_not_found(self):
+        from fastapi.testclient import TestClient
+        from api.main import app
+        client = TestClient(app)
+        r = client.get("/api/v1/jobs/nonexistent_job_id")
+        assert r.status_code == 404
+
+    def test_api_job_result_not_ready(self):
+        """job未完成时获取result应返回202"""
+        from fastapi.testclient import TestClient
+        from api.main import app
+        client = TestClient(app)
+        # 创建一个pending状态的job
+        from api.main import _new_job
+        job_id = _new_job()
+        r = client.get(f"/api/v1/jobs/{job_id}/result")
+        assert r.status_code == 202
+
+    # ── 并发安全 ──
+    def test_concurrent_backtests_no_error(self):
+        """多线程并发回测不报错"""
+        import threading
+        from analysis.strategy.ashare_backtester import AShareBacktester
+        from analysis.strategy.ashare_strategy import AShareStrategy
+        errors = []; results = []
+        def _run(sym):
+            try:
+                bt = AShareBacktester(strategy=AShareStrategy(initial_capital=100_000))
+                r = bt.run(sym, self.dm.get_stock_data(sym))
+                results.append(r.total_return_pct)
+            except Exception as e:
+                errors.append(str(e))
+        threads = [threading.Thread(target=_run, args=(s,)) for s in self.syms]
+        for t in threads: t.start()
+        for t in threads: t.join()
+        assert len(errors) == 0
+        assert len(results) == len(self.syms)

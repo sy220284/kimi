@@ -65,6 +65,26 @@ async def require_auth(request: Request, api_key: str | None = Depends(_API_KEY_
 
 _dm = None
 
+# ── 异步任务存储（内存实现，生产环境替换为 Redis）─────
+import uuid
+from collections import OrderedDict
+
+_jobs: OrderedDict[str, dict] = OrderedDict()
+_JOB_MAX = 100   # 最多保留100个任务记录
+
+
+def _new_job() -> str:
+    job_id = str(uuid.uuid4())[:8]
+    _jobs[job_id] = {"status": "pending", "progress": 0, "total": 0, "done": 0, "result": None, "error": None}
+    if len(_jobs) > _JOB_MAX:
+        _jobs.popitem(last=False)
+    return job_id
+
+
+def _update_job(job_id: str, **kwargs):
+    if job_id in _jobs:
+        _jobs[job_id].update(kwargs)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -169,6 +189,28 @@ class BatchSummaryResponse(BaseModel):
     profitable_pct: float; total_trades: int; elapsed_sec: float
 
 
+class BatchAnalyzeRequest(BaseModel):
+    symbols: list[str] = Field(..., description="股票代码列表")
+    min_grade: str = Field("B", description="最低因子等级 A/B/C/D")
+    include_avoid: bool = Field(False, description="是否包含AVOID结果")
+
+
+class BatchAnalyzeResponse(BaseModel):
+    total: int
+    results: list[AnalyzeResponse]
+    elapsed_sec: float
+
+
+class JobStatus(BaseModel):
+    job_id: str
+    status: str          # pending / running / done / error
+    progress: int        # 0-100
+    total: int
+    done: int
+    result_key: str | None = None
+    error: str | None = None
+
+
 def _rows_to_df(rows):
     import pandas as pd
     return pd.DataFrame([r.model_dump() for r in rows])
@@ -268,3 +310,223 @@ async def backtest_batch_endpoint(req: BatchBacktestRequest):
         best_symbol=s.best_symbol, best_return=s.best_return,
         worst_symbol=s.worst_symbol, worst_return=s.worst_return,
         profitable_pct=s.profitable_pct, total_trades=s.total_trades, elapsed_sec=s.elapsed_sec)
+
+
+# ── 批量分析端点 ─────────────────────────────────────────
+
+@app.post(
+    "/api/v1/analyze/batch",
+    response_model=BatchAnalyzeResponse,
+    dependencies=[Depends(require_auth)],
+    tags=["分析"],
+    summary="批量完整分析",
+    description="对多只股票执行完整分析，返回 BUY/WATCH 结果（可选包含AVOID）",
+)
+async def analyze_batch_endpoint(req: BatchAnalyzeRequest):
+    if len(req.symbols) > 200:
+        raise HTTPException(status_code=400, detail="单次最多200只")
+    t0 = time.time()
+    agent = AShareAgent()
+    dm = get_dm()
+    results = []
+    for sym in req.symbols:
+        df = dm.get_stock_data(sym)
+        if df is None or df.empty:
+            continue
+        try:
+            r = agent.analyze(sym, df)
+            if not req.include_avoid and r.action == "AVOID":
+                continue
+            sig_resp = None
+            if r.signal and r.signal.is_valid:
+                s = r.signal
+                sig_resp = SignalInfo(
+                    signal_type=s.signal_type.value, entry_price=s.entry_price,
+                    stop_loss=s.stop_loss, target_price=s.target_price,
+                    rr_ratio=s.rr_ratio, confidence=s.confidence, position_pct=s.position_pct)
+            results.append(AnalyzeResponse(
+                symbol=r.symbol, date=r.date, price=r.price,
+                action=r.action, reason=r.reason, confidence=r.confidence,
+                regime=_regime_to_resp(r.regime),
+                factor=_factor_to_resp(r.factor_score), signal=sig_resp))
+        except Exception:
+            pass
+    results.sort(key=lambda x: x.confidence, reverse=True)
+    return BatchAnalyzeResponse(total=len(results), results=results,
+                                 elapsed_sec=round(time.time()-t0, 3))
+
+
+@app.post(
+    "/api/v1/backtest/batch/async",
+    response_model=JobStatus,
+    dependencies=[Depends(require_auth)],
+    tags=["回测"],
+    summary="异步批量回测",
+    description="提交异步任务，立即返回 job_id，通过 /api/v1/jobs/{job_id} 轮询进度",
+)
+async def backtest_batch_async_endpoint(req: BatchBacktestRequest):
+    if len(req.symbols) > 500:
+        raise HTTPException(status_code=400, detail="异步批量最多500只")
+    import threading, dataclasses
+    job_id = _new_job()
+    _update_job(job_id, status="pending", total=len(req.symbols))
+
+    def _run():
+        _update_job(job_id, status="running")
+        def _prog(done, total, sym):
+            _update_job(job_id, done=done, progress=int(done / max(total, 1) * 100))
+        try:
+            strategy = AShareStrategy(initial_capital=req.initial_capital)
+            bt = AShareBatchBacktester(strategy=strategy, max_workers=req.max_workers,
+                                        progress_callback=_prog)
+            summary, _ = bt.run(req.symbols, data_loader=get_dm().get_stock_data)
+            _update_job(job_id, status="done", progress=100,
+                        result=dataclasses.asdict(summary))
+        except Exception as e:
+            _update_job(job_id, status="error", error=str(e)[:200])
+
+    threading.Thread(target=_run, daemon=True).start()
+    return JobStatus(job_id=job_id, status="pending",
+                     progress=0, total=len(req.symbols), done=0)
+
+
+@app.get(
+    "/api/v1/jobs/{job_id}",
+    response_model=JobStatus,
+    dependencies=[Depends(require_auth)],
+    tags=["任务"],
+    summary="查询任务进度",
+)
+async def get_job_status(job_id: str):
+    if job_id not in _jobs:
+        raise HTTPException(status_code=404, detail=f"任务 {job_id} 不存在")
+    job = _jobs[job_id]
+    return JobStatus(
+        job_id=job_id, status=job["status"],
+        progress=job["progress"], total=job["total"], done=job["done"],
+        result_key=job_id if job["status"] == "done" else None,
+        error=job.get("error"))
+
+
+@app.get(
+    "/api/v1/jobs/{job_id}/result",
+    dependencies=[Depends(require_auth)],
+    tags=["任务"],
+    summary="获取任务结果",
+)
+async def get_job_result(job_id: str):
+    if job_id not in _jobs:
+        raise HTTPException(status_code=404, detail=f"任务 {job_id} 不存在")
+    job = _jobs[job_id]
+    if job["status"] != "done":
+        raise HTTPException(status_code=202, detail=f"任务未完成，当前: {job['status']}")
+    return {"job_id": job_id, "result": job.get("result")}
+
+
+# ── 批量分析端点 ─────────────────────────────────────────
+
+@app.post(
+    "/api/v1/analyze/batch",
+    response_model=BatchAnalyzeResponse,
+    dependencies=[Depends(require_auth)],
+    tags=["分析"],
+    summary="批量完整分析",
+)
+async def analyze_batch_endpoint(req: BatchAnalyzeRequest):
+    if len(req.symbols) > 200:
+        raise HTTPException(status_code=400, detail="单次最多200只")
+    t0 = time.time()
+    agent = AShareAgent()
+    dm = get_dm()
+    results = []
+    for sym in req.symbols:
+        df = dm.get_stock_data(sym)
+        if df is None or df.empty:
+            continue
+        try:
+            r = agent.analyze(sym, df)
+            if not req.include_avoid and r.action == "AVOID":
+                continue
+            sig_resp = None
+            if r.signal and r.signal.is_valid:
+                s = r.signal
+                sig_resp = SignalInfo(
+                    signal_type=s.signal_type.value, entry_price=s.entry_price,
+                    stop_loss=s.stop_loss, target_price=s.target_price,
+                    rr_ratio=s.rr_ratio, confidence=s.confidence, position_pct=s.position_pct)
+            results.append(AnalyzeResponse(
+                symbol=r.symbol, date=r.date, price=r.price,
+                action=r.action, reason=r.reason, confidence=r.confidence,
+                regime=_regime_to_resp(r.regime),
+                factor=_factor_to_resp(r.factor_score), signal=sig_resp))
+        except Exception:
+            pass
+    results.sort(key=lambda x: x.confidence, reverse=True)
+    return BatchAnalyzeResponse(total=len(results), results=results,
+                                 elapsed_sec=round(time.time()-t0, 3))
+
+
+@app.post(
+    "/api/v1/backtest/batch/async",
+    response_model=JobStatus,
+    dependencies=[Depends(require_auth)],
+    tags=["回测"],
+    summary="异步批量回测（非阻塞）",
+)
+async def backtest_batch_async_endpoint(req: BatchBacktestRequest):
+    if len(req.symbols) > 500:
+        raise HTTPException(status_code=400, detail="异步批量最多500只")
+    import threading, dataclasses
+    job_id = _new_job()
+    _update_job(job_id, status="pending", total=len(req.symbols))
+
+    def _run():
+        _update_job(job_id, status="running")
+        def _prog(done, total, sym):
+            _update_job(job_id, done=done, progress=int(done / max(total, 1) * 100))
+        try:
+            strategy = AShareStrategy(initial_capital=req.initial_capital)
+            bt = AShareBatchBacktester(strategy=strategy, max_workers=req.max_workers,
+                                        progress_callback=_prog)
+            summary, _ = bt.run(req.symbols, data_loader=get_dm().get_stock_data)
+            _update_job(job_id, status="done", progress=100,
+                        result=dataclasses.asdict(summary))
+        except Exception as e:
+            _update_job(job_id, status="error", error=str(e)[:200])
+
+    threading.Thread(target=_run, daemon=True).start()
+    return JobStatus(job_id=job_id, status="pending",
+                     progress=0, total=len(req.symbols), done=0)
+
+
+@app.get(
+    "/api/v1/jobs/{job_id}",
+    response_model=JobStatus,
+    dependencies=[Depends(require_auth)],
+    tags=["任务"],
+    summary="查询任务进度",
+)
+async def get_job_status(job_id: str):
+    if job_id not in _jobs:
+        raise HTTPException(status_code=404, detail=f"任务 {job_id} 不存在")
+    job = _jobs[job_id]
+    return JobStatus(
+        job_id=job_id, status=job["status"],
+        progress=job["progress"], total=job["total"], done=job["done"],
+        result_key=job_id if job["status"] == "done" else None,
+        error=job.get("error"))
+
+
+@app.get(
+    "/api/v1/jobs/{job_id}/result",
+    dependencies=[Depends(require_auth)],
+    tags=["任务"],
+    summary="获取任务结果",
+)
+async def get_job_result(job_id: str):
+    if job_id not in _jobs:
+        raise HTTPException(status_code=404, detail=f"任务 {job_id} 不存在")
+    job = _jobs[job_id]
+    if job["status"] != "done":
+        raise HTTPException(status_code=202, detail=f"任务未完成，当前: {job['status']}")
+    return {"job_id": job_id, "result": job.get("result")}
