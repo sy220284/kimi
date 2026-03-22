@@ -136,7 +136,7 @@ class AShareMultiFactor:
         m_s, m_sigs   = self._momentum_factor(c, v)
         t_s, t_sigs   = self._turnover_factor(v)
         tr_s, tr_sigs = self._trend_factor(c)
-        r_s, r_sigs   = self._rsi_factor(c)
+        r_s, r_sigs   = self._rsi_factor(c, df)
         vp_s, vp_sigs = self._vol_price_factor(c, v)
         co_s, co_sigs = self._cost_factor(c)
 
@@ -324,7 +324,7 @@ class AShareMultiFactor:
             "bull_arrangement": sum(checks),  # 满足几条
         }
 
-    def _rsi_factor(self, c: np.ndarray) -> tuple[float, dict]:
+    def _rsi_factor(self, c: np.ndarray, df: pd.DataFrame | None = None) -> tuple[float, dict]:
         """
         RSI健康区间因子
         A股策略：RSI 45-70 为最佳入场区间
@@ -334,7 +334,15 @@ class AShareMultiFactor:
           65-75：偏热，可持有但不加仓
           > 75：过热，减仓区间
         """
-        rsi = self._calc_rsi(c, self.rsi_period)
+        # 优先使用 calculate_all() 已算好的 RSI14，避免重复计算
+        if df is not None and f"RSI{self.rsi_period}" in df.columns:
+            rsi = float(df[f"RSI{self.rsi_period}"].iloc[-1])
+            if not np.isnan(rsi):
+                pass
+            else:
+                rsi = self._calc_rsi(c, self.rsi_period)
+        else:
+            rsi = self._calc_rsi(c, self.rsi_period)
 
         if 50 <= rsi <= 65:
             score = 1.0
@@ -433,18 +441,24 @@ class AShareMultiFactor:
 
     @staticmethod
     def _calc_rsi(c: np.ndarray, period: int = 14) -> float:
-        """计算RSI"""
+        """
+        计算RSI（Wilder平滑法，与 TechnicalIndicators.rsi() 对齐）。
+        保留为静态方法避免循环导入；如已有 RSI14 列优先用 DataFrame 中的值。
+        """
         if len(c) < period + 1:
             return 50.0
-        diffs = np.diff(c[-(period + 10):])
-        gains  = np.where(diffs > 0, diffs, 0)
-        losses = np.where(diffs < 0, -diffs, 0)
-        avg_gain = float(np.mean(gains[-period:]))
-        avg_loss = float(np.mean(losses[-period:]))
+        diffs = np.diff(c[-(period * 3):])  # 取3倍窗口，Wilder平滑更稳
+        gains  = np.where(diffs > 0, diffs, 0.0)
+        losses = np.where(diffs < 0, -diffs, 0.0)
+        # Wilder平滑
+        avg_gain = float(np.mean(gains[:period]))
+        avg_loss = float(np.mean(losses[:period]))
+        for i in range(period, len(gains)):
+            avg_gain = (avg_gain * (period - 1) + gains[i]) / period
+            avg_loss = (avg_loss * (period - 1) + losses[i]) / period
         if avg_loss < 1e-10:
             return 100.0
-        rs = avg_gain / avg_loss
-        return 100 - (100 / (1 + rs))
+        return 100 - (100 / (1 + avg_gain / avg_loss))
 
     def factor_report(self, score: FactorScore) -> str:
         """生成单股因子报告"""

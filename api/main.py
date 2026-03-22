@@ -36,6 +36,7 @@ config = load_config()
 
 _API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
 _rate_limit: dict[str, list[float]] = defaultdict(list)
+_RATE_LIMIT_MAX_IPS = 1000   # 超过此数量时清理最旧的 IP，防止内存泄漏
 
 
 def _get_valid_keys() -> set[str]:
@@ -56,6 +57,10 @@ async def require_auth(request: Request, api_key: str | None = Depends(_API_KEY_
     if len(_rate_limit[ip]) >= 60:
         raise HTTPException(status_code=429, detail="请求过于频繁")
     _rate_limit[ip].append(now)
+    # 防止内存泄漏：IP 数量超限时清理访问最少的 IP
+    if len(_rate_limit) > _RATE_LIMIT_MAX_IPS:
+        oldest_ip = min(_rate_limit, key=lambda k: _rate_limit[k][-1] if _rate_limit[k] else 0)
+        del _rate_limit[oldest_ip]
 
 
 _dm = None

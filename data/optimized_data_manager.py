@@ -1,3 +1,4 @@
+import threading
 """
 组合优化模块 - 内存缓存 + 向量化计算
 修复版 - 简化groupby操作避免列丢失
@@ -18,6 +19,7 @@ class OptimizedDataManager:
     """组合优化数据管理器 - 单例模式 + LRU缓存淘汰"""
 
     _instance = None
+    _lock = threading.Lock()
 
     # C1: LRU 配置（动态适配，由 PerformanceAdaptor 决定）
     @classmethod
@@ -39,8 +41,10 @@ class OptimizedDataManager:
 
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance._initialized = False
+            with cls._lock:
+                if cls._instance is None:   # 双重检查锁定
+                    cls._instance = super().__new__(cls)
+                    cls._instance._initialized = False
         return cls._instance
 
     def __init__(self):

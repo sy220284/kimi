@@ -172,7 +172,9 @@ class AShareAgent:
         for sym, df in symbol_dfs.items():
             try:
                 r = self.analyze(sym, df, market_df)
-                if r.action in ("BUY", "WATCH") and r.factor_score.grade >= min_grade:
+                _GRADE_RANK = {"A": 4, "B": 3, "C": 2, "D": 1}
+                min_rank = _GRADE_RANK.get(min_grade, 1)
+                if r.action in ("BUY", "WATCH") and _GRADE_RANK.get(r.factor_score.grade, 0) >= min_rank:
                     results.append(r)
             except Exception as e:
                 logger.debug(f"scan {sym} error: {e}")

@@ -222,25 +222,38 @@ class AShareMarketRegime:
         }
 
     def _volume_score(self, v: np.ndarray) -> tuple[float, dict]:
-        """成交量放量/缩量状态 0-1（0.5=中性）"""
-        if len(v) < self.vol_lookback + 5:
+        """
+        成交量放量/缩量状态 0-1（0.5=中性）
+
+        改进：
+          - 近10日均量（原5日，噪声大）vs 前20日均量基准
+          - 量能趋势：近10日 vs 近20日的斜率方向
+        """
+        lookback = self.vol_lookback   # 默认20
+        curr_window = max(10, lookback // 2)   # 10日（比5日稳）
+
+        if len(v) < lookback + curr_window:
             return 0.5, {}
 
-        vol_avg  = float(np.mean(v[-self.vol_lookback:-5]))
-        vol_curr = float(np.mean(v[-5:]))  # 近5日均量
-        ratio    = vol_curr / (vol_avg + 1e-8)
+        base_vol  = float(np.mean(v[-(lookback + curr_window):-curr_window]))
+        curr_vol  = float(np.mean(v[-curr_window:]))
+        ratio     = curr_vol / (base_vol + 1e-8)
 
-        # 放量：趋势行情中的积极信号
         if ratio >= self.vol_surge_mult:
-            score = min(1.0, 0.5 + 0.5 * (ratio - 1))
+            score = min(1.0, 0.5 + 0.5 * min((ratio - 1), 1.0))
         elif ratio <= self.vol_shrink_mult:
-            # 缩量：震荡/末期信号
             score = max(0.0, 0.5 * ratio / self.vol_shrink_mult)
         else:
-            score = 0.5
+            # 线性插值
+            score = 0.5 + (ratio - 1.0) * 0.5 / (self.vol_surge_mult - 1.0)
 
-        # 量能趋势（5日量比20日是否在提升）
-        vol_trend = (vol_curr - vol_avg) / (vol_avg + 1e-8)
+        # 量能趋势：近10日与前10日对比（是否持续放量）
+        prev_vol = float(np.mean(v[-(curr_window * 2):-curr_window]))
+        vol_trend = (curr_vol - prev_vol) / (prev_vol + 1e-8)
+        if vol_trend > 0.1:
+            score = min(1.0, score + 0.05)   # 持续放量加分
+        elif vol_trend < -0.1:
+            score = max(0.0, score - 0.05)   # 持续缩量减分
 
         return score, {
             "volume_ratio": round(ratio, 2),

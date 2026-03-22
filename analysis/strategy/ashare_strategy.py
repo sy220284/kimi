@@ -183,10 +183,19 @@ class AShareStrategy:
         self.equity_curve: list[dict] = []
 
     def reset(self):
+        """重置单次回测状态（保留跨回测的 Kelly 胜率统计）"""
         self.capital      = self.initial_capital
         self.positions    = {}
         self.trades       = []
         self.equity_curve = []
+
+    def reset_full(self):
+        """完全重置，包含 Kelly 统计（用于全新回测序列）"""
+        self.reset()
+        # 重置 Kelly 自适应胜率（若有）
+        if hasattr(self, '_kelly_wins'):
+            self._kelly_wins   = 0
+            self._kelly_total  = 0
 
     # ─────────────────────────────────────────────
     # 信号生成
@@ -441,12 +450,13 @@ class AShareStrategy:
             trade.stop_loss = trade.entry_price  # 移至成本
 
         # ── 4. 移动止盈 ─────────────────────────
-        if profit_pct >= self.trail_activation:
+        # 激活条件：浮盈首次达到 trail_activation
+        if profit_pct >= self.trail_activation or trade.trailing_stop is not None:
             trail_price = trade.highest_price * (1 - self.trail_pct)
             if trade.trailing_stop is None:
-                trade.trailing_stop = trail_price
+                trade.trailing_stop = trail_price   # 首次激活
             else:
-                trade.trailing_stop = max(trade.trailing_stop, trail_price)
+                trade.trailing_stop = max(trade.trailing_stop, trail_price)  # 只升不降
 
             if low <= trade.trailing_stop:
                 self._close(symbol, date, trade.trailing_stop, "trailing_stop")
