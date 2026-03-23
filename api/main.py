@@ -130,6 +130,7 @@ class OHLCVRow(BaseModel):
 class SymbolRequest(BaseModel):
     symbol: str
     rows: list[OHLCVRow] | None = None
+    style: str | None = Field(None, description="交易风格: short_term/swing/medium_term")
 
 class RegimeRequest(BaseModel):
     symbol: str | None = None
@@ -139,16 +140,19 @@ class ScanRequest(BaseModel):
     symbols: list[str]
     top_n: int = Field(10, ge=1, le=50)
     min_grade: str = "B"
+    style: str | None = None
 
 class BacktestRequest(BaseModel):
     symbol: str
     initial_capital: float = 100_000
     max_stop_pct: float = 0.09
+    style: str | None = None
 
 class BatchBacktestRequest(BaseModel):
     symbols: list[str]
     initial_capital: float = 100_000
     max_workers: int = Field(4, ge=1, le=8)
+    style: str | None = None
 
 class HealthResponse(BaseModel):
     status: str; version: str; timestamp: str; data_loaded: bool
@@ -193,6 +197,7 @@ class BatchAnalyzeRequest(BaseModel):
     symbols: list[str] = Field(..., description="股票代码列表")
     min_grade: str = Field("B", description="最低因子等级 A/B/C/D")
     include_avoid: bool = Field(False, description="是否包含AVOID结果")
+    style: str | None = Field(None, description="交易风格: short_term/swing/medium_term")
 
 
 class BatchAnalyzeResponse(BaseModel):
@@ -272,19 +277,24 @@ async def factors_endpoint(req: SymbolRequest):
           dependencies=[Depends(require_auth)], tags=["分析"], summary="单股完整分析")
 async def analyze_endpoint(req: SymbolRequest):
     df = _rows_to_df(req.rows) if req.rows else get_df(req.symbol)
-    return _sig_to_resp(AShareAgent().analyze(req.symbol, df))
+    return _sig_to_resp(AShareAgent(style=req.style).analyze(req.symbol, df))
 
 @app.post("/api/v1/scan", response_model=list[AnalyzeResponse],
           dependencies=[Depends(require_auth)], tags=["选股"], summary="批量扫描选股")
 async def scan_endpoint(req: ScanRequest):
     dm = get_dm()
     sdfs = {s: df for s in req.symbols if (df := dm.get_stock_data(s)) is not None and not df.empty}
-    return [_sig_to_resp(r) for r in AShareAgent().scan(sdfs, top_n=req.top_n, min_grade=req.min_grade)]
+    return [_sig_to_resp(r) for r in AShareAgent(style=req.style).scan(sdfs, top_n=req.top_n, min_grade=req.min_grade)]
 
 @app.post("/api/v1/backtest", response_model=BacktestResponse,
           dependencies=[Depends(require_auth)], tags=["回测"], summary="单股回测")
 async def backtest_endpoint(req: BacktestRequest):
-    bt = AShareBacktester(strategy=AShareStrategy(initial_capital=req.initial_capital, max_stop_pct=req.max_stop_pct))
+    if req.style:
+        from analysis.strategy.multi_style import MultiStyleStrategy
+        strategy = MultiStyleStrategy(style=req.style, initial_capital=req.initial_capital, max_stop_pct=req.max_stop_pct)
+    else:
+        strategy = AShareStrategy(initial_capital=req.initial_capital, max_stop_pct=req.max_stop_pct)
+    bt = AShareBacktester(strategy=strategy)
     r = bt.run(req.symbol, get_df(req.symbol))
     ex = r.exit_reason_counts; total = r.total_trades or 1
     return BacktestResponse(symbol=r.symbol, total_trades=r.total_trades, win_rate=r.win_rate,

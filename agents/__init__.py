@@ -8,10 +8,17 @@ agents — A股智能分析Agent模块
   market_regime() 市场状态判断
 """
 from .ashare_agent import AShareAgent, AShareAnalysis
+from analysis.strategy.style import TradingStyle, StyleConfig, get_style_config
+from analysis.strategy.multi_style import MultiStyleStrategy
+from analysis.strategy.signal_detector import AShareSignalDetector, ExtendedSignalType
 from .base_agent import BaseAgent, AgentInput, AgentOutput, AgentState, AnalysisType
 
 __all__ = [
     "AShareAgent",
+    "MultiStyleStrategy",
+    "TradingStyle",
+    "AShareSignalDetector",
+    "ExtendedSignalType",
     "AShareAnalysis",
     "BaseAgent",
     "AgentInput",

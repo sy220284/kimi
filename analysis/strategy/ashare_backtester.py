@@ -169,6 +169,14 @@ class AShareBacktester:
             # ── 记录权益（使用实际价格）─────────────
             self.strategy.record_equity(date, {symbol: price})
 
+            # ── MultiStyleStrategy 专属：组合风控更新 + 金字塔加仓 ─────
+            if hasattr(self.strategy, 'update_portfolio_risk'):
+                eq = self.strategy.equity_curve[-1]['total'] if self.strategy.equity_curve else self.strategy.initial_capital
+                self.strategy.update_portfolio_risk(date, eq)
+            if (hasattr(self.strategy, 'check_pyramid_add')
+                    and symbol in self.strategy.positions):
+                self.strategy.check_pyramid_add(symbol, date, price, i)
+
         # 强制平仓未平仓的持仓
         if symbol in self.strategy.positions:
             last_date  = str(dates[-1])

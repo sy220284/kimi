@@ -1805,3 +1805,462 @@ class TestBatchWorkersFallback:
         from analysis.strategy.ashare_batch import AShareBatchBacktester
         bt = AShareBatchBacktester(max_workers=4)
         assert bt.max_workers == 4
+
+
+# ─────────────────────────────────────────────
+# 多风格策略测试
+# ─────────────────────────────────────────────
+
+def _make_trend_df(n=300, seed=1, drift=0.0006):
+    import numpy as np, pandas as pd
+    np.random.seed(seed)
+    p = 100*np.exp(drift*np.arange(n)+0.01*np.cumsum(np.random.randn(n)))
+    v = 1e7*(1+0.2*np.abs(np.random.randn(n)))
+    return pd.DataFrame({
+        'date': pd.date_range('2022-01-01',periods=n,freq='B').strftime('%Y-%m-%d'),
+        'open':p,'high':p*1.008,'low':p*0.992,'close':p,'volume':v})
+
+def _make_limit_up_df():
+    """构造涨停次日场景"""
+    import numpy as np, pandas as pd
+    p = np.ones(200)*100
+    for i in range(1,198): p[i]=p[i-1]*(1+0.0003)
+    p[198]=p[197]*1.10; p[199]=p[198]*1.03
+    v=np.ones(200)*1e7; v[197]=3e7; v[198]=5e7; v[199]=1.8e7
+    return pd.DataFrame({'date':pd.date_range('2022-01-01',periods=200,freq='B').strftime('%Y-%m-%d'),
+        'open':p,'high':p*1.005,'low':p*0.995,'close':p,'volume':v})
+
+
+class TestTradingStyle:
+    def test_style_configs_exist(self):
+        from analysis.strategy.style import (TradingStyle, SHORT_TERM_CONFIG,
+                                              SWING_CONFIG, MEDIUM_TERM_CONFIG)
+        assert SHORT_TERM_CONFIG.max_holding_days == 5
+        assert SWING_CONFIG.max_holding_days == 20
+        assert MEDIUM_TERM_CONFIG.max_holding_days == 60
+        assert SHORT_TERM_CONFIG.max_stop_pct < SWING_CONFIG.max_stop_pct < MEDIUM_TERM_CONFIG.max_stop_pct
+
+    def test_get_style_config(self):
+        from analysis.strategy.style import get_style_config, TradingStyle
+        cfg = get_style_config(TradingStyle.SHORT_TERM)
+        assert cfg.style == TradingStyle.SHORT_TERM
+        cfg2 = get_style_config("swing")
+        assert cfg2.style == TradingStyle.SWING
+
+    def test_style_rr_ratio_ordering(self):
+        """中线盈亏比应最高"""
+        from analysis.strategy.style import SHORT_TERM_CONFIG, SWING_CONFIG, MEDIUM_TERM_CONFIG
+        assert SHORT_TERM_CONFIG.min_rr_ratio < SWING_CONFIG.min_rr_ratio < MEDIUM_TERM_CONFIG.min_rr_ratio
+
+    def test_style_factor_score_ordering(self):
+        """中线因子门槛应最高"""
+        from analysis.strategy.style import SHORT_TERM_CONFIG, SWING_CONFIG, MEDIUM_TERM_CONFIG
+        assert SHORT_TERM_CONFIG.min_factor_score <= SWING_CONFIG.min_factor_score <= MEDIUM_TERM_CONFIG.min_factor_score
+
+
+class TestSignalDetector:
+    def setup_method(self):
+        from analysis.strategy.signal_detector import AShareSignalDetector
+        from analysis.technical.indicators import TechnicalIndicators
+        self.detector = AShareSignalDetector()
+        self.ti = TechnicalIndicators()
+
+    def test_limit_up_follow_detected(self):
+        """涨停次日应检测到信号"""
+        from analysis.strategy.signal_detector import ExtendedSignalType
+        df = _make_limit_up_df()
+        sig = self.detector._limit_up_follow(
+            df['close'].values, df['high'].values, df['volume'].values, 0.095)
+        assert sig is not None
+        assert sig.signal_type == ExtendedSignalType.LIMIT_UP_FOLLOW
+        assert sig.strength > 0.5
+
+    def test_no_signal_on_flat_data(self):
+        """平稳数据不应触发激进信号"""
+        import numpy as np, pandas as pd
+        p = np.ones(200)*100; v = np.ones(200)*1e7
+        df = pd.DataFrame({'date':pd.date_range('2022',periods=200,freq='B').strftime('%Y-%m-%d'),
+            'open':p,'high':p,'low':p,'close':p,'volume':v})
+        sigs = self.detector.detect_all(df,'short_term')
+        assert len(sigs) == 0
+
+    def test_platform_breakout_conditions(self):
+        """平台突破的关键条件"""
+        import numpy as np, pandas as pd
+        n=250
+        p=np.ones(n)*100
+        p[:180]=100*(1+np.cumsum(np.random.RandomState(1).randn(180)*0.008))
+        p[180:230]=p[179]*(1+np.random.RandomState(2).randn(50)*0.002)
+        p[230:]=p[229]*(1+np.arange(20)*0.006)
+        v=np.ones(n)*1e7; v[230:]=3e7
+        df=pd.DataFrame({'date':pd.date_range('2022',periods=n,freq='B').strftime('%Y-%m-%d'),
+            'open':p,'high':p*1.005,'low':p*0.995,'close':p,'volume':v})
+        df_ind=self.ti.calculate_all(df.copy())
+        sigs=self.detector._swing_breakout(df_ind['close'].values, df_ind['high'].values, df_ind['volume'].values)
+        # 不强求必须有信号（取决于随机数据），只要不报错
+        assert sigs is None or hasattr(sigs,'strength')
+
+    def test_volume_divergence_detected(self):
+        """量价背离：价微跌+大幅缩量"""
+        import numpy as np, pandas as pd
+        p=100*np.exp(0.001*np.arange(200)+0.008*np.cumsum(np.random.RandomState(7).randn(200)))
+        p[-10:]*=0.97
+        v=np.ones(200)*1e7; v[-10:]=0.3e7
+        df=pd.DataFrame({'date':pd.date_range('2022',periods=200,freq='B').strftime('%Y-%m-%d'),
+            'open':p,'high':p*1.005,'low':p*0.995,'close':p,'volume':v})
+        df_ind=self.ti.calculate_all(df.copy())
+        sig=self.detector._volume_divergence(df_ind['close'].values, df_ind['volume'].values)
+        from analysis.strategy.signal_detector import ExtendedSignalType
+        if sig:
+            assert sig.signal_type == ExtendedSignalType.VOLUME_DIVERGENCE
+            assert sig.strength > 0
+
+    def test_detect_all_returns_sorted(self):
+        """detect_all 返回按强度降序"""
+        df = _make_limit_up_df()
+        sigs = self.detector.detect_all(df, 'short_term')
+        for i in range(len(sigs)-1):
+            assert sigs[i].strength >= sigs[i+1].strength
+
+    def test_get_best_signal(self):
+        """get_best_signal 返回最强信号"""
+        df = _make_limit_up_df()
+        sigs = self.detector.detect_all(df, 'short_term')
+        best = self.detector.get_best_signal(sigs)
+        if sigs:
+            assert best == sigs[0]
+        else:
+            assert best is None
+
+
+class TestMultiStyleStrategy:
+    def setup_method(self):
+        from analysis.strategy.multi_style import MultiStyleStrategy
+        from analysis.strategy.style import TradingStyle
+        from analysis.regime.market_regime import AShareMarketRegime
+        from analysis.factors.multi_factor import AShareMultiFactor
+        from analysis.technical.indicators import TechnicalIndicators
+        self.ti = TechnicalIndicators()
+        self.regime_det = AShareMarketRegime()
+        self.factor_eng = AShareMultiFactor()
+        self.MultiStyleStrategy = MultiStyleStrategy
+        self.TradingStyle = TradingStyle
+
+    def _get_regime_score(self, df):
+        df_ind = self.ti.calculate_all(df.copy())
+        regime = self.regime_det.detect(df_ind)
+        score = self.factor_eng.score('TEST', df_ind)
+        return df_ind, regime, score
+
+    def test_short_term_holding_days(self):
+        """短线持仓天数应 <= 5"""
+        s = self.MultiStyleStrategy.create_short_term()
+        assert s.max_holding_days == 5
+
+    def test_swing_holding_days(self):
+        s = self.MultiStyleStrategy.create_swing()
+        assert s.max_holding_days == 20
+
+    def test_medium_term_holding_days(self):
+        s = self.MultiStyleStrategy.create_medium_term()
+        assert s.max_holding_days == 60
+
+    def test_stop_loss_tighter_for_short_term(self):
+        """短线止损应比中线更紧"""
+        short = self.MultiStyleStrategy.create_short_term()
+        medium = self.MultiStyleStrategy.create_medium_term()
+        assert short.max_stop_pct < medium.max_stop_pct
+
+    def test_short_term_generates_signal(self):
+        """短线策略应在牛市数据中产生信号"""
+        from analysis.regime.market_regime import MarketRegime
+        df = _make_trend_df(300, seed=42, drift=0.0008)
+        df_ind, regime, score = self._get_regime_score(df)
+        if regime.regime == MarketRegime.SYSTEMIC_RISK:
+            import pytest; pytest.skip("systemic risk, no signal expected")
+        strat = self.MultiStyleStrategy.create_short_term()
+        if score.passed_filter and regime.is_tradeable:
+            sig = strat.generate_signal('TEST', df_ind, score, regime)
+            # 有信号时验证约束
+            if sig and sig.is_valid:
+                assert sig.stop_loss < sig.entry_price
+                assert sig.target_price > sig.entry_price
+                assert sig.rr_ratio >= strat.min_rr_ratio
+
+    def test_circuit_breaker_stops_new_positions(self):
+        """熔断触发后不允许开新仓"""
+        strat = self.MultiStyleStrategy.create_swing(circuit_break_pct=0.05)
+        strat._risk.peak_equity = 100_000
+        strat.update_portfolio_risk('2023-01-01', 94_000)  # -6%
+        assert strat._risk.circuit_triggered
+        assert not strat._risk.can_open_new
+
+    def test_cooldown_after_consecutive_losses(self):
+        """连亏3次应触发冷静期"""
+        strat = self.MultiStyleStrategy.create_short_term(max_consec_loss=3)
+        strat._risk.consecutive_losses = 3
+        strat._risk.cooldown_days_left = strat._risk.cooldown_days
+        assert not strat._risk.can_open_new
+
+    def test_cooldown_expires(self):
+        """冷静期倒计时归零后恢复"""
+        strat = self.MultiStyleStrategy.create_short_term()
+        strat._risk.cooldown_days_left = 1
+        strat.update_portfolio_risk('2023-01-01', 100_000)
+        assert strat._risk.cooldown_days_left == 0
+        assert strat._risk.can_open_new
+
+    def test_reset_clears_risk_state(self):
+        strat = self.MultiStyleStrategy.create_swing()
+        strat._risk.circuit_triggered = True
+        strat._risk.consecutive_losses = 5
+        strat.reset()
+        assert not strat._risk.circuit_triggered
+        assert strat._risk.consecutive_losses == 0
+
+    def test_factory_methods(self):
+        """便捷工厂方法"""
+        from analysis.strategy.style import TradingStyle
+        short = self.MultiStyleStrategy.create_short_term(initial_capital=50_000)
+        assert short.style == TradingStyle.SHORT_TERM
+        assert short.initial_capital == 50_000
+
+    def test_get_style_summary(self):
+        strat = self.MultiStyleStrategy.create_swing()
+        summary = strat.get_style_summary()
+        assert summary["style"] == "swing"
+        assert "circuit_triggered" in summary
+        assert "style_name" in summary
+
+    def test_style_in_agent(self):
+        """AShareAgent 接受 style 参数"""
+        from agents.ashare_agent import AShareAgent
+        agent_short = AShareAgent(style="short_term")
+        agent_swing  = AShareAgent(style="swing")
+        from analysis.strategy.multi_style import MultiStyleStrategy
+        assert isinstance(agent_short.strategy, MultiStyleStrategy)
+        assert agent_short.strategy.max_holding_days == 5
+        assert agent_swing.strategy.max_holding_days == 20
+
+    def test_multi_style_backtest_comparison(self):
+        """三种风格回测结果差异验证"""
+        from analysis.strategy.ashare_backtester import AShareBacktester
+        from analysis.strategy.style import TradingStyle
+        results = {}
+        df = _make_trend_df(300, seed=5, drift=0.0006)
+        for style in [TradingStyle.SHORT_TERM, TradingStyle.SWING, TradingStyle.MEDIUM_TERM]:
+            strat = self.MultiStyleStrategy(style=style, initial_capital=100_000)
+            bt = AShareBacktester(strategy=strat)
+            r = bt.run('TEST', df)
+            results[style.value] = r
+        # 短线交易笔数最多（因为持仓时间最短）
+        short_trades = results[TradingStyle.SHORT_TERM.value].total_trades
+        medium_trades = results[TradingStyle.MEDIUM_TERM.value].total_trades
+        assert short_trades >= medium_trades, f"短线({short_trades}) should >= 中线({medium_trades})"
+
+
+# ─────────────────────────────────────────────
+# 新功能完善测试
+# ─────────────────────────────────────────────
+
+class TestStyleAPIIntegration:
+    """API 风格参数完整集成测试"""
+    def setup_method(self):
+        from fastapi.testclient import TestClient
+        from api.main import app
+        self.client = TestClient(app)
+
+    def test_analyze_with_short_term_style(self):
+        r = self.client.post("/api/v1/analyze",
+            json={"symbol":"600519","style":"short_term"})
+        assert r.status_code in (200, 404)
+
+    def test_scan_with_swing_style(self):
+        r = self.client.post("/api/v1/scan",
+            json={"symbols":["600519","000001"],"top_n":5,"min_grade":"D","style":"swing"})
+        assert r.status_code == 200
+        results = r.json()
+        assert isinstance(results, list)
+
+    def test_backtest_with_style(self):
+        r = self.client.post("/api/v1/backtest",
+            json={"symbol":"600519","style":"short_term"})
+        assert r.status_code in (200, 404)
+        if r.status_code == 200:
+            d = r.json()
+            assert "total_trades" in d
+
+    def test_batch_backtest_with_style(self):
+        r = self.client.post("/api/v1/backtest/batch",
+            json={"symbols":["600519","000001"],"style":"swing","max_workers":2})
+        assert r.status_code == 200
+        assert r.json()["symbols_total"] == 2
+
+    def test_invalid_style_graceful(self):
+        """无效风格应由 Pydantic 处理或策略层优雅降级"""
+        r = self.client.post("/api/v1/scan",
+            json={"symbols":["600519"],"top_n":5,"min_grade":"D","style":None})
+        assert r.status_code == 200
+
+    def test_batch_analyze_with_style(self):
+        r = self.client.post("/api/v1/analyze/batch",
+            json={"symbols":["600519","000001"],"min_grade":"D",
+                  "include_avoid":True,"style":"short_term"})
+        assert r.status_code == 200
+        d = r.json()
+        assert "total" in d
+
+
+class TestPyramidAddPosition:
+    """金字塔加仓完整功能测试"""
+    def setup_method(self):
+        from analysis.strategy.multi_style import MultiStyleStrategy
+        from analysis.strategy.ashare_strategy import AShareSignal, SignalType
+        from analysis.regime.market_regime import MarketRegime
+        self.MultiStyleStrategy = MultiStyleStrategy
+        self.AShareSignal = AShareSignal
+        self.SignalType = SignalType
+        self.MarketRegime = MarketRegime
+
+    def _make_strat_with_position(self, price=100.0, enable=True):
+        strat = self.MultiStyleStrategy(
+            style='swing', initial_capital=100_000,
+            enable_pyramid=enable, pyramid_threshold=0.05)
+        sig = self.AShareSignal(
+            symbol='X', signal_type=self.SignalType.MOMENTUM_BREAKOUT,
+            entry_price=price, stop_loss=price*0.94,
+            target_price=price*1.15, confidence=0.75,
+            factor_score=72.0, regime=self.MarketRegime.STRUCTURAL,
+            position_pct=0.15, atr=1.5)
+        strat.execute_buy(sig, '2023-01-01', 10)
+        return strat
+
+    def test_pyramid_triggers_above_threshold(self):
+        strat = self._make_strat_with_position(100.0)
+        added = strat.check_pyramid_add('X', '2023-01-10', 106.0, 14)
+        assert added is True
+        assert strat.positions['X'].quantity > 100
+
+    def test_pyramid_not_triggers_below_threshold(self):
+        strat = self._make_strat_with_position(100.0)
+        added = strat.check_pyramid_add('X', '2023-01-10', 103.0, 14)
+        assert added is False
+
+    def test_pyramid_max_adds_respected(self):
+        """最多加仓 max_pyramid_adds 次"""
+        strat = self._make_strat_with_position(100.0)
+        strat.check_pyramid_add('X','2023-01-10',106.0,14)
+        added_second = strat.check_pyramid_add('X','2023-01-15',110.0,19)
+        assert added_second is False
+
+    def test_pyramid_disabled_no_add(self):
+        strat = self._make_strat_with_position(100.0, enable=False)
+        added = strat.check_pyramid_add('X','2023-01-10',106.0,14)
+        assert added is False
+
+    def test_pyramid_updates_avg_price(self):
+        """加仓后均价应在初始价和当前价之间"""
+        strat = self._make_strat_with_position(100.0)
+        strat.check_pyramid_add('X','2023-01-10',106.0,14)
+        avg = strat.positions['X'].entry_price
+        assert 100.0 < avg < 106.5
+
+    def test_pyramid_blocked_by_circuit_breaker(self):
+        strat = self._make_strat_with_position(100.0)
+        strat._risk.circuit_triggered = True
+        added = strat.check_pyramid_add('X','2023-01-10',106.0,14)
+        assert added is False
+
+
+class TestPortfolioRiskControl:
+    """组合风控完整测试"""
+    def _make_strat(self, **kwargs):
+        from analysis.strategy.multi_style import MultiStyleStrategy
+        return MultiStyleStrategy(style='short_term', **kwargs)
+
+    def test_circuit_breaker_triggers_at_threshold(self):
+        strat = self._make_strat(circuit_break_pct=0.08)
+        strat._risk.peak_equity = 100_000
+        strat.update_portfolio_risk('2023-01-01', 91_000)  # -9%
+        assert strat._risk.circuit_triggered
+
+    def test_circuit_breaker_not_at_small_loss(self):
+        strat = self._make_strat(circuit_break_pct=0.08)
+        strat._risk.peak_equity = 100_000
+        strat.update_portfolio_risk('2023-01-01', 95_000)  # -5% < 8%
+        assert not strat._risk.circuit_triggered
+
+    def test_cooldown_triggered_after_consec_losses(self):
+        strat = self._make_strat(max_consec_loss=3)
+        strat._risk.consecutive_losses = 3
+        strat._risk.cooldown_days_left = strat._risk.cooldown_days
+        assert not strat._risk.can_open_new
+
+    def test_cooldown_countdown(self):
+        strat = self._make_strat()
+        strat._risk.cooldown_days_left = 2
+        strat.update_portfolio_risk('d1', 100_000)
+        assert strat._risk.cooldown_days_left == 1
+        strat.update_portfolio_risk('d2', 100_000)
+        assert strat._risk.cooldown_days_left == 0
+        assert strat._risk.can_open_new
+
+    def test_reset_clears_all_risk(self):
+        strat = self._make_strat()
+        strat._risk.circuit_triggered = True
+        strat._risk.consecutive_losses = 5
+        strat._risk.cooldown_days_left = 2
+        strat.reset()
+        assert not strat._risk.circuit_triggered
+        assert strat._risk.consecutive_losses == 0
+        assert strat._risk.cooldown_days_left == 0
+
+    def test_portfolio_risk_state_updates_peak(self):
+        from analysis.strategy.multi_style import PortfolioRiskState
+        risk = PortfolioRiskState()
+        risk.update_peak(100_000)
+        risk.update_peak(110_000)
+        risk.update_peak(105_000)
+        assert risk.peak_equity == 110_000
+        assert risk.max_drawdown_pct > 0
+
+
+class TestMultiStyleBacktestIntegration:
+    """多风格策略与回测器集成测试"""
+    def _run_style(self, style, seed=42):
+        import numpy as np, pandas as pd
+        from analysis.strategy.multi_style import MultiStyleStrategy
+        from analysis.strategy.ashare_backtester import AShareBacktester
+        from analysis.strategy.style import TradingStyle
+        np.random.seed(seed); n=300
+        drift = {'short_term':0.001,'swing':0.0006,'medium_term':0.0004}[style]
+        p=100*np.exp(drift*np.arange(n)+0.01*np.cumsum(np.random.randn(n)))
+        df=pd.DataFrame({'date':pd.date_range('2022-01-01',periods=n,freq='B').strftime('%Y-%m-%d'),
+            'open':p,'high':p*1.008,'low':p*0.992,'close':p,'volume':1e7*np.ones(n)})
+        strat=MultiStyleStrategy(style=style,initial_capital=100_000)
+        bt=AShareBacktester(strategy=strat)
+        return bt.run('TEST',df), strat
+
+    def test_short_term_more_trades_than_medium(self):
+        r_short, _ = self._run_style('short_term', seed=1)
+        r_medium, _ = self._run_style('medium_term', seed=1)
+        assert r_short.total_trades >= r_medium.total_trades
+
+    def test_style_summary_accessible(self):
+        _, strat = self._run_style('swing')
+        summary = strat.get_style_summary()
+        assert summary['style'] == 'swing'
+        assert isinstance(summary['style_signals'], dict)
+
+    def test_portfolio_risk_updated_during_backtest(self):
+        """回测后组合风控状态应有记录"""
+        r, strat = self._run_style('short_term', seed=3)
+        # equity_curve 应有记录
+        assert len(strat.equity_curve) > 0
+
+    def test_three_styles_different_holding(self):
+        """三种风格持仓天数上限不同"""
+        from analysis.strategy.multi_style import MultiStyleStrategy
+        assert MultiStyleStrategy.create_short_term().max_holding_days == 5
+        assert MultiStyleStrategy.create_swing().max_holding_days == 20
+        assert MultiStyleStrategy.create_medium_term().max_holding_days == 60

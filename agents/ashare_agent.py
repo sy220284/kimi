@@ -80,10 +80,14 @@ class AShareAgent:
 
     def __init__(
         self,
-        strategy: AShareStrategy | None = None,
+        strategy: "AShareStrategy | None" = None,
+        style: str | None = None,          # 'short_term'/'swing'/'medium_term'
         min_factor_score: float = 55.0,
         regime_min_confidence: float = 0.50,
     ):
+        if strategy is None and style is not None:
+            from analysis.strategy.multi_style import MultiStyleStrategy
+            strategy = MultiStyleStrategy(style=style)
         self.strategy              = strategy or AShareStrategy()
         self.min_factor_score      = min_factor_score
         self.regime_min_confidence = regime_min_confidence
