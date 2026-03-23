@@ -90,7 +90,7 @@ class AShareBatchBacktester:
         progress_callback: Callable | None = None,
     ):
         self.strategy_template = strategy or AShareStrategy()
-        self.max_workers       = max_workers
+        self.max_workers       = max(1, max_workers)  # 至少1，防止0报错
         self.reanalyze_every   = reanalyze_every
         self.min_data_rows     = min_data_rows
         self.progress_callback = progress_callback
@@ -234,6 +234,7 @@ class AShareBatchBacktester:
         )
 
     def report(self) -> str:
+        """生成批量回测汇总报告（多行文本）"""
         s = self._summary
         if not s: return "尚未运行"
         lines = [
@@ -258,6 +259,7 @@ class AShareBatchBacktester:
         return "\n".join(lines)
 
     def report_detail(self, top_n: int = 20) -> str:
+        """生成逐股详细明细表（按收益率降序）"""
         act = sorted(
             [r for r in self._results if r.status == "ok" and r.total_trades > 0],
             key=lambda r: r.total_return_pct, reverse=True,
@@ -274,6 +276,7 @@ class AShareBatchBacktester:
         return "\n".join(rows)
 
     def save_results(self, output_dir: str = "results") -> dict[str, str]:
+        """将回测结果持久化为 CSV/JSON/TXT 文件，返回各文件路径字典"""
         Path(output_dir).mkdir(parents=True, exist_ok=True)
         ts    = datetime.now().strftime("%Y%m%d_%H%M%S")
         paths = {}

@@ -373,10 +373,10 @@ async def backtest_batch_async_endpoint(req: BatchBacktestRequest):
 
     def _run():
         _update_job(job_id, status="running")
-        def _prog(done, total, sym):
-            _update_job(job_id, done=done, progress=int(done / max(total, 1) * 100))
+        def _prog(d, t, s): _update_job(job_id, done=d, progress=int(d/max(t,1)*100))
         try:
-            strategy = AShareStrategy(initial_capital=req.initial_capital)
+            strategy = AShareStrategy.from_config()
+            strategy.initial_capital = req.initial_capital   # 覆盖资金
             bt = AShareBatchBacktester(strategy=strategy, max_workers=req.max_workers,
                                         progress_callback=_prog)
             summary, _ = bt.run(req.symbols, data_loader=get_dm().get_stock_data)
@@ -482,10 +482,10 @@ async def backtest_batch_async_endpoint(req: BatchBacktestRequest):
 
     def _run():
         _update_job(job_id, status="running")
-        def _prog(done, total, sym):
-            _update_job(job_id, done=done, progress=int(done / max(total, 1) * 100))
+        def _prog(d, t, s): _update_job(job_id, done=d, progress=int(d/max(t,1)*100))
         try:
-            strategy = AShareStrategy(initial_capital=req.initial_capital)
+            strategy = AShareStrategy.from_config()
+            strategy.initial_capital = req.initial_capital   # 覆盖资金
             bt = AShareBatchBacktester(strategy=strategy, max_workers=req.max_workers,
                                         progress_callback=_prog)
             summary, _ = bt.run(req.symbols, data_loader=get_dm().get_stock_data)

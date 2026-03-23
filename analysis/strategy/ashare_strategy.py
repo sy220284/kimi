@@ -85,7 +85,7 @@ class AShareTrade:
     trailing_stop: float | None = None
 
     def close(self, date: str, price: float, reason: str,
-               commission: float = 0.0013, stamp_tax: float = 0.001):
+               commission: float = 0.0013, stamp_tax: float = 0.001) -> None:
         """平仓，扣除交易成本"""
         self.exit_date   = date
         self.exit_reason = reason
@@ -182,24 +182,110 @@ class AShareStrategy:
         self.trades:    list[AShareTrade] = []
         self.equity_curve: list[dict] = []
 
-    def reset(self):
+    def reset(self) -> None:
         """重置单次回测状态（保留跨回测的 Kelly 胜率统计）"""
         self.capital      = self.initial_capital
         self.positions    = {}
         self.trades       = []
         self.equity_curve = []
 
-    def reset_full(self):
+    def reset_full(self) -> None:
         """完全重置，包含 Kelly 统计（用于全新回测序列）"""
         self.reset()
         # 重置 Kelly 自适应胜率（若有）
         if hasattr(self, '_kelly_wins'):
             self._kelly_wins   = 0
             self._kelly_total  = 0
+    @classmethod
+    def from_config(cls, config: dict | None = None) -> "AShareStrategy":
+        """
+        从配置字典创建实例（读取 config.yaml 中 analysis.strategy 节）
+
+        用法::
+            from utils.config_loader import load_config
+            cfg = load_config()
+            strategy = AShareStrategy.from_config(cfg)
+        """
+        if config is None:
+            from utils.config_loader import load_config
+            config = load_config()
+        s = config.get("analysis", {}).get("strategy", {})
+        return cls(
+            initial_capital  = s.get("initial_capital",   100_000),
+            atr_stop_mult    = s.get("atr_stop_mult",       2.0),
+            min_stop_pct     = s.get("min_stop_pct",        0.04),
+            max_stop_pct     = s.get("max_stop_pct",        0.09),
+            target_lookback  = s.get("target_lookback",      30),
+            target_buffer    = s.get("target_buffer",        0.02),
+            min_rr_ratio     = s.get("min_rr_ratio",         1.3),
+            max_holding_days = s.get("max_holding_days",      20),
+            trail_activation = s.get("trail_activation",     0.06),
+            trail_pct        = s.get("trail_pct",            0.04),
+            breakeven_pct    = s.get("breakeven_pct",        0.04),
+        )
+
 
     # ─────────────────────────────────────────────
     # 信号生成
     # ─────────────────────────────────────────────
+
+    # ─────────────────────────────────────────────
+    # generate_signal 拆分的辅助方法
+    # ─────────────────────────────────────────────
+
+    def _calc_stop_loss(self, price: float, h: np.ndarray,
+                        l: np.ndarray, c: np.ndarray) -> float:
+        """计算止损价：ATR×2 + 近5日低点，约束在[min_stop, max_stop]之间"""
+        atr      = self._calc_atr(h, l, c)
+        stop_raw = price - self.atr_stop_mult * atr
+        recent_low = float(np.min(l[-5:]))
+        stop = min(stop_raw, recent_low * 0.99)
+        stop = max(stop, price * (1 - self.max_stop_pct))
+        stop = min(stop, price * (1 - self.min_stop_pct))
+        return round(stop, 3)
+
+    def _calc_target_price(self, price: float, h: np.ndarray) -> float:
+        """目标价：前30日高点×(1-buffer)，突破时延伸至60日高点"""
+        lookback  = min(self.target_lookback, len(h) - 1)
+        prev_high = float(np.max(h[-lookback - 1:-1]))
+        target    = prev_high * (1 - self.target_buffer)
+
+        if price >= prev_high * 0.98:          # 已突破前高，延伸目标
+            longer = min(60, len(h) - 1)
+            longer_high = float(np.max(h[-longer - 1:-1]))
+            target = max(longer_high * (1 - self.target_buffer), price * 1.08)
+
+        if target <= price * 1.02:             # 兜底：至少5%空间
+            target = price * (1 + max(self.min_stop_pct * self.min_rr_ratio, 0.05))
+
+        return round(target, 3)
+
+    def _classify_signal_type(self, c: np.ndarray, v: np.ndarray) -> SignalType:
+        """基于近期涨幅和量比判断信号类型"""
+        ret_5     = (c[-1] / c[-6] - 1) if len(c) >= 6 else 0.0
+        vol_base  = float(np.mean(v[-20:-5])) if len(v) >= 20 else float(np.mean(v))
+        vol_curr  = float(np.mean(v[-5:]))
+        vol_ratio = vol_curr / (vol_base + 1e-8)
+
+        if vol_ratio >= 1.8 and ret_5 > 0.03:
+            return SignalType.VOLUME_SURGE
+        if ret_5 > 0.04:
+            return SignalType.MOMENTUM_BREAKOUT
+        if -0.03 <= ret_5 <= 0.01:
+            return SignalType.PULLBACK_ENTRY
+        return SignalType.TREND_CONTINUATION
+
+    def _calc_confidence(self, factor_score: float,
+                          regime: "RegimeResult") -> float:
+        """因子分 + 市场状态 → 置信度 [0.45, 0.95]"""
+        base = 0.45 + (factor_score - self.min_factor_score) / 90 * 0.50
+        boost = {
+            MarketRegime.POLICY_BOTTOM:  0.10,
+            MarketRegime.BULL_TREND:     0.05,
+            MarketRegime.STRUCTURAL:     0.00,
+            MarketRegime.STOCK_GAME:    -0.05,
+        }.get(regime.regime, 0.0)
+        return round(max(0.45, min(0.95, base + boost)), 3)
 
     def generate_signal(
         self,
@@ -209,11 +295,16 @@ class AShareStrategy:
         regime: RegimeResult,
     ) -> AShareSignal | None:
         """
-        基于多因子评分和市场状态生成交易信号
+        基于多因子评分和市场状态生成交易信号。
 
-        目标价策略（解决0%触达率问题）：
-          优先使用前N日高点×(1-buffer)作为目标
-          保证盈亏比≥1.3
+        流程（各步骤已提取为独立方法）：
+          1. 前置过滤（因子分/市场状态）
+          2. 止损计算 → _calc_stop_loss()
+          3. 目标价计算 → _calc_target_price()
+          4. 盈亏比检查（≥ min_rr_ratio）
+          5. 信号类型分类 → _classify_signal_type()
+          6. 置信度计算 → _calc_confidence()
+          7. 仓位计算 → _calc_position()
         """
         if not factor_score.passed_filter:
             return None
@@ -223,8 +314,8 @@ class AShareStrategy:
             return None
 
         c = df["close"].values.astype(float)
-        h = df["high"].values.astype(float) if "high" in df.columns else c * 1.005
-        l = df["low"].values.astype(float) if "low" in df.columns else c * 0.995
+        h = df["high"].values.astype(float)  if "high"   in df.columns else c * 1.005
+        l = df["low"].values.astype(float)   if "low"    in df.columns else c * 0.995
         v = df["volume"].values.astype(float) if "volume" in df.columns else np.ones(len(c))
 
         if len(c) < 30:
@@ -232,99 +323,44 @@ class AShareStrategy:
 
         price = float(c[-1])
 
-        # ── ATR止损 ─────────────────────────────
-        atr   = self._calc_atr(h, l, c)
-        stop_raw = price - self.atr_stop_mult * atr
-        # 同时考虑近5日最低点
-        recent_low = float(np.min(l[-5:]))
-        stop = min(stop_raw, recent_low * 0.99)
-        # 约束止损范围
-        stop = max(stop, price * (1 - self.max_stop_pct))
-        stop = min(stop, price * (1 - self.min_stop_pct))
+        # ── 止损 / 目标价 / 盈亏比 ──────────────
+        stop   = self._calc_stop_loss(price, h, l, c)
+        target = self._calc_target_price(price, h)
 
-        # ── 目标价（前高法，非斐波那契）─────────
-        lookback = min(self.target_lookback, len(h) - 1)
-        prev_high = float(np.max(h[-lookback-1:-1]))  # 不含今天
-        target = prev_high * (1 - self.target_buffer)
-
-        # 若价格已经超过前高（突破行情），目标价延伸
-        if price >= prev_high * 0.98:
-            # 用更远的前高
-            longer_lookback = min(60, len(h) - 1)
-            longer_high = float(np.max(h[-longer_lookback-1:-1]))
-            target = max(longer_high * (1 - self.target_buffer),
-                         price * 1.08)  # 至少8%空间
-
-        # 确保目标价高于入场价
-        if target <= price * 1.02:
-            target = price * (1 + max(self.min_stop_pct * self.min_rr_ratio, 0.05))
-
-        # ── 盈亏比检查 ──────────────────────────
-        risk = price - stop
+        risk   = price - stop
         reward = target - price
-        rr = reward / (risk + 1e-8)
+        rr     = reward / (risk + 1e-8)
         if rr < self.min_rr_ratio:
             return None
 
-        # ── 信号类型判断 ─────────────────────────
-        ret_5  = (c[-1] / c[-6] - 1) if len(c) >= 6 else 0
-        vol_ratio = float(np.mean(v[-5:])) / (float(np.mean(v[-20:-5])) + 1e-8)
-
-        if vol_ratio >= 1.8 and ret_5 > 0.03:
-            stype = SignalType.VOLUME_SURGE
-        elif ret_5 > 0.04:
-            stype = SignalType.MOMENTUM_BREAKOUT
-        elif -0.03 <= ret_5 <= 0.01:
-            stype = SignalType.PULLBACK_ENTRY
-        else:
-            stype = SignalType.TREND_CONTINUATION
-
-        # ── 信号置信度（多因子→置信度） ─────────
-        # 因子分55-100 → 置信度0.45-0.95
-        confidence = 0.45 + (factor_score.total_score - 55) / 90 * 0.50
-        confidence = max(0.45, min(0.95, confidence))
-
-        # 市场状态加成
-        regime_boost = {
-            MarketRegime.POLICY_BOTTOM: 0.10,
-            MarketRegime.BULL_TREND:    0.05,
-            MarketRegime.STRUCTURAL:    0.00,
-            MarketRegime.STOCK_GAME:   -0.05,
-        }.get(regime.regime, 0)
-        confidence = max(0.45, min(0.95, confidence + regime_boost))
-
+        # ── 信号分类 & 置信度 ────────────────────
+        stype      = self._classify_signal_type(c, v)
+        confidence = self._calc_confidence(factor_score.total_score, regime)
         if confidence < self.min_confidence:
             return None
 
-        # ── 仓位计算（市场状态×信号质量） ────────
+        # ── 仓位 & 买入成本（含交易费用）──────────
         position_pct = self._calc_position(regime, confidence, rr)
-
-        # 买入成本（含佣金+滑点）
-        buy_cost = price * (1 + self.commission_rate + self.slippage_rate)
+        buy_cost     = price * (1 + self.commission_rate + self.slippage_rate)
 
         return AShareSignal(
             symbol=symbol,
             signal_type=stype,
             entry_price=round(buy_cost, 3),
-            stop_loss=round(stop, 3),
-            target_price=round(target, 3),
-            confidence=round(confidence, 3),
+            stop_loss=stop,
+            target_price=target,
+            confidence=confidence,
             factor_score=factor_score.total_score,
             regime=regime.regime,
             position_pct=round(position_pct, 4),
-            atr=round(atr, 3),
+            atr=round(self._calc_atr(h, l, c), 3),
             signals={
-                "vol_ratio": round(vol_ratio, 2),
-                "ret_5d":    round(ret_5 * 100, 1),
+                "vol_ratio": round(float(np.mean(v[-5:])) / (float(np.mean(v[-20:-5] if len(v)>=20 else v)) + 1e-8), 2),
+                "ret_5d":    round((c[-1]/c[-6]-1)*100 if len(c)>=6 else 0, 1),
                 "rr_ratio":  round(rr, 2),
-                "prev_high": round(prev_high, 2),
-                **factor_score.signals,
+                "prev_high": round(float(np.max(h[-min(self.target_lookback,len(h)-1)-1:-1])), 2),
             },
         )
-
-    # ─────────────────────────────────────────────
-    # 仓位管理
-    # ─────────────────────────────────────────────
 
     def _calc_position(
         self,
@@ -479,7 +515,7 @@ class AShareStrategy:
         self.capital += trade.quantity * (trade.exit_price or price)
         del self.positions[symbol]
 
-    def record_equity(self, date: str, prices: dict[str, float]):
+    def record_equity(self, date: str, prices: dict[str, float]) -> None:
         """记录每日权益（接收价格字典，多股精确估值）"""
         pos_value = sum(
             self.positions[sym].quantity * prices.get(sym, self.positions[sym].entry_price)

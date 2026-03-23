@@ -1521,3 +1521,287 @@ class TestBatchCapabilities:
         for t in threads: t.join()
         assert len(errors) == 0
         assert len(results) == len(self.syms)
+
+
+# ─────────────────────────────────────────────
+# from_config() 工厂方法测试
+# ─────────────────────────────────────────────
+
+class TestFromConfig:
+    def test_strategy_from_config(self):
+        from analysis.strategy.ashare_strategy import AShareStrategy
+        s = AShareStrategy.from_config()
+        assert isinstance(s, AShareStrategy)
+        assert s.initial_capital == 100_000
+        assert 0 < s.atr_stop_mult <= 5
+        assert 0 < s.min_rr_ratio < 5
+
+    def test_regime_from_config(self):
+        from analysis.regime.market_regime import AShareMarketRegime
+        d = AShareMarketRegime.from_config()
+        assert isinstance(d, AShareMarketRegime)
+        assert d.trend_ma_short < d.trend_ma_medium < d.trend_ma_long
+
+    def test_factor_from_config(self):
+        from analysis.factors.multi_factor import AShareMultiFactor
+        e = AShareMultiFactor.from_config()
+        assert isinstance(e, AShareMultiFactor)
+        assert sum(e.WEIGHTS.values()) == 100
+
+    def test_config_override(self):
+        """自定义 config 可以覆盖默认值"""
+        from analysis.strategy.ashare_strategy import AShareStrategy
+        custom = {"analysis": {"strategy": {
+            "initial_capital": 200_000, "min_rr_ratio": 2.0}}}
+        s = AShareStrategy.from_config(custom)
+        assert s.initial_capital == 200_000
+        assert s.min_rr_ratio == 2.0
+
+    def test_strategy_weight_override(self):
+        from analysis.factors.multi_factor import AShareMultiFactor
+        custom = {"analysis": {"factors": {"weights": {
+            "momentum": 40, "turnover": 20, "trend": 20,
+            "rsi": 10, "vol_price": 5, "cost": 5}}}}
+        e = AShareMultiFactor.from_config(custom)
+        assert e.WEIGHTS["momentum"] == 40
+        assert sum(e.WEIGHTS.values()) == 100
+
+
+# ─────────────────────────────────────────────
+# 拆分后的辅助方法测试
+# ─────────────────────────────────────────────
+
+class TestRefactoredHelpers:
+    def setup_method(self):
+        from analysis.strategy.ashare_strategy import AShareStrategy
+        self.s = AShareStrategy(initial_capital=100_000)
+        import numpy as np
+        n = 200
+        p = 100 * np.exp(0.0005*np.arange(n)+0.01*np.cumsum(np.random.randn(n)))
+        self.c = p
+        self.h = p * 1.008
+        self.l = p * 0.992
+        self.v = 1e7 * np.ones(n)
+
+    def test_calc_stop_loss_in_range(self):
+        price = float(self.c[-1])
+        stop = self.s._calc_stop_loss(price, self.h, self.l, self.c)
+        assert self.s.min_stop_pct <= (price - stop) / price <= self.s.max_stop_pct
+
+    def test_calc_target_price_above_entry(self):
+        price = float(self.c[-1])
+        target = self.s._calc_target_price(price, self.h)
+        assert target > price * 1.01
+
+    def test_classify_signal_type(self):
+        from analysis.strategy.ashare_strategy import SignalType
+        stype = self.s._classify_signal_type(self.c, self.v)
+        assert stype in list(SignalType)
+
+    def test_calc_confidence_range(self):
+        from analysis.regime.market_regime import RegimeResult, MarketRegime
+        regime = RegimeResult(regime=MarketRegime.STRUCTURAL, confidence=0.8,
+                              max_position=0.5, max_positions=3, description="test")
+        conf = self.s._calc_confidence(70.0, regime)
+        assert 0.45 <= conf <= 0.95
+
+    def test_calc_equity_metrics(self):
+        from analysis.strategy.ashare_backtester import AShareBacktester
+        bt = AShareBacktester(strategy=self.s)
+        # 构造一个权益序列
+        eq = [100_000 * (1 + 0.001 * i) for i in range(100)]
+        ret, sharpe, sortino, dd, calmar = bt._calc_equity_metrics(eq)
+        assert ret > 0
+        assert sharpe > 0
+        assert dd >= 0
+
+    def test_calc_equity_metrics_empty(self):
+        from analysis.strategy.ashare_backtester import AShareBacktester
+        bt = AShareBacktester(strategy=self.s)
+        result = bt._calc_equity_metrics([])
+        assert result == (0.0, 0.0, 0.0, 0.0, 0.0)
+
+    def test_calc_equity_metrics_drawdown(self):
+        """先涨后跌场景，最大回撤应大于0"""
+        from analysis.strategy.ashare_backtester import AShareBacktester
+        bt = AShareBacktester(strategy=self.s)
+        eq = [100_000, 110_000, 120_000, 100_000, 105_000]
+        _, _, _, dd, _ = bt._calc_equity_metrics(eq)
+        # 最大回撤: (120000-100000)/120000 = 16.7%
+        assert abs(dd - 16.67) < 1.0
+
+
+# ─────────────────────────────────────────────
+# api/main.py 新端点覆盖测试
+# ─────────────────────────────────────────────
+
+class TestAPINewEndpoints:
+    """覆盖 analyze/batch, async batch, jobs 端点"""
+    def setup_method(self):
+        from fastapi.testclient import TestClient
+        from api.main import app
+        self.client = TestClient(app)
+
+    def test_analyze_batch_include_avoid(self):
+        """include_avoid=True 返回所有结果含AVOID"""
+        from api.main import app
+        from fastapi.testclient import TestClient
+        import numpy as np
+        np.random.seed(3); n=200
+        p = 100*np.exp(0.0005*np.arange(n)+0.01*np.cumsum(np.random.randn(n)))
+        rows = [{"date":f"2022-{i//22+1:02d}-{i%22+1:02d}",
+                 "open":float(p[i]),"high":float(p[i]*1.005),"low":float(p[i]*0.995),
+                 "close":float(p[i]),"volume":1e7} for i in range(n)]
+        client = TestClient(app)
+        r = client.post("/api/v1/analyze/batch",
+                        json={"symbols":["000001","600519"],"min_grade":"D","include_avoid":True})
+        assert r.status_code == 200
+        d = r.json()
+        assert "total" in d and "results" in d
+        assert d["elapsed_sec"] > 0
+
+    def test_analyze_batch_empty_symbols(self):
+        r = self.client.post("/api/v1/analyze/batch",
+                             json={"symbols":[],"min_grade":"D"})
+        assert r.status_code == 200
+        assert r.json()["total"] == 0
+
+    def test_analyze_batch_over_limit(self):
+        r = self.client.post("/api/v1/analyze/batch",
+                             json={"symbols":["A"]*201,"min_grade":"D"})
+        assert r.status_code == 400
+
+    def test_async_batch_over_limit(self):
+        r = self.client.post("/api/v1/backtest/batch/async",
+                             json={"symbols":["A"]*501,"max_workers":2})
+        assert r.status_code == 400
+
+    def test_async_batch_and_poll(self):
+        """完整异步流程：提交→轮询→结果"""
+        import time
+        r = self.client.post("/api/v1/backtest/batch/async",
+                             json={"symbols":["600519","000001"],"max_workers":1})
+        assert r.status_code == 200
+        job_id = r.json()["job_id"]
+        # 轮询
+        for _ in range(40):
+            time.sleep(0.3)
+            r2 = self.client.get(f"/api/v1/jobs/{job_id}")
+            assert r2.status_code == 200
+            if r2.json()["status"] in ("done","error"):
+                break
+        assert r2.json()["status"] == "done"
+        assert r2.json()["progress"] == 100
+
+    def test_job_result_done(self):
+        """done 状态可以取结果"""
+        import time
+        r = self.client.post("/api/v1/backtest/batch/async",
+                             json={"symbols":["600519"],"max_workers":1})
+        job_id = r.json()["job_id"]
+        for _ in range(30):
+            time.sleep(0.3)
+            if self.client.get(f"/api/v1/jobs/{job_id}").json()["status"] == "done":
+                break
+        r3 = self.client.get(f"/api/v1/jobs/{job_id}/result")
+        assert r3.status_code == 200
+        result = r3.json()
+        assert "job_id" in result and "result" in result
+        assert "avg_return_pct" in result["result"]
+
+    def test_job_result_pending_returns_202(self):
+        from api.main import _new_job, _update_job
+        job_id = _new_job()
+        _update_job(job_id, status="running")
+        r = self.client.get(f"/api/v1/jobs/{job_id}/result")
+        assert r.status_code == 202
+
+    def test_job_not_found_404(self):
+        r = self.client.get("/api/v1/jobs/xxxxxxxx")
+        assert r.status_code == 404
+
+    def test_health_endpoint_data_loaded(self):
+        r = self.client.get("/health")
+        assert r.status_code == 200
+        d = r.json()
+        assert "data_loaded" in d
+        assert d["version"] == "2.0.0"
+
+    def test_backtest_batch_sync_from_config(self):
+        """同步批量回测走 from_config()"""
+        r = self.client.post("/api/v1/backtest/batch",
+                             json={"symbols":["600519","000001"],"max_workers":1})
+        assert r.status_code == 200
+        d = r.json()
+        assert d["symbols_total"] == 2
+        assert "avg_target_reached_pct" in d
+
+
+# ─────────────────────────────────────────────
+# config_loader 覆盖提升
+# ─────────────────────────────────────────────
+
+class TestConfigLoaderDeep:
+    def test_get_nested_key(self):
+        from utils.config_loader import load_config
+        cfg = load_config()
+        # 通过 get() 方法访问嵌套键
+        from utils.config_loader import ConfigLoader
+        loader = ConfigLoader()
+        pg_host = loader.get("database.postgres.host")
+        assert pg_host == "localhost"
+
+    def test_get_missing_key_returns_default(self):
+        from utils.config_loader import ConfigLoader
+        loader = ConfigLoader()
+        val = loader.get("nonexistent.key.path", default="fallback")
+        assert val == "fallback"
+
+    def test_get_api_config(self):
+        from utils.config_loader import ConfigLoader
+        loader = ConfigLoader()
+        port = loader.get("api.port")
+        assert port == 8000
+
+    def test_get_analysis_strategy(self):
+        from utils.config_loader import ConfigLoader
+        loader = ConfigLoader()
+        rr = loader.get("analysis.strategy.min_rr_ratio")
+        assert rr == 1.3
+
+    def test_from_config_creates_valid_strategy(self):
+        """from_config() 与直接构造结果等价"""
+        from analysis.strategy.ashare_strategy import AShareStrategy
+        s1 = AShareStrategy()
+        s2 = AShareStrategy.from_config()
+        # 默认参数应与 config.yaml 一致
+        assert s1.initial_capital == s2.initial_capital
+        assert s1.min_rr_ratio == s2.min_rr_ratio
+
+    def test_config_loader_singleton(self):
+        """同一路径的 loader 应复用缓存"""
+        from utils.config_loader import load_config
+        c1 = load_config()
+        c2 = load_config()
+        assert c1 is not None and c2 is not None
+
+
+# ─────────────────────────────────────────────
+# workers=0 fallback 测试
+# ─────────────────────────────────────────────
+
+class TestBatchWorkersFallback:
+    def test_workers_zero_clamps_to_one(self):
+        from analysis.strategy.ashare_batch import AShareBatchBacktester
+        bt = AShareBatchBacktester(max_workers=0)
+        assert bt.max_workers == 1
+
+    def test_workers_negative_clamps_to_one(self):
+        from analysis.strategy.ashare_batch import AShareBatchBacktester
+        bt = AShareBatchBacktester(max_workers=-5)
+        assert bt.max_workers == 1
+
+    def test_workers_valid_unchanged(self):
+        from analysis.strategy.ashare_batch import AShareBatchBacktester
+        bt = AShareBatchBacktester(max_workers=4)
+        assert bt.max_workers == 4

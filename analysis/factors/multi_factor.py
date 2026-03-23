@@ -475,3 +475,27 @@ class AShareMultiFactor:
         }
         bar_str = "  ".join(f"{k}:{v:.0f}" for k, v in bars.items())
         return (f"  {score.symbol} [{score.grade}] 总分={score.total_score:.1f} | {bar_str}")
+    @classmethod
+    def from_config(cls, config: dict | None = None) -> "AShareMultiFactor":
+        """从 config.yaml analysis.factors 节创建实例"""
+        if config is None:
+            from utils.config_loader import load_config
+            config = load_config()
+        s = config.get("analysis", {}).get("factors", {})
+        w = s.get("weights", {})
+        inst = cls(
+            rsi_overbought = s.get("rsi_overbought", 82),
+            min_volume     = 1e5,
+        )
+        # 覆盖权重（如配置有）
+        if w:
+            inst.WEIGHTS = {
+                "momentum":  w.get("momentum",  35),
+                "turnover":  w.get("turnover",  20),
+                "trend":     w.get("trend",     20),
+                "rsi":       w.get("rsi",       10),
+                "vol_price": w.get("vol_price", 10),
+                "cost":      w.get("cost",       5),
+            }
+        return inst
+

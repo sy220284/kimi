@@ -181,6 +181,45 @@ class AShareBacktester:
     # 结果计算
     # ─────────────────────────────────────────────
 
+
+    # ─────────────────────────────────────────────
+    # 指标计算辅助
+    # ─────────────────────────────────────────────
+
+    def _calc_equity_metrics(self, eq_values: list[float]) -> tuple[float,float,float,float,float]:
+        """
+        从权益曲线计算五大指标：
+        (total_ret_pct, sharpe, sortino, max_dd_pct, calmar)
+        """
+        if not eq_values or len(eq_values) < 2:
+            return 0.0, 0.0, 0.0, 0.0, 0.0
+
+        total_ret_pct = (eq_values[-1] / self.strategy.initial_capital - 1) * 100
+        daily_rets    = pd.Series(eq_values).pct_change().dropna()
+        rf_daily      = 0.03 / 252
+        mu            = float(daily_rets.mean())
+        std           = float(daily_rets.std())
+        sharpe        = (mu - rf_daily) / std * np.sqrt(252) if std > 0 else 0.0
+        down          = daily_rets[daily_rets < rf_daily] - rf_daily
+        dstd          = float(down.std()) if len(down) > 1 else 0.0
+        sortino       = (mu - rf_daily) / dstd * np.sqrt(252) if dstd > 0 else 0.0
+
+        # 最大回撤
+        peak = eq_values[0]; max_dd_pct = 0.0
+        for eq in eq_values:
+            if eq > peak: peak = eq
+            if peak > 0:
+                dd = (peak - eq) / peak * 100
+                max_dd_pct = max(max_dd_pct, dd)
+
+        # Calmar（复利年化收益 / 最大回撤）
+        n_days       = len(eq_values)
+        compound_ann = (1 + total_ret_pct / 100) ** (252 / max(n_days, 1)) - 1
+        calmar        = (compound_ann / (max_dd_pct / 100)) if max_dd_pct > 0 else 0.0
+
+        return (round(total_ret_pct,4), round(sharpe,4),
+                round(sortino,4), round(max_dd_pct,4), round(calmar,4))
+
     def _calc_result(self, symbol: str, df: pd.DataFrame) -> AShareBacktestResult:
         trades    = self.strategy.trades
         closed    = [t for t in trades if t.status == "closed"]
@@ -208,32 +247,8 @@ class AShareBacktester:
         gross_loss   = abs(sum(t.pnl for t in losers))
         profit_factor = gross_profit / (gross_loss + 1e-8)
 
-        # 收益率（基于权益曲线）
-        if eq_values and len(eq_values) >= 2:
-            total_ret_pct = (eq_values[-1] / self.strategy.initial_capital - 1) * 100
-            daily_rets    = pd.Series(eq_values).pct_change().dropna()
-            rf_daily      = 0.03 / 252
-            std = float(daily_rets.std())
-            sharpe  = ((daily_rets.mean() - rf_daily) / std * np.sqrt(252)) if std > 0 else 0.0
-            down    = daily_rets[daily_rets < rf_daily] - rf_daily
-            dstd    = float(down.std()) if len(down) > 1 else 0.0
-            sortino = ((daily_rets.mean() - rf_daily) / dstd * np.sqrt(252)) if dstd > 0 else 0.0
-        else:
-            total_ret_pct = 0.0; sharpe = sortino = 0.0
-
-        # 最大回撤
-        max_dd_pct = 0.0
-        peak = eq_values[0] if eq_values else self.strategy.initial_capital
-        for eq in eq_values:
-            if eq > peak: peak = eq
-            if peak > 0:
-                dd = (peak - eq) / peak * 100
-                if dd > max_dd_pct: max_dd_pct = dd
-
-        # Calmar（复利年化）
-        n_days = len(eq_values)
-        compound_ann = (1 + total_ret_pct / 100) ** (252 / max(n_days, 1)) - 1
-        calmar = (compound_ann / (max_dd_pct / 100)) if max_dd_pct > 0 else 0.0
+        # 收益率及风险指标（提取为独立计算块，便于单元测试）
+        total_ret_pct, sharpe, sortino, max_dd_pct, calmar =             self._calc_equity_metrics(eq_values)
 
         # 信号/退出统计
         signal_counts: dict[str, int] = {}

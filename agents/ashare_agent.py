@@ -273,6 +273,15 @@ class AShareAgent:
     # ─────────────────────────────────────────────
 
     def report(self, analyses: list[AShareAnalysis]) -> str:
+        """
+        生成选股报告字符串。
+
+        Args:
+            analyses: analyze() 或 scan() 的结果列表
+
+        Returns:
+            格式化的报告文本，包含 BUY/WATCH 建议和市场状态分布
+        """
         lines = [
             "", "=" * 65,
             "  A股智能选股报告",

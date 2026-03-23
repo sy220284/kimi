@@ -398,3 +398,19 @@ class AShareMarketRegime:
                 sub = df.iloc[-w:]
                 results[f"{w}d"] = self.detect(sub)
         return results
+    @classmethod
+    def from_config(cls, config: dict | None = None) -> "AShareMarketRegime":
+        """从 config.yaml analysis.regime 节创建实例"""
+        if config is None:
+            from utils.config_loader import load_config
+            config = load_config()
+        s = config.get("analysis", {}).get("regime", {})
+        return cls(
+            trend_ma_short  = s.get("trend_ma_short",   20),
+            trend_ma_medium = s.get("trend_ma_medium",  60),
+            trend_ma_long   = s.get("trend_ma_long",   120),
+            vol_lookback    = s.get("vol_lookback",      20),
+            crash_pct       = s.get("crash_pct",       0.08),
+            rally_pct       = s.get("rally_pct",       0.15),
+        )
+
