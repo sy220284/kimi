@@ -2264,3 +2264,309 @@ class TestMultiStyleBacktestIntegration:
         assert MultiStyleStrategy.create_short_term().max_holding_days == 5
         assert MultiStyleStrategy.create_swing().max_holding_days == 20
         assert MultiStyleStrategy.create_medium_term().max_holding_days == 60
+
+# ─────────────────────────────────────────────
+# 策略池系统测试
+# ─────────────────────────────────────────────
+
+class TestStrategyRegistry:
+    def setup_method(self):
+        import tempfile, os
+        self.tmp = tempfile.NamedTemporaryFile(suffix=".json", delete=False).name
+        from analysis.pool.strategy_registry import StrategyRegistry, StrategyStatus
+        self.StrategyStatus = StrategyStatus
+        self.reg = StrategyRegistry(storage_path=self.tmp)
+
+    def teardown_method(self):
+        import os
+        if os.path.exists(self.tmp): os.unlink(self.tmp)
+
+    def test_register_returns_id(self):
+        sid = self.reg.register("测试策略", "swing", {"min_factor_score": 55})
+        assert sid.startswith("swi_")
+
+    def test_register_dedup(self):
+        sid1 = self.reg.register("A", "swing", {"x": 1})
+        sid2 = self.reg.register("A", "swing", {"x": 1})
+        assert sid1 == sid2
+
+    def test_valid_transition_chain(self):
+        sid = self.reg.register("S", "swing", {})
+        self.reg.transition(sid, self.StrategyStatus.SHADOW, "t")
+        self.reg.transition(sid, self.StrategyStatus.ACTIVE, "t")
+        self.reg.transition(sid, self.StrategyStatus.DEGRADED, "t")
+        self.reg.transition(sid, self.StrategyStatus.ACTIVE, "t")
+        self.reg.transition(sid, self.StrategyStatus.RETIRED, "t")
+        assert self.reg.get(sid).status == "retired"
+
+    def test_invalid_transition_raises(self):
+        import pytest
+        sid = self.reg.register("S", "swing", {})
+        with pytest.raises(ValueError, match="非法状态迁移"):
+            self.reg.transition(sid, self.StrategyStatus.ACTIVE, "skip")
+
+    def test_retired_cannot_transition(self):
+        import pytest
+        sid = self.reg.register("S", "swing", {})
+        self.reg.transition(sid, self.StrategyStatus.RETIRED, "retire immediately")
+        with pytest.raises(ValueError):
+            self.reg.transition(sid, self.StrategyStatus.SHADOW, "illegal")
+
+    def test_update_live_metrics(self):
+        sid = self.reg.register("S", "swing", {})
+        self.reg.transition(sid, self.StrategyStatus.SHADOW, "t")
+        self.reg.transition(sid, self.StrategyStatus.ACTIVE, "t")
+        self.reg.update_live(sid, sharpe=1.2, win_rate=0.55, ret_pct=5.0, max_dd=2.0, trade_count=10)
+        rec = self.reg.get(sid)
+        assert rec.live_sharpe == 1.2
+        assert rec.live_trade_count == 10
+
+    def test_recommend_best_sharpe(self):
+        for name, sh in [("A",0.5),("B",1.2),("C",0.8)]:
+            sid = self.reg.register(name, "swing", {"n": sh})
+            self.reg.transition(sid, self.StrategyStatus.SHADOW, "t")
+            self.reg.transition(sid, self.StrategyStatus.ACTIVE, "t")
+            self.reg.update_live(sid, sharpe=sh, win_rate=0.5, ret_pct=2.0, max_dd=1.0, trade_count=5)
+        best = self.reg.recommend()
+        assert best.name == "B"
+
+    def test_recommend_returns_none_if_no_active(self):
+        self.reg.register("X", "swing", {})
+        assert self.reg.recommend() is None
+
+    def test_list_by_status(self):
+        s1 = self.reg.register("A","swing",{})
+        s2 = self.reg.register("B","swing",{})
+        self.reg.transition(s1, self.StrategyStatus.SHADOW, "t")
+        self.reg.transition(s1, self.StrategyStatus.ACTIVE, "t")
+        active = self.reg.list_active()
+        assert len(active) == 1
+
+    def test_persistence(self):
+        sid = self.reg.register("P","swing",{})
+        self.reg.transition(sid, self.StrategyStatus.SHADOW, "t")
+        self.reg.transition(sid, self.StrategyStatus.ACTIVE, "t")
+        from analysis.pool.strategy_registry import StrategyRegistry
+        reg2 = StrategyRegistry(storage_path=self.tmp)
+        assert reg2.get(sid).status == "active"
+
+    def test_report_contains_status(self):
+        sid = self.reg.register("R","swing",{})
+        self.reg.transition(sid, self.StrategyStatus.SHADOW, "t")
+        report = self.reg.report()
+        assert "SHADOW" in report or "shadow" in report
+
+    def test_count(self):
+        s1 = self.reg.register("A","swing",{})
+        s2 = self.reg.register("B","short_term",{})
+        self.reg.transition(s1, self.StrategyStatus.SHADOW, "t")
+        self.reg.transition(s1, self.StrategyStatus.ACTIVE, "t")
+        counts = self.reg.count()
+        assert counts.get("active",0) == 1
+        assert counts.get("candidate",0) == 1
+
+
+class TestStrategyMonitor:
+    def setup_method(self):
+        import tempfile
+        self.tmp = tempfile.NamedTemporaryFile(suffix=".json", delete=False).name
+        from analysis.pool.strategy_registry import StrategyRegistry, StrategyStatus
+        from analysis.pool.monitor import StrategyMonitor
+        self.reg = StrategyRegistry(storage_path=self.tmp)
+        self.mon = StrategyMonitor(self.reg, degrade_consec=3,
+                                    degrade_winrate=0.25, recover_sharpe=0.2)
+        # 预建 ACTIVE 策略
+        self.sid = self.reg.register("M", "swing", {})
+        self.reg.transition(self.sid, StrategyStatus.SHADOW, "t")
+        self.reg.transition(self.sid, StrategyStatus.ACTIVE, "t")
+        self.reg.update_validation(self.sid, sharpe=1.0, win_rate=0.5,
+                                    ret_pct=5.0, pvalue=0.04, passed=True)
+
+    def teardown_method(self):
+        import os
+        if os.path.exists(self.tmp): os.unlink(self.tmp)
+
+    def test_normal_trades_keep_active(self):
+        import numpy as np; np.random.seed(1)
+        for i in range(10):
+            pnl = 1.5 + np.random.randn()*0.3
+            self.mon.record_trade(self.sid, f"2023-01-{i+1:02d}", "X", pnl, "target")
+        snap = self.mon.check(self.sid)
+        assert snap.recommended_action == "ok"
+        assert self.reg.get(self.sid).status == "active"
+
+    def test_consecutive_losses_trigger_degrade(self):
+        for i in range(5):
+            self.mon.record_trade(self.sid, f"2023-01-{i+1:02d}", "X", -2.0, "stop")
+        snap = self.mon.check(self.sid)
+        assert snap.recommended_action == "degrade"
+        assert self.reg.get(self.sid).status == "degraded"
+        assert any("R5" in r for r in snap.triggered_rules)
+
+    def test_recovery_after_losses(self):
+        import numpy as np; np.random.seed(2)
+        for i in range(5):
+            self.mon.record_trade(self.sid, f"2023-01-{i+1:02d}", "X", -2.0, "stop")
+        self.mon.check(self.sid)
+        assert self.reg.get(self.sid).status == "degraded"
+        for i in range(20):
+            pnl = 2.0 + np.random.randn()*0.3
+            self.mon.record_trade(self.sid, f"2023-02-{i+1:02d}", "X", pnl, "target")
+        snap2 = self.mon.check(self.sid)
+        assert snap2.recommended_action == "recover"
+        assert self.reg.get(self.sid).status == "active"
+
+    def test_rolling_metrics_empty(self):
+        state = self.mon._get_state(self.sid)
+        m = state.rolling_metrics(20)
+        assert m["sharpe"] == 0.0
+        assert m["consec_losses"] == 0
+
+    def test_check_all_returns_snapshots(self):
+        sid2 = self.reg.register("N","short_term",{})
+        from analysis.pool.strategy_registry import StrategyStatus
+        self.reg.transition(sid2, StrategyStatus.SHADOW, "t")
+        self.reg.transition(sid2, StrategyStatus.ACTIVE, "t")
+        snaps = self.mon.check_all()
+        assert len(snaps) == 2
+
+    def test_live_metrics_updated_after_check(self):
+        import numpy as np; np.random.seed(3)
+        for i in range(10):
+            pnl = 1.0 + np.random.randn()*0.5
+            self.mon.record_trade(self.sid, f"2023-01-{i+1:02d}", "X", pnl, "t")
+        self.mon.check(self.sid)
+        rec = self.reg.get(self.sid)
+        assert rec.live_trade_count == 10
+
+
+class TestStrategyValidator:
+    def setup_method(self):
+        import numpy as np, pandas as pd
+        from analysis.pool.validator import StrategyValidator
+        self.StrategyValidator = StrategyValidator
+        np.random.seed(42); n=500
+        p = 100*np.exp(0.0008*np.arange(n)+0.01*np.cumsum(np.random.randn(n)))
+        self.df = pd.DataFrame({
+            "date": pd.date_range("2021-01-01",periods=n,freq="B").strftime("%Y-%m-%d"),
+            "open":p,"high":p*1.008,"low":p*0.992,"close":p,
+            "volume":1e7*np.ones(n)})
+        self.symbol_dfs = {"TEST": self.df}
+
+    def test_insufficient_data_returns_fail(self):
+        from analysis.strategy.multi_style import MultiStyleStrategy
+        tiny = self.df.head(100)
+        validator = self.StrategyValidator(train_days=200, valid_days=130)
+        r = validator.validate("X","X", lambda: MultiStyleStrategy(style="swing"),
+                               {"T": tiny})
+        assert not r.passed
+        assert any("数据不足" in f for f in r.fail_reasons)
+
+    def test_validation_result_has_required_fields(self):
+        from analysis.strategy.multi_style import MultiStyleStrategy
+        validator = self.StrategyValidator()
+        r = validator.validate("TEST","测试",
+                               lambda: MultiStyleStrategy(style="swing"),
+                               self.symbol_dfs)
+        assert r.strategy_id == "TEST"
+        assert r.n_windows >= 0
+        assert isinstance(r.passed, bool)
+        assert isinstance(r.fail_reasons, list)
+
+    def test_oos_sharpe_range(self):
+        from analysis.strategy.multi_style import MultiStyleStrategy
+        validator = self.StrategyValidator()
+        r = validator.validate("TEST","测试",
+                               lambda: MultiStyleStrategy(style="swing"),
+                               self.symbol_dfs)
+        # OOS Sharpe should be a finite number
+        assert r.oos_sharpe == r.oos_sharpe   # not NaN
+        assert r.oos_max_dd >= 0
+
+    def test_wf_windows_count_positive(self):
+        from analysis.strategy.multi_style import MultiStyleStrategy
+        validator = self.StrategyValidator(train_days=200, valid_days=130, step_days=50)
+        r = validator.validate("TEST","测试",
+                               lambda: MultiStyleStrategy(style="swing"),
+                               self.symbol_dfs)
+        # With 500 rows, train=200, valid=130, step=50 → multiple windows
+        assert r.n_windows >= 1
+
+    def test_summary_string(self):
+        from analysis.strategy.multi_style import MultiStyleStrategy
+        validator = self.StrategyValidator()
+        r = validator.validate("X","策略X",
+                               lambda: MultiStyleStrategy(style="short_term"),
+                               self.symbol_dfs)
+        summary = r.summary()
+        assert "策略X" in summary
+        assert "OOS" in summary
+
+
+class TestStrategyPoolManager:
+    def setup_method(self):
+        import tempfile
+        self.tmp = tempfile.NamedTemporaryFile(suffix=".json", delete=False).name
+        from analysis.pool.manager import StrategyPoolManager
+        self.pool = StrategyPoolManager(storage_path=self.tmp)
+        import numpy as np, pandas as pd
+        np.random.seed(1); n=500
+        p = 100*np.exp(0.0008*np.arange(n)+0.01*np.cumsum(np.random.randn(n)))
+        df = pd.DataFrame({
+            "date": pd.date_range("2021-01-01",periods=n,freq="B").strftime("%Y-%m-%d"),
+            "open":p,"high":p*1.008,"low":p*0.992,"close":p,"volume":1e7*np.ones(n)})
+        self.symbol_dfs = {f"S{i:02d}": df.copy() for i in range(5)}
+
+    def teardown_method(self):
+        import os
+        for f in [self.tmp]:
+            if os.path.exists(f): os.unlink(f)
+
+    def test_register_returns_id(self):
+        sid = self.pool.register("T", "swing")
+        assert sid is not None
+
+    def test_register_defaults_creates_three(self):
+        sid_map = self.pool.register_defaults(self.symbol_dfs, auto_validate=False)
+        assert "short_term" in sid_map
+        assert "swing" in sid_map
+        assert "medium_term" in sid_map
+
+    def test_summary_structure(self):
+        self.pool.register_defaults(self.symbol_dfs, auto_validate=False)
+        s = self.pool.summary()
+        assert s.total == 3
+        assert isinstance(s.by_status, dict)
+
+    def test_record_trade_and_monitor(self):
+        sid_map = self.pool.register_defaults(self.symbol_dfs, auto_validate=False)
+        # 手动激活一个策略
+        from analysis.pool.strategy_registry import StrategyStatus
+        sid = list(sid_map.values())[0]
+        self.pool.registry.transition(sid, StrategyStatus.ACTIVE, "manual activate")
+        self.pool.record_trade(sid, "2023-01-01", "S00", 3.0, "target")
+        self.pool.record_trade(sid, "2023-01-02", "S00", -1.0, "stop")
+        snaps = self.pool.monitor_all()
+        assert len(snaps) == 1
+
+    def test_rotate_empty_returns_empty(self):
+        assert self.pool.rotate() == []
+
+    def test_recommend_none_when_no_active(self):
+        assert self.pool.recommend() is None
+
+    def test_report_no_exception(self):
+        self.pool.register_defaults(self.symbol_dfs, auto_validate=False)
+        report = self.pool.report()
+        assert isinstance(report, str)
+        assert len(report) > 0
+
+    def test_validate_updates_registry(self):
+        """验证后 registry 中应有 validation_sharpe"""
+        import logging; logging.disable(logging.CRITICAL)
+        sid_map = self.pool.register_defaults(self.symbol_dfs, auto_validate=True)
+        for sid in sid_map.values():
+            rec = self.pool.registry.get(sid)
+            # validation_sharpe 应该被设置（不管是否通过）
+            assert rec.validation_sharpe is not None
+        logging.disable(logging.NOTSET)
