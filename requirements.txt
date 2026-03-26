@@ -14,7 +14,7 @@ alembic==1.18.4
 baostock==0.8.9
 pandas==3.0.1
 numpy==2.4.3
-requests==2.32.5
+requests==2.33.0
 httpx==0.28.1
 
 # 数据分析
